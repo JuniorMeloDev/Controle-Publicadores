@@ -1,11 +1,9 @@
-import { Pool } from 'pg';
+import { Pool } from '@neondatabase/serverless'; 
 import { NextResponse } from 'next/server';
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
+  // A configuração 'ssl' foi removida
 });
 
 export async function POST(req) {

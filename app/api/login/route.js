@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs'; // Para comparar senhas
 import jwt from 'jsonwebtoken'; // Para criar o token de sessão
@@ -6,7 +6,7 @@ import { serialize } from 'cookie'; // Para criar o cookie
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
-  ssl: { rejectUnauthorized: false }
+  // A configuração 'ssl' foi removida
 });
 
 // Uma "chave secreta" para assinar nosso token.
@@ -34,7 +34,7 @@ export async function POST(req) {
 
     // 3. Verificar se a pessoa tem permissão (ex: é ancião ou SM)
     //    (Adapte essa lógica para seu caso)
-    const isAdmin = user.privilegios?.includes('anciao') || user.privilegios?.includes('servo_ministerial');
+    const isAdmin = user.privilegios?.includes('Ancião') || user.privilegios?.includes('servo_ministerial');
     
     if (!isAdmin) {
         return NextResponse.json({ message: 'Você não tem permissão para acessar esta área.' }, { status: 403 }); // 403 Forbidden
