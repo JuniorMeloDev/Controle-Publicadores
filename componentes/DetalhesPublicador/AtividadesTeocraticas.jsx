@@ -1,15 +1,17 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Loader2, Printer } from 'lucide-react';
+import RelatorioImprimivel from './RelatorioImprimivel';
 
-export default function AtividadesTeocraticas({ publicadorId, publicadorNome }) {
+export default function AtividadesTeocraticas({ publicadorId, publicadorNome, relatorios: relatoriosInicial, publicador }) {
   const [activeSubTab, setActiveSubTab] = useState('relatorios');
-  const [relatorios, setRelatorios] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [relatorios, setRelatorios] = useState(relatoriosInicial || []);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const printRef = useRef(null);
 
   useEffect(() => {
-    if (!publicadorId) return;
+    if (!publicadorId || relatoriosInicial) return;
     
     const fetchRelatorios = async () => {
       setIsLoading(true);
@@ -27,7 +29,23 @@ export default function AtividadesTeocraticas({ publicadorId, publicadorNome }) 
     };
 
     fetchRelatorios();
-  }, [publicadorId]); // Recarrega se o ID do publicador mudar
+  }, [publicadorId, relatoriosInicial]);
+
+  // Função de impressão
+  const handlePrint = () => {
+    if (printRef.current) {
+      const printWindow = window.open('', '', 'height=600,width=800');
+      printWindow.document.write('<html><head><title>' + publicadorNome + '</title>');
+      printWindow.document.write('<style>');
+      printWindow.document.write('body { color: #000; background: #fff; font-family: Arial, sans-serif; }');
+      printWindow.document.write('</style>');
+      printWindow.document.write('</head><body>');
+      printWindow.document.write(printRef.current.innerHTML);
+      printWindow.document.write('</body></html>');
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
 
   return (
     <div className="mt-6">
@@ -47,61 +65,55 @@ export default function AtividadesTeocraticas({ publicadorId, publicadorNome }) 
         </nav>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-6">
         {activeSubTab === 'relatorios' && (
           <div>
-            {isLoading && <Loader2 className="size-6 animate-spin text-neutral-400" />}
-            {error && <p className="text-red-400">{error}</p>}
+            {isLoading && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="size-6 animate-spin text-neutral-400" />
+              </div>
+            )}
+            
+            {error && (
+              <div className="p-4 bg-red-900/30 text-red-300 border border-red-800 rounded-lg">
+                {error}
+              </div>
+            )}
             
             {!isLoading && !error && relatorios.length === 0 && (
-              <p className="text-neutral-500 italic">Nenhum relatório de serviço encontrado.</p>
+              <div className="p-6 bg-neutral-800/50 border border-neutral-700 rounded-lg text-center">
+                <p className="text-neutral-400 italic">Nenhum relatório de serviço encontrado.</p>
+              </div>
             )}
 
             {!isLoading && !error && relatorios.length > 0 && (
-              <div className="flow-root">
-                <ul role="list" className="-mb-8">
-                  {relatorios.map((relatorio, relatorioIdx) => (
-                    <li key={relatorio.id}>
-                      <div className="relative pb-8">
-                        {relatorioIdx !== relatorios.length - 1 ? (
-                          <span className="absolute left-4 top-4 -ml-px h-full w-0.5 bg-neutral-700" aria-hidden="true" />
-                        ) : null}
-                        
-                        <div className="relative flex space-x-3">
-                          <div>
-                            <span className="h-8 w-8 rounded-full bg-neutral-700 flex items-center justify-center ring-8 ring-neutral-900">
-                              <svg className="h-5 w-5 text-neutral-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59l-2.1-2.1a.75.75 0 00-1.06 1.06l3.5 3.5a.75.75 0 001.06 0l3.5-3.5a.75.75 0 10-1.06-1.06l-2.1 2.1V6.75z" clipRule="evenodd" />
-                              </svg>
-                            </span>
-                          </div>
-                          <div className="flex min-w-0 flex-1 flex-col justify-center space-y-1 pt-1.5">
-                            <div>
-                              <p className="text-sm text-neutral-300">
-                                Relatório de <span className="font-medium text-white">{relatorio.mes} {relatorio.ano_servico}</span>
-                              </p>
-                            </div>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-400">
-                              {relatorio.pioneiro_auxiliar && (
-                                <span className="bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded-full">Pioneiro Auxiliar</span>
-                              )}
-                              {relatorio.horas > 0 && (
-                                <span><span className="font-medium">{relatorio.horas}</span> horas</span>
-                              )}
-                              <span><span className="font-medium">{relatorio.estudos_biblicos || 0}</span> estudos</span>
-                            </div>
-                            {/* Incluindo as observações */}
-                            {relatorio.observacoes && (
-                              <p className="text-sm text-neutral-500 italic mt-1">
-                                &ldquo;{relatorio.observacoes}&rdquo;
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+              <div className="space-y-6">
+                {/* Exibe o relatório imprimível */}
+                <div className="bg-white text-black rounded-lg border border-neutral-300 overflow-hidden shadow-lg">
+                  <div ref={printRef} className="p-8">
+                    <RelatorioImprimivel 
+                      publicador={publicador || {
+                        nome_completo: publicadorNome,
+                        data_nascimento: '',
+                        data_batismo: '',
+                        privilegios: [],
+                        designacoes: []
+                      }}
+                      relatorios={relatorios} 
+                    />
+                  </div>
+                </div>
+
+                {/* Botão de Impressão */}
+                <div className="flex justify-center">
+                  <button
+                    onClick={handlePrint}
+                    className="flex items-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-colors"
+                  >
+                    <Printer size={18} />
+                    Imprimir Relatório
+                  </button>
+                </div>
               </div>
             )}
           </div>

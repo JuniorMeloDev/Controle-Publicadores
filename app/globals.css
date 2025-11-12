@@ -20,3 +20,64 @@
     color: theme('colors.white');
   }
 }
+
+/* ==============================================
+    CÓDIGO DE IMPRESSÃO - (COLAR NO FINAL)
+   ==============================================
+*/
+
+/* NOVO: Estilos para esconder o componente de impressão na TELA.
+  Usamos 'visibility' e 'position' em vez de 'display: none'
+  para que o Ref do componente continue acessível.
+*/
+.printable-content {
+  visibility: hidden;
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+  height: 0;
+  overflow: hidden;
+  background-color: #ffffff; /* Garante fundo branco para o componente */
+  color: #000000; /* Garante texto preto */
+}
+
+@media print {
+  /* Força fundo branco e texto preto para impressão */
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  /* Esconde tudo por padrão na impressão */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Mostra o container de impressão e tudo dentro dele */
+  .printable-content, .printable-content * {
+    visibility: visible;
+  }
+  
+  /* Posiciona o container de impressão no topo da página */
+  .printable-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: auto; /* Reseta a altura */
+    overflow: visible; /* Reseta o overflow */
+    padding: 1rem; /* Adiciona uma margem de impressão */
+  }
+
+  /* Garante que cada "página" comece em uma nova folha */
+  .page-break {
+    page-break-after: always;
+  }
+
+  /* Evita quebras de página ruins */
+  table, tr, td, th, h1, h2, p, div {
+    page-break-inside: avoid !important;
+  }
+}

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Search, ShieldCheck, Star, User, X, ArrowLeft } from 'lucide-react';
+import { Search, ShieldCheck, Star, User, X, ArrowLeft, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-export default function FiltroELista({ publicadores, selectedId, onPublicadorSelect }) {
+export default function FiltroELista({ publicadores, selectedId, onPublicadorSelect, onNovoPublicador }) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [grupoSelecionado, setGrupoSelecionado] = useState('');
@@ -77,20 +77,20 @@ export default function FiltroELista({ publicadores, selectedId, onPublicadorSel
 
   return (
     <div className="flex flex-col h-full">
-      {/* Botão para voltar à tela principal */}
-      <div className="p-4 border-b border-neutral-800">
+      {/* === BOTÃO VOLTAR === */}
+      <div className="p-4 border-b border-neutral-800 shrink-0">
         <button
           type="button"
           onClick={() => router.push('/admin/dashboard')}
-          className="inline-flex items-center gap-2 px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-md text-sm text-neutral-100 hover:bg-neutral-700"
+          className="inline-flex items-center gap-2 px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-md text-sm text-neutral-100 hover:bg-neutral-700 transition"
         >
           <ArrowLeft size={16} />
           <span className="hidden sm:inline">Voltar</span>
         </button>
       </div>
 
-      {/* === Busca e filtros === */}
-      <div className="p-4 border-b border-neutral-800 space-y-3">
+      {/* === BUSCA E FILTROS === */}
+      <div className="p-4 border-b border-neutral-800 space-y-3 shrink-0">
         <div className="flex items-center bg-neutral-800 rounded-md px-3 py-2">
           <Search size={16} className="text-neutral-400" />
           <input
@@ -115,7 +115,7 @@ export default function FiltroELista({ publicadores, selectedId, onPublicadorSel
           ))}
         </select>
 
-        {/* Linha única para todos os toggles — tenta manter o máximo em uma linha */}
+        {/* Linha única para todos os toggles */}
         <div className="flex items-center gap-2 flex-wrap mt-1">
           <div className="flex items-center gap-2 flex-wrap">
             <button
@@ -180,16 +180,25 @@ export default function FiltroELista({ publicadores, selectedId, onPublicadorSel
           {temFiltrosAtivos && (
             <button
               onClick={handleLimpar}
-              className="h-9 px-3 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-medium inline-flex items-center gap-2"
+              className="h-9 px-3 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-medium inline-flex items-center gap-2 transition"
             >
               <X size={16} />
               <span className="hidden sm:inline">Limpar</span>
             </button>
           )}
         </div>
+
+        {/* === BOTÃO NOVO PUBLICADOR === */}
+        <button
+          onClick={onNovoPublicador}
+          className="w-full h-10 px-4 rounded-md text-sm font-semibold text-white bg-green-600 hover:bg-green-500 transition-colors inline-flex items-center justify-center gap-2"
+        >
+          <Plus size={18} />
+          Novo Publicador
+        </button>
       </div>
 
-      {/* === Lista de publicadores === */}
+      {/* === LISTA DE PUBLICADORES === */}
       <div className="flex-1 overflow-y-auto">
         {filtrados.map((p) => (
           <div

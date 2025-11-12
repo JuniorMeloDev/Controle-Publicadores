@@ -1,20 +1,23 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Printer } from 'lucide-react';
 import FormularioInformacoes from '@/componentes/DetalhesPublicador/FormularioInformacoes';
 import AtividadesTeocraticas from '@/componentes/DetalhesPublicador/AtividadesTeocraticas';
+import RelatorioImprimivel from './RelatorioImprimivel';
 
 export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
   const [activeTab, setActiveTab] = useState('informacoes');
   const [gruposList, setGruposList] = useState([]);  
   const [formData, setFormData] = useState({
-    nome_completo: '', data_nascimento: '', nome_grupo: '',
+    nome_completo: '', data_nascimento: '', data_batismo: '', nome_grupo: '',
+    sexo: '', esperanca: '',
     senha: '', privilegios: [], designacoes: [],
     telefone: '', email: '', cep: '', logradouro: '',
     numero: '', complemento: '', bairro: '', cidade: '', estado: ''
   });
   
+  const [relatorios, setRelatorios] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -24,16 +27,15 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
   const [cepError, setCepError] = useState('');
   
   const numeroInputRef = useRef(null);
+  const printRef = useRef(null);
 
-  // useEffect: Busca os dados
   useEffect(() => {
     if (!publicadorId) {
       setIsPageLoading(false);
       return;
     }
     
-
-    const fetchGruposEPublicador = async () => {
+    const fetchTudo = async () => {
       setIsPageLoading(true);
       setMessage('');
       setIsError(false);
@@ -50,6 +52,9 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
         setFormData({
           ...pubData,
           data_nascimento: pubData.data_nascimento || '',
+          data_batismo: pubData.data_batismo || '',
+          sexo: pubData.sexo || '',
+          esperanca: pubData.esperanca || '',
           telefone: pubData.telefone || '',
           email: pubData.email || '',
           cep: pubData.cep || '',
@@ -64,6 +69,11 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
           designacoes: pubData.designacoes || [],
         });
 
+        const relRes = await fetch(`/api/admin/get-relatorios/${publicadorId}`);
+        if (!relRes.ok) throw new Error('Falha ao buscar relatórios');
+        const relData = await relRes.json();
+        setRelatorios(relData);
+
       } catch (err) {
         console.error(err);
         setMessage('Erro ao carregar dados. ' + err.message);
@@ -73,18 +83,19 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
       }
     };
 
-    fetchGruposEPublicador();
-  }, [publicadorId]); // Roda sempre que o publicadorId (prop) mudar
+    fetchTudo();
+  }, [publicadorId]);
 
-  // Handlers
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prevData => ({ ...prevData, [name]: value }));
   };
+
   const handleMaskChange = (value, name) => {
     setFormData(prevData => ({ ...prevData, [name]: value }));
     if (name === 'cep') setCepError('');
   };
+
   const handlePrivilegioChange = (e) => {
     const { value, checked } = e.target;
     setFormData(prevData => {
@@ -92,6 +103,7 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
       return { ...prevData, privilegios: prevData.privilegios.filter(p => p !== value) };
     });
   };
+
   const handleDesignacaoChange = (e) => {
     const { value, checked } = e.target;
     setFormData(prevData => {
@@ -99,18 +111,19 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
       return { ...prevData, designacoes: prevData.designacoes.filter(d => d !== value) };
     });
   };
+
   const handleCepBlur = async () => {
     const cep = formData.cep.replace(/\D/g, ''); 
     if (cep.length !== 8) { setCepError(''); return; }
-    setIsCepLoading(true); setCepError('');
+    setIsCepLoading(true);
+    setCepError('');
     try {
-      // Usando a rota dinâmica /api/get-cep/[cep]
       const response = await fetch(`/api/get-cep/${cep}`, { cache: 'no-store' }); 
       const data = await response.json();
       if (!response.ok || data.erro) throw new Error(data.message || 'CEP não encontrado.');
       setFormData(prev => ({
         ...prev, logradouro: data.logradouro, bairro: data.bairro,
-        cidade: data.localidade, estado: data.uf, complemento: '', cepError: ''
+        cidade: data.localidade, estado: data.uf, complemento: ''
       }));
       numeroInputRef.current?.focus();
     } catch (err) {
@@ -123,7 +136,6 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
     }
   };
 
-  // Handler de SUBMIT (Salvar Alterações)
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -142,7 +154,7 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
       if (response.ok) {
         setMessage('Publicador alterado com sucesso');
         setIsError(false);
-        onSaveSuccess(); // Avisa o componente pai para atualizar a lista!
+        onSaveSuccess();
       } else {
         setMessage(data.message || 'Ocorreu um erro.');
         setIsError(true);
@@ -152,6 +164,23 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
       setIsError(true);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Função de impressão simples (sem react-to-print)
+  const handlePrint = () => {
+    if (printRef.current) {
+      const printWindow = window.open('', '', 'height=600,width=800');
+      printWindow.document.write('<html><head><title>' + formData.nome_completo + '</title>');
+      printWindow.document.write('<style>');
+      printWindow.document.write('@import url("https://cdn.tailwindcss.com");');
+      printWindow.document.write('body { color: #000; background: #fff; }');
+      printWindow.document.write('</style>');
+      printWindow.document.write('</head><body>');
+      printWindow.document.write(printRef.current.innerHTML);
+      printWindow.document.write('</body></html>');
+      printWindow.document.close();
+      printWindow.print();
     }
   };
 
@@ -174,6 +203,13 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
             ID do Publicador: {publicadorId}
           </p>
         </div>
+        <button
+          onClick={handlePrint}
+          className="flex items-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold text-neutral-100 bg-neutral-700 hover:bg-neutral-600 transition-colors"
+        >
+          <Printer size={18} />
+          Imprimir
+        </button>
       </div>
       
       {message && (
@@ -189,56 +225,62 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
         <nav className="-mb-px flex space-x-6" aria-label="Abas">
           <button
             onClick={() => setActiveTab('informacoes')}
-            className={`
-              ${activeTab === 'informacoes' 
-                ? 'border-blue-500 text-blue-400' 
-                : 'border-transparent text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}
-              whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
-            `}
+            className={`${activeTab === 'informacoes' 
+              ? 'border-blue-500 text-blue-400' 
+              : 'border-transparent text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}
+              whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
           >
             Informações Pessoais
           </button>
           <button
             onClick={() => setActiveTab('atividades')}
-            className={`
-              ${activeTab === 'atividades' 
-                ? 'border-blue-500 text-blue-400' 
-                : 'border-transparent text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}
-              whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
-            `}
+            className={`${activeTab === 'atividades' 
+              ? 'border-blue-500 text-blue-400' 
+              : 'border-transparent text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}
+              whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
           >
             Atividades Teocráticas
           </button>
         </nav>
       </div>
 
-      <div>
-        {activeTab === 'informacoes' && (
-          <FormularioInformacoes
-            formData={formData}
-            setFormData={setFormData}
-            handleSubmit={handleSubmit}
-            handleChange={handleChange}
-            handleMaskChange={handleMaskChange}
-            handlePrivilegioChange={handlePrivilegioChange}
-            handleDesignacaoChange={handleDesignacaoChange}
-            handleCepBlur={handleCepBlur}
-            gruposList={gruposList}
-            isLoading={isLoading}
-            isCepLoading={isCepLoading}
-            cepError={cepError}
-            numeroInputRef={numeroInputRef}
-            showPassword={showPassword}
-            setShowPassword={setShowPassword}
-          />
-        )}
+      {activeTab === 'informacoes' && (
+        <FormularioInformacoes
+          formData={formData}
+          setFormData={setFormData}
+          handleSubmit={handleSubmit}
+          handleChange={handleChange}
+          handleMaskChange={handleMaskChange}
+          handlePrivilegioChange={handlePrivilegioChange}
+          handleDesignacaoChange={handleDesignacaoChange}
+          handleCepBlur={handleCepBlur}
+          gruposList={gruposList}
+          isLoading={isLoading}
+          isCepLoading={isCepLoading}
+          cepError={cepError}
+          numeroInputRef={numeroInputRef}
+          showPassword={showPassword}
+          setShowPassword={setShowPassword}
+        />
+      )}
 
-        {activeTab === 'atividades' && (
-          <AtividadesTeocraticas 
-            publicadorId={publicadorId} 
-            publicadorNome={formData.nome_completo}
+      {activeTab === 'atividades' && (
+        <AtividadesTeocraticas 
+          publicadorId={publicadorId} 
+          publicadorNome={formData.nome_completo}
+          relatorios={relatorios}
+          publicador={formData}
+        />
+      )}
+
+      {/* Componente de Impressão (oculto) */}
+      <div style={{ display: 'none' }}>
+        <div ref={printRef}>
+          <RelatorioImprimivel 
+            publicador={formData} 
+            relatorios={relatorios} 
           />
-        )}
+        </div>
       </div>
     </div>
   );
