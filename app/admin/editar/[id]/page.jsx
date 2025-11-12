@@ -54,6 +54,17 @@ function FormularioInformacoes({
               className={baseInputClass} placeholder="dd/mm/aaaa" required
             />
           </div>
+
+          <div>
+            <label htmlFor="data_batismo" className={labelClass}>Data de Batismo</label>
+            <IMaskInput
+              mask="00/00/0000" id="data_batismo" name="data_batismo"
+              value={formData.data_batismo || ''}
+              onAccept={(value) => handleMaskChange(value, 'data_batismo')}
+              className={baseInputClass} placeholder="dd/mm/aaaa"
+            />
+          </div>
+
           <div>
             <label htmlFor="nome_grupo" className={labelClass}>Grupo de Campo</label>
             <select id="nome_grupo" name="nome_grupo" value={formData.nome_grupo} onChange={handleChange} className={baseInputClass} required>
@@ -316,8 +327,8 @@ export default function EditarPublicadorPage() {
 
   const [gruposList, setGruposList] = useState([]);
   const [formData, setFormData] = useState({
-    nome_completo: '', data_nascimento: '', nome_grupo: '',
-    senha: '', privilegios: [], designacoes: [],
+    nome_completo: '', data_nascimento: '', data_batismo: '',
+    nome_grupo: '', senha: '', privilegios: [], designacoes: [],
     telefone: '', email: '', cep: '', logradouro: '',
     numero: '', complemento: '', bairro: '', cidade: '', estado: ''
   });
@@ -354,6 +365,7 @@ export default function EditarPublicadorPage() {
         setFormData({
           ...pubData,
           data_nascimento: pubData.data_nascimento || '',
+          data_batismo: pubData.data_batismo || '',
           telefone: pubData.telefone || '',
           email: pubData.email || '',
           cep: pubData.cep || '',

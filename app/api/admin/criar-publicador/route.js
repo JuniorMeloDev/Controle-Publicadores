@@ -10,7 +10,8 @@ export async function POST(req) {
   const body = await req.json();
   const { 
     nome_completo, 
-    data_nascimento, 
+    data_nascimento,
+    data_batismo, // ADICIONADO
     nome_grupo, 
     senha, 
     privilegios, 
@@ -52,12 +53,12 @@ export async function POST(req) {
     // --- QUERY ATUALIZADA PARA INSERIR TUDO ---
     await client.query(
       `INSERT INTO publicadores (
-         nome_completo, data_nascimento, grupo_id, senha, privilegios, designacoes,
+         nome_completo, data_nascimento, data_batismo, grupo_id, senha, privilegios, designacoes,
          telefone, email, cep, logradouro, numero, complemento, bairro, cidade, estado
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
       [
-        nome_completo, data_nascimento, grupo.id, hashSenha, finalPrivilegios, finalDesignacoes,
+        nome_completo, data_nascimento, data_batismo || null, grupo.id, hashSenha, finalPrivilegios, finalDesignacoes,
         telefone || null, email || null, cep || null, logradouro || null, numero || null, 
         complemento || null, bairro || null, cidade || null, estado || null
       ]

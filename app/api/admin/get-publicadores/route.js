@@ -8,13 +8,12 @@ const pool = new Pool({
 export async function GET() {
   const client = await pool.connect();
   try {
-    // Este SQL junta as tabelas publicadores e grupos
-    // para que tenhamos o nome do grupo em vez do ID.
     const res = await client.query(`
       SELECT 
         p.id, 
         p.nome_completo, 
         p.data_nascimento, 
+        p.data_batismo,
         g.nome_grupo, 
         p.privilegios, 
         p.designacoes 

@@ -14,7 +14,7 @@ export async function PUT(request, context) {
   const body = await request.json();   // Pega os dados do formulário
 
   const { 
-    nome_completo, data_nascimento, nome_grupo, senha, 
+    nome_completo, data_nascimento, data_batismo, nome_grupo, senha, 
     privilegios, designacoes, telefone, email, cep, 
     logradouro, numero, complemento, bairro, cidade, estado
   } = body;
@@ -48,19 +48,14 @@ export async function PUT(request, context) {
     await client.query(
       `UPDATE publicadores
        SET 
-         nome_completo = $1, data_nascimento = $2, grupo_id = $3, 
-         privilegios = $4, designacoes = $5, telefone = $6, email = $7,
-         cep = $8, logradouro = $9, numero = $10, complemento = $11,
-         bairro = $12, cidade = $13, estado = $14,
-         
-         -- Lógica da Senha:
-         -- Se $15 (hashSenha) for NULL, use o valor que JÁ ESTÁ no banco (senha)
-         -- Se $15 (hashSenha) NÃO for NULL, use o $15 (a nova senha)
-         senha = COALESCE($15, senha) 
-         
-       WHERE id = $16`, // Onde o ID bate
+         nome_completo = $1, data_nascimento = $2, data_batismo = $3, grupo_id = $4, 
+         privilegios = $5, designacoes = $6, telefone = $7, email = $8,
+         cep = $9, logradouro = $10, numero = $11, complemento = $12,
+         bairro = $13, cidade = $14, estado = $15,
+         senha = COALESCE($16, senha) 
+       WHERE id = $17`,
       [
-        nome_completo, data_nascimento, grupo_id,
+        nome_completo, data_nascimento, data_batismo || null, grupo_id,
         finalPrivilegios, finalDesignacoes, telefone || null, email || null,
         cep || null, logradouro || null, numero || null, complemento || null,
         bairro || null, cidade || null, estado || null,

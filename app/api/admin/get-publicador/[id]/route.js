@@ -21,7 +21,7 @@ export async function GET(request, context) {
     // a tabela 'grupos' para pegar o 'nome_grupo'
     const res = await client.query(
       `SELECT 
-         p.id, p.nome_completo, p.data_nascimento, 
+         p.id, p.nome_completo, p.data_nascimento, p.data_batismo,
          g.nome_grupo, p.privilegios, p.designacoes,
          p.telefone, p.email, p.cep, p.logradouro, 
          p.numero, p.complemento, p.bairro, p.cidade, p.estado

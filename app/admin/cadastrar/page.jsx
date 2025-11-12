@@ -23,6 +23,7 @@ export default function CadastrarPublicador() {
   const [formData, setFormData] = useState({
     nome_completo: '',
     data_nascimento: '',
+    data_batismo: '', // ADICIONADO
     nome_grupo: '',
     senha: '',
     privilegios: [], 
@@ -248,6 +249,18 @@ export default function CadastrarPublicador() {
                   className={baseInputClass}
                   placeholder="dd/mm/aaaa"
                   required
+                />
+              </div>
+              <div>
+                <label htmlFor="data_batismo" className={labelClass}>Data de Batismo</label>
+                <IMaskInput
+                  mask="00/00/0000"
+                  id="data_batismo"
+                  name="data_batismo"
+                  value={formData.data_batismo}
+                  onAccept={(value) => handleMaskChange(value, 'data_batismo')}
+                  className={baseInputClass}
+                  placeholder="dd/mm/aaaa"
                 />
               </div>
               <div>
