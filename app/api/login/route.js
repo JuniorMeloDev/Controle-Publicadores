@@ -34,7 +34,7 @@ export async function POST(req) {
 
     // 3. Verificar se a pessoa tem permissão (ex: é ancião ou SM)
     //    (Adapte essa lógica para seu caso)
-    const isAdmin = user.privilegios?.includes('Ancião') || user.privilegios?.includes('servo_ministerial');
+    const isAdmin = user.privilegios?.includes('anciao') || user.privilegios?.includes('servo_ministerial');
     
     if (!isAdmin) {
         return NextResponse.json({ message: 'Você não tem permissão para acessar esta área.' }, { status: 403 }); // 403 Forbidden
