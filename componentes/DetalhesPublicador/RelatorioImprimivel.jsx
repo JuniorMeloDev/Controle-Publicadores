@@ -138,33 +138,52 @@ export default function RelatorioImprimivel({ publicador, relatorios }) {
           <thead>
             <tr className="bg-gray-200">
               <th className="border border-black p-2 text-xs font-bold">Mês</th>
-              <th className="border border-black p-2 text-xs font-bold">Partic.</th>
+              <th className="border border-black p-2 text-xs font-bold">Participou no ministério</th>
               <th className="border border-black p-2 text-xs font-bold">Estudos</th>
-              <th className="border border-black p-2 text-xs font-bold">Pion. Aux.</th>
+              <th className="border border-black p-2 text-xs font-bold">Pioneiro Auxiliar</th>
               <th className="border border-black p-2 text-xs font-bold">Horas</th>
               <th className="border border-black p-2 text-xs font-bold">Observações</th>
             </tr>
           </thead>
           <tbody>
             {MESES_ANO_SERVICO.map((mes) => {
-              const rel = relatoriosPorMes[mes];
+              const rel = relatoriosPorMes[mes] || {};
+              const Box = ({ checked }) => (
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: 16,
+                    height: 16,
+                    border: '1px solid #000',
+                    textAlign: 'center',
+                    lineHeight: '14px',
+                    fontSize: 12,
+                    color: '#000',
+                    verticalAlign: 'middle'
+                  }}
+                  aria-hidden
+                >
+                  {checked ? '✔' : '\u00A0'}
+                </span>
+              );
+
               return (
                 <tr key={mes}>
                   <td className="border border-black p-2 text-xs">{mes}</td>
                   <td className="border border-black p-2 text-center text-xs">
-                    {rel?.participacoes ? 'X' : ''}
+                    <Box checked={!!rel.participacoes} />
                   </td>
                   <td className="border border-black p-2 text-center text-xs">
-                    {rel?.estudos || ''}
+                    {rel.estudos || ''}
                   </td>
                   <td className="border border-black p-2 text-center text-xs">
-                    {rel?.pioneiro_auxiliar ? 'X' : ''}
+                    <Box checked={!!rel.pioneiro_auxiliar} />
                   </td>
                   <td className="border border-black p-2 text-center text-xs">
-                    {rel?.horas || ''}
+                    {rel.horas || ''}
                   </td>
                   <td className="border border-black p-2 text-xs text-gray-600">
-                    {rel?.observacoes || ''}
+                    {rel.observacoes || ''}
                   </td>
                 </tr>
               );

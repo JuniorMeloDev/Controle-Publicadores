@@ -16,7 +16,9 @@ export async function GET() {
         p.data_batismo,
         g.nome_grupo, 
         p.privilegios, 
-        p.designacoes 
+        p.designacoes,
+        p.sexo,         -- <-- ADICIONADO
+        p.esperanca     -- <-- ADICIONADO
       FROM publicadores p
       LEFT JOIN grupos g ON p.grupo_id = g.id
       ORDER BY p.nome_completo ASC

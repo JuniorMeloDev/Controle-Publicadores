@@ -10,41 +10,40 @@ const pool = new Pool({
 
 // Rota: PUT /api/admin/update-publicador/123
 export async function PUT(request, context) {
-  const { id } = await context.params; // Pega o ID da URL
-  const body = await request.json();   // Pega os dados do formulário
+  const { id } = await context.params; 
+  const body = await request.json();   
 
   const { 
     nome_completo, data_nascimento, data_batismo, nome_grupo, senha, 
     privilegios, designacoes, telefone, email, cep, 
-    logradouro, numero, complemento, bairro, cidade, estado
+    logradouro, numero, complemento, bairro, cidade, estado,
+    sexo, esperanca // <-- ADICIONADO
   } = body;
 
-  if (!id || !nome_completo || !data_nascimento || !nome_grupo) {
-    return NextResponse.json({ message: 'ID, Nome, Data de Nascimento e Grupo são obrigatórios.' }, { status: 400 });
+  // Validação principal
+  if (!id || !nome_completo || !data_nascimento || !nome_grupo || !sexo) {
+    return NextResponse.json({ message: 'ID, Nome, Data de Nascimento, Sexo e Grupo são obrigatórios.' }, { status: 400 });
   }
 
   const client = await pool.connect();
 
   try {
-    // 1. Criptografa a nova senha (APENAS se uma nova foi digitada)
     let hashSenha = null;
     if (senha && senha.trim() !== '') {
       const salt = await bcrypt.genSalt(10);
       hashSenha = await bcrypt.hash(senha, salt);
     }
 
-    // 2. Encontra o ID do grupo (igual ao 'create')
     const grupoRes = await client.query('SELECT id FROM grupos WHERE nome_grupo = $1', [nome_grupo]);
     if (grupoRes.rows.length === 0) {
       return NextResponse.json({ message: 'Grupo não encontrado.' }, { status: 404 });
     }
     const grupo_id = grupoRes.rows[0].id;
 
-    // 3. Garante que arrays vazios sejam salvos como NULL
     const finalPrivilegios = privilegios.length > 0 ? privilegios : null;
     const finalDesignacoes = designacoes.length > 0 ? designacoes : null;
 
-    // 4. Executa a query de ATUALIZAÇÃO (UPDATE)
+    // --- QUERY DE ATUALIZAÇÃO (UPDATE) ---
     await client.query(
       `UPDATE publicadores
        SET 
@@ -52,24 +51,43 @@ export async function PUT(request, context) {
          privilegios = $5, designacoes = $6, telefone = $7, email = $8,
          cep = $9, logradouro = $10, numero = $11, complemento = $12,
          bairro = $13, cidade = $14, estado = $15,
-         senha = COALESCE($16, senha) 
-       WHERE id = $17`,
+         sexo = $16, esperanca = $17,
+         senha = COALESCE($18, senha)
+       WHERE id = $19`,
       [
         nome_completo, data_nascimento, data_batismo || null, grupo_id,
         finalPrivilegios, finalDesignacoes, telefone || null, email || null,
         cep || null, logradouro || null, numero || null, complemento || null,
         bairro || null, cidade || null, estado || null,
-        hashSenha, 
-        id        
+        sexo, esperanca || null,
+        hashSenha,
+        id
       ]
     );
     
-    return NextResponse.json({ message: 'Publicador atualizado com sucesso!' }, { status: 200 });
+    // Buscar o registro atualizado (incluindo nome_grupo) para devolver ao cliente
+    const updatedRes = await client.query(
+      `SELECT 
+         p.id, p.nome_completo, p.data_nascimento, p.data_batismo,
+         g.nome_grupo, p.privilegios, p.designacoes,
+         p.sexo, p.esperanca,
+         p.telefone, p.email, p.cep, p.logradouro, p.numero, p.complemento, p.bairro, p.cidade, p.estado
+       FROM publicadores p
+       LEFT JOIN grupos g ON p.grupo_id = g.id
+       WHERE p.id = $1`,
+      [id]
+    );
+    
+    const updatedPublicador = updatedRes.rows[0] || null;
+    return NextResponse.json({ message: 'Publicador atualizado com sucesso!', publicador: updatedPublicador }, { status: 200 });
   
   } catch (err) {
-    // Erro de nome duplicado
     if (err.code === '23505') {
       return NextResponse.json({ message: 'Outro publicador já existe com este Nome Completo.' }, { status: 409 });
+    }
+    // Tratamento de erro para constraints CHECK
+    if (err.code === '23514') {
+      return NextResponse.json({ message: `Valor inválido para Sexo ou Esperança. Verifique os dados.` }, { status: 400 });
     }
     console.error('Erro ao atualizar publicador:', err);
     return NextResponse.json({ message: 'Erro interno do servidor.' }, { status: 500 });

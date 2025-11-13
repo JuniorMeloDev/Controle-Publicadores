@@ -155,7 +155,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
   return (
     <div className="flex flex-col h-full bg-neutral-900 overflow-hidden">
       {/* HEADER */}
-      <div className="flex-shrink-0 border-b border-neutral-800 bg-neutral-800/50">
+      <div className="shrink-0 border-b border-neutral-800 bg-neutral-800/50">
         <div className="flex items-center justify-between px-4 py-3">
           <div>
             <h2 className="text-base font-bold text-white">Novo Publicador</h2>

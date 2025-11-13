@@ -156,7 +156,7 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
         setIsError(false);
         onSaveSuccess();
       } else {
-        setMessage(data.message || 'Ocorreu um erro.');
+        setMessage(data?.message || 'Erro ao salvar');
         setIsError(true);
       }
     } catch (err) {
@@ -167,21 +167,20 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
     }
   };
 
-  // Função de impressão simples (sem react-to-print)
+  // Função de impressão simplificada: usa media print + .printable-content do globals.css
   const handlePrint = () => {
-    if (printRef.current) {
-      const printWindow = window.open('', '', 'height=600,width=800');
-      printWindow.document.write('<html><head><title>' + formData.nome_completo + '</title>');
-      printWindow.document.write('<style>');
-      printWindow.document.write('@import url("https://cdn.tailwindcss.com");');
-      printWindow.document.write('body { color: #000; background: #fff; }');
-      printWindow.document.write('</style>');
-      printWindow.document.write('</head><body>');
-      printWindow.document.write(printRef.current.innerHTML);
-      printWindow.document.write('</body></html>');
-      printWindow.document.close();
-      printWindow.print();
+    const el = document.querySelector('.printable-content');
+    if (!el) {
+      console.error('handlePrint: container imprimível não encontrado');
+      return;
     }
+
+    // garante que o DOM esteja atualizado antes de abrir o diálogo de impressão
+    // (pequeno delay ajuda em casos de render assíncrona)
+    setTimeout(() => {
+      window.focus();
+      window.print();
+    }, 100);
   };
 
   if (isPageLoading) {
@@ -274,7 +273,7 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
       )}
 
       {/* Componente de Impressão (oculto) */}
-      <div style={{ display: 'none' }}>
+      <div className="printable-content">
         <div ref={printRef}>
           <RelatorioImprimivel 
             publicador={formData} 

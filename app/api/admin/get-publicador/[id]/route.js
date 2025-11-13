@@ -23,6 +23,7 @@ export async function GET(request, context) {
       `SELECT 
          p.id, p.nome_completo, p.data_nascimento, p.data_batismo,
          g.nome_grupo, p.privilegios, p.designacoes,
+         p.sexo, p.esperanca,   -- <-- ADICIONADO: retornar sexo e esperanca
          p.telefone, p.email, p.cep, p.logradouro, 
          p.numero, p.complemento, p.bairro, p.cidade, p.estado
        FROM publicadores p

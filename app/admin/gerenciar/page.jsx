@@ -16,7 +16,8 @@ export default function GerenciarPage() {
   const fetchPublicadores = async () => {
     setIsLoadingList(true);
     try {
-      const res = await fetch('/api/admin/get-publicadores');
+      // Adicionado cache: 'no-store' aqui também por segurança
+      const res = await fetch('/api/admin/get-publicadores', { cache: 'no-store' });
       if (!res.ok) throw new Error('Falha ao buscar publicadores');
       const data = await res.json();
       setPublicadores(data);
@@ -49,9 +50,12 @@ export default function GerenciarPage() {
     setModoNovo(false);
   };
 
-  const handleSaveSuccess = () => {
+  const handleSaveSuccess = (keepOpen = false) => {
     fetchPublicadores();
-    handleCloseDrawer();
+    // Se keepOpen for true, apenas atualiza a lista e mantém o drawer aberto
+    if (!keepOpen) {
+      handleCloseDrawer();
+    }
   };
 
   if (isLoadingList) {
@@ -90,6 +94,7 @@ export default function GerenciarPage() {
 
         {isDrawerOpen && !modoNovo && selectedPublicadorId && (
           <DetalhesPublicador
+            key={selectedPublicadorId} // <-- ESTA É A CORREÇÃO CRÍTICA
             publicadorId={selectedPublicadorId}
             onSaveSuccess={handleSaveSuccess}
             onClose={handleCloseDrawer}

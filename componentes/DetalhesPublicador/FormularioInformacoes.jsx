@@ -2,6 +2,7 @@
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { IMaskInput } from 'react-imask';
 
+// Listas estáticas (não precisam de .map)
 const LISTA_PRIVILEGIOS = [
   { id: 'anciao', label: 'Ancião' },
   { id: 'servo_ministerial', label: 'Servo Ministerial' },
@@ -19,11 +20,15 @@ export default function FormularioInformacoes({
   showPassword, setShowPassword 
 }) {
   
+  // Log para mostrar EXATAMENTE o que o formulário está recebendo
+  console.log('[FormularioInformacoes] Renderizando com formData:', formData);
+  
   const labelClass = "block text-xs font-semibold text-neutral-300 mb-1";
   const baseInputClass = "w-full rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-sm text-neutral-100 placeholder-neutral-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50";
   const checkboxLabelClass = "ml-2 text-xs text-neutral-100 select-none cursor-pointer";
   const checkboxClass = "h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-blue-600 cursor-pointer";
   
+  // A prop 'handleSubmit' do componente pai é ligada aqui
   return (
     <form onSubmit={handleSubmit} className="space-y-4 mt-6">
       {/* === LINHA 1: PESSOAIS === */}
@@ -52,7 +57,7 @@ export default function FormularioInformacoes({
             <select 
               id="sexo" 
               name="sexo" 
-              value={formData.sexo || ''} 
+              value={formData.sexo || ''} // Garantia de que o valor é controlado
               onChange={handleChange} 
               className={baseInputClass} 
               required
@@ -95,7 +100,7 @@ export default function FormularioInformacoes({
             <select 
               id="esperanca" 
               name="esperanca" 
-              value={formData.esperanca || ''} 
+              value={formData.esperanca || ''} // Garantia de que o valor é controlado
               onChange={handleChange} 
               className={baseInputClass}
             >
@@ -170,7 +175,7 @@ export default function FormularioInformacoes({
                 disabled={isCepLoading}
               />
               {isCepLoading && (
-                <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-neutral-400" />
+                <Loader2 className="absolute right-2 top-1/2 -translate-y-1.2 h-4 w-4 animate-spin text-neutral-400" />
               )}
             </div>
             {cepError && <p className="text-xs text-red-400 mt-1">{cepError}</p>}
@@ -306,7 +311,7 @@ export default function FormularioInformacoes({
                     name="privilegios" 
                     type="checkbox" 
                     value={priv.id} 
-                    checked={formData.privilegios.includes(priv.id)} 
+                    checked={Array.isArray(formData.privilegios) && formData.privilegios.includes(priv.id)} 
                     onChange={handlePrivilegioChange} 
                     className={checkboxClass} 
                   />
@@ -331,7 +336,7 @@ export default function FormularioInformacoes({
                   name="designacoes" 
                   type="checkbox" 
                   value={desig.id} 
-                  checked={formData.designacoes.includes(desig.id)} 
+                  checked={Array.isArray(formData.designacoes) && formData.designacoes.includes(desig.id)} 
                   onChange={handleDesignacaoChange} 
                   className={checkboxClass} 
                 />
@@ -340,6 +345,7 @@ export default function FormularioInformacoes({
             ))}
           </div>
 
+          {/* Este é o botão que causa o 'submit' */}
           <button 
             type="submit" 
             disabled={isLoading || isCepLoading}

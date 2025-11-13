@@ -11,7 +11,9 @@ export async function POST(req) {
   const { 
     nome_completo, 
     data_nascimento,
-    data_batismo, // ADICIONADO
+    data_batismo,
+    sexo,         
+    esperanca,    
     nome_grupo, 
     senha, 
     privilegios, 
@@ -27,8 +29,9 @@ export async function POST(req) {
     estado
   } = body;
 
-  if (!nome_completo || !data_nascimento || !nome_grupo) {
-    return NextResponse.json({ message: 'Nome, Data de Nascimento e Grupo são obrigatórios.' }, { status: 400 });
+  // Validação principal
+  if (!nome_completo || !data_nascimento || !nome_grupo || !sexo) {
+    return NextResponse.json({ message: 'Nome, Data de Nascimento, Sexo e Grupo são obrigatórios.' }, { status: 400 });
   }
 
   const client = await pool.connect();
@@ -54,13 +57,15 @@ export async function POST(req) {
     await client.query(
       `INSERT INTO publicadores (
          nome_completo, data_nascimento, data_batismo, grupo_id, senha, privilegios, designacoes,
-         telefone, email, cep, logradouro, numero, complemento, bairro, cidade, estado
+         telefone, email, cep, logradouro, numero, complemento, bairro, cidade, estado,
+         sexo, esperanca -- <-- ADICIONADO
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`, // <-- ATUALIZADO PARA $18
       [
         nome_completo, data_nascimento, data_batismo || null, grupo.id, hashSenha, finalPrivilegios, finalDesignacoes,
         telefone || null, email || null, cep || null, logradouro || null, numero || null, 
-        complemento || null, bairro || null, cidade || null, estado || null
+        complemento || null, bairro || null, cidade || null, estado || null,
+        sexo, esperanca || null // <-- ADICIONADO
       ]
     );
 
@@ -69,6 +74,10 @@ export async function POST(req) {
   } catch (err) {
     if (err.code === '23505') {
       return NextResponse.json({ message: 'Um publicador com este Nome Completo já existe.' }, { status: 409 });
+    }
+    // Tratamento de erro para constraints CHECK (como sexo ou esperanca)
+    if (err.code === '23514') { // Código de erro para CHECK constraint
+      return NextResponse.json({ message: `Valor inválido para Sexo ou Esperança. Verifique os dados.` }, { status: 400 });
     }
     console.error('Erro ao criar publicador:', err);
     return NextResponse.json({ message: 'Erro interno ao salvar o publicador.' }, { status: 500 });
