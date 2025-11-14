@@ -32,19 +32,19 @@ export default function AtividadesTeocraticas({ publicadorId, publicadorNome, re
   }, [publicadorId, relatoriosInicial]);
 
   // Função de impressão
-  const handlePrint = () => {
-    if (printRef.current) {
-      const printWindow = window.open('', '', 'height=600,width=800');
-      printWindow.document.write('<html><head><title>' + publicadorNome + '</title>');
-      printWindow.document.write('<style>');
-      printWindow.document.write('body { color: #000; background: #fff; font-family: Arial, sans-serif; }');
-      printWindow.document.write('</style>');
-      printWindow.document.write('</head><body>');
-      printWindow.document.write(printRef.current.innerHTML);
-      printWindow.document.write('</body></html>');
-      printWindow.document.close();
-      printWindow.print();
+ const handlePrint = () => {
+    const el = document.querySelector('.printable-content');
+    if (!el) {
+      console.error('handlePrint: container imprimível não encontrado');
+      return;
     }
+
+    // garante que o DOM esteja atualizado antes de abrir o diálogo de impressão
+    // (pequeno delay ajuda em casos de render assíncrona)
+    setTimeout(() => {
+      window.focus();
+      window.print();
+    }, 100);
   };
 
   return (
@@ -105,13 +105,22 @@ export default function AtividadesTeocraticas({ publicadorId, publicadorNome, re
                 </div>
 
                 {/* Botão de Impressão */}
-                <div className="flex justify-center">
+                <div className="flex justify-center gap-3">
                   <button
                     onClick={handlePrint}
                     className="flex items-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-colors"
                   >
                     <Printer size={18} />
-                    Imprimir Relatório
+                    Imprimir Registro de Publicador
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      window.location.href = `/relatorio-mensal?publicadorId=${publicadorId}`
+                    }}
+                    className="flex items-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-500 transition-colors"
+                  >
+                    Enviar Relatório Manual
                   </button>
                 </div>
               </div>

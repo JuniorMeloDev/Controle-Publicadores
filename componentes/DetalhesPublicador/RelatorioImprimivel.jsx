@@ -207,11 +207,6 @@ export default function RelatorioImprimivel({ publicador, relatorios }) {
           </tbody>
         </table>
       </div>
-
-      {/* FOOTER */}
-      <div className="text-center text-xs text-gray-600 mt-4">
-        <p>Relatório gerado automaticamente</p>
-      </div>
     </div>
   );
 }

@@ -15,7 +15,7 @@ export default function Dashboard() {
       router.push('/');
     } catch (err) {
       console.error('Erro ao fazer logout', err);
-      alert('Erro ao tentar sair.');
+      // Removido o alert()
       setIsLoggingOut(false);
     }
   };
@@ -43,18 +43,32 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           
-          {/* --- CARD ATUALIZADO --- */}
+          {/* --- CARD GERENCIAR PUBLICADORES --- */}
           <Link 
-            href="/admin/gerenciar" // <-- MUDANÇA 1: Link
+            href="/admin/gerenciar"
             className="block p-6 bg-neutral-800 border border-neutral-700 rounded-lg hover:bg-neutral-700 transition-colors shadow-lg"
           >
             <h2 className="text-xl font-semibold text-white mb-2">
-              Gerenciar Publicadores {/* <-- MUDANÇA 2: Título */}
+              Gerenciar Publicadores
             </h2>
             <p className="text-neutral-400">
-              Visualizar, editar e adicionar novos publicadores ao sistema. {/* <-- MUDANÇA 3: Descrição */}
+              Visualizar, editar e adicionar novos publicadores ao sistema.
             </p>
           </Link>
+
+          {/* --- NOVO CARD ADICIONADO --- */}
+          <Link 
+            href="/admin/designacoes"
+            className="block p-6 bg-neutral-800 border border-neutral-700 rounded-lg hover:bg-neutral-700 transition-colors shadow-lg"
+          >
+            <h2 className="text-xl font-semibold text-white mb-2">
+              Designações da Reunião
+            </h2>
+            <p className="text-neutral-400">
+              Criar o programa da reunião importando o .RTF da semana.
+            </p>
+          </Link>
+          {/* --- FIM DO NOVO CARD --- */}
 
           {/* Card de Exemplo Futuro */}
           <div className="block p-6 bg-neutral-800 border border-neutral-700 rounded-lg opacity-50 cursor-not-allowed">

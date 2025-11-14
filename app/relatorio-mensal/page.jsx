@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+// 1. Importar o useSearchParams
+import { useSearchParams } from 'next/navigation';
 
 const meses = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -28,27 +30,80 @@ export default function RelatorioMensal() {
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
 
+  // 2. Pegar os parâmetros da URL
+  const searchParams = useSearchParams();
+  const publicadorId = searchParams.get('publicadorId');
+  
+  // Criamos um estado para saber se é entrada manual
+  const [isManualEntry, setIsManualEntry] = useState(!!publicadorId);
+
+
+  // Efeito para carregar os grupos
   useEffect(() => {
-    const fetchGrupos = async () => {
-      try {
-        const response = await fetch('/api/get-grupos');
-        if (!response.ok) {
-          throw new Error('Falha ao carregar grupos');
-        }
-        const data = await response.json();
-        setGruposList(data); 
-        
-        if (data.length > 0) {
-          setFormData(prev => ({ ...prev, nome_grupo: data[0] }));
-        }
+    // Só carrega a lista completa de grupos se NÃO for entrada manual
+    if (!publicadorId) {
+      const fetchGrupos = async () => {
+        try {
+          const response = await fetch('/api/get-grupos');
+          if (!response.ok) {
+            throw new Error('Falha ao carregar grupos');
+          }
+          const data = await response.json();
+          setGruposList(data); 
+          
+          if (data.length > 0) {
+            setFormData(prev => ({ ...prev, nome_grupo: data[0] }));
+          }
 
-      } catch (err) {
-        console.error(err);
-      }
-    };
+        } catch (err) {
+          console.error(err);
+        }
+      };
 
-    fetchGrupos();
-  }, []); 
+      fetchGrupos();
+    }
+  }, [publicadorId]); // Roda se publicadorId mudar (para não rodar se for manual)
+
+  // 3. NOVO EFEITO: Carregar dados do publicador se publicadorId existir
+  useEffect(() => {
+    if (publicadorId) {
+      setIsLoading(true);
+      setMessage('Carregando dados do publicador...');
+      
+      const fetchPublicadorData = async () => {
+        try {
+          const res = await fetch(`/api/enviar-relatorio-mensal/manual?publicadorId=${publicadorId}`);
+          
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.message || 'Não foi possível encontrar os dados do publicador.');
+          }
+          
+          const data = await res.json();
+          
+          // Preenche o formulário com os dados recebidos
+          setFormData(prev => ({
+            ...prev,
+            nome_completo: data.nome_completo,
+            data_nascimento: data.data_nascimento,
+            nome_grupo: data.nome_grupo,
+          }));
+          
+          setMessage(''); // Limpa a mensagem de "carregando"
+          setIsError(false);
+          
+        } catch (err) {
+          console.error(err);
+          setMessage(err.message);
+          setIsError(true);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      
+      fetchPublicadorData();
+    }
+  }, [publicadorId]); // Roda apenas se publicadorId existir
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -61,27 +116,67 @@ export default function RelatorioMensal() {
     setIsLoading(true);
     setMessage('');
     setIsError(false);
+    
     try {
-      const response = await fetch('/api/enviar-relatorio-mensal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // 4. Determina qual API usar
+      const apiUrl = isManualEntry 
+        ? '/api/enviar-relatorio-mensal/manual' 
+        : '/api/enviar-relatorio-mensal';
+        
+      const bodyPayload = isManualEntry
+        ? { publicadorId: publicadorId, ...formData } // API Manual espera o ID
+        : { ...formData }; // API Pública espera os dados de texto
+
+      // A API pública (route2.js) é a que espera os campos de texto
+      // A API manual (route.js) espera o publicadorId
+      // Vamos decidir qual API e qual payload enviar
+      
+      let finalApiUrl;
+      let finalBody;
+
+      if (isManualEntry) {
+         // Se é manual, enviamos para a API /manual com o ID
+        finalApiUrl = '/api/enviar-relatorio-mensal/manual';
+        finalBody = JSON.stringify({
+          publicadorId: publicadorId, // A API manual POST espera o ID
+          mes: formData.mes,
+          ano_servico: formData.ano_servico,
+          participou_ministerio: formData.participou_ministerio,
+          pioneiro_auxiliar: formData.pioneiro_auxiliar,
+          estudos_biblicos: formData.estudos_biblicos || null,
+          horas: formData.horas || null,
+          observacoes: formData.observacoes || null
+        });
+      } else {
+        // Se é público, enviamos para a API /enviar-relatorio-mensal
+        finalApiUrl = '/api/enviar-relatorio-mensal';
+        finalBody = JSON.stringify({
           ...formData,
           estudos_biblicos: formData.estudos_biblicos || null,
           horas: formData.horas || null,
-        })
+        });
+      }
+
+      const response = await fetch(finalApiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: finalBody
       });
+      
       const data = await response.json();
+      
       if (response.ok) {
         setMessage(data.message);
         setIsError(false);
         setFormData(prev => ({
           ...prev,
+          // Limpa apenas os campos de relatório
           participou_ministerio: false,
           pioneiro_auxiliar: false,
           estudos_biblicos: '',
           horas: '',
           observacoes: ''
+          // Mantém os dados de identificação preenchidos (se for manual)
         }));
       } else {
         setMessage(data.message || 'Ocorreu um erro.');
@@ -103,9 +198,8 @@ export default function RelatorioMensal() {
     }));
   };
 
-  // ----- CLASSES DO TAILWIND ATUALIZADAS -----
+  // ----- CLASSES DO TAILWIND (INALTERADAS) -----
   const labelClass = "block text-sm font-medium text-neutral-300";
-  // Classe base para inputs, selects e textareas
   const baseInputClass = "mt-1 block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-neutral-100 placeholder-neutral-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50";
   const checkboxLabelClass = "ml-2 text-sm text-neutral-100 select-none";
   const checkboxClass = "h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-neutral-900";
@@ -117,7 +211,8 @@ export default function RelatorioMensal() {
       <div className="max-w-2xl mx-auto bg-neutral-900 p-6 md:p-8 rounded-xl shadow-2xl border border-neutral-800">
 
         <h2 className="text-3xl font-bold text-center mb-6 text-white">
-          Enviar Relatório Mensal
+          {/* Título dinâmico */}
+          {isManualEntry ? 'Enviar Relatório (Manual)' : 'Enviar Relatório Mensal'}
         </h2>
         
         {message && (
@@ -137,7 +232,18 @@ export default function RelatorioMensal() {
             </h3>
             <div>
               <label htmlFor="nome_completo" className={labelClass}>Nome Completo</label>
-              <input type="text" id="nome_completo" name="nome_completo" value={formData.nome_completo} onChange={handleChange} className={baseInputClass} required />
+              <input 
+                type="text" 
+                id="nome_completo" 
+                name="nome_completo" 
+                value={formData.nome_completo} 
+                onChange={handleChange} 
+                className={baseInputClass} 
+                required 
+                // 5. Desabilitar se for manual
+                disabled={isManualEntry}
+                readOnly={isManualEntry}
+              />
             </div>
 
             <div>
@@ -147,21 +253,43 @@ export default function RelatorioMensal() {
                 name="nome_grupo" 
                 value={formData.nome_grupo} 
                 onChange={handleChange} 
-                className={baseInputClass} // Usa a mesma classe base
+                className={baseInputClass}
                 required
+                // 5. Desabilitar se for manual
+                disabled={isManualEntry}
               >
                 <option value="" disabled>Selecione seu grupo...</option>
-                {gruposList.map(grupo => (
-                  <option key={grupo} value={grupo}>
-                    {grupo}
-                  </option>
-                ))}
+                
+                {/* 6. Lógica de opções atualizada */}
+                {isManualEntry && formData.nome_grupo ? (
+                  // Se for manual, mostra apenas o grupo carregado
+                  <option value={formData.nome_grupo}>{formData.nome_grupo}</option>
+                ) : (
+                  // Se for público, lista todos os grupos
+                  gruposList.map(grupo => (
+                    <option key={grupo} value={grupo}>
+                      {grupo}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
             
             <div>
               <label htmlFor="data_nascimento" className={labelClass}>Data de Nascimento</label>
-              <input type="text" id="data_nascimento" name="data_nascimento" value={formData.data_nascimento} onChange={handleChange} className={baseInputClass} placeholder="dd/mm/aaaa" required />
+              <input 
+                type="text" 
+                id="data_nascimento" 
+                name="data_nascimento" 
+                value={formData.data_nascimento} 
+                onChange={handleChange} 
+                className={baseInputClass} 
+                placeholder="dd/mm/aaaa" 
+                required 
+                // 5. Desabilitar se for manual
+                disabled={isManualEntry}
+                readOnly={isManualEntry}
+              />
             </div>
           </div>
           
@@ -170,6 +298,7 @@ export default function RelatorioMensal() {
               Relatório
             </h3>
             
+            {/* Campos de Relatório (inalterados) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="mes" className={labelClass}>Mês</label>
@@ -215,7 +344,8 @@ export default function RelatorioMensal() {
             disabled={isLoading} 
             className="w-full flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-neutral-900 disabled:opacity-50 transition-colors"
           >
-            {isLoading ? 'Enviando...' : 'Enviar Relatório'}
+            {/* O texto do botão agora se baseia no estado de loading */}
+            {isLoading ? (isManualEntry ? 'Carregando...' : 'Enviando...') : 'Enviar Relatório'}
           </button>
         </form>
       </div>
