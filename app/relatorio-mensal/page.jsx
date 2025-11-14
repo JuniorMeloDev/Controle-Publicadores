@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-// 1. Importar o useSearchParams
+// 1. Importar o Suspense
+import { useState, useEffect, Suspense } from 'react';
+// 2. Importar o useSearchParams
 import { useSearchParams } from 'next/navigation';
 
 const meses = [
@@ -10,7 +11,8 @@ const meses = [
 ];
 const mesAtual = meses[new Date().getMonth()];
 
-export default function RelatorioMensal() {
+// 3. Movemos toda a lógica do formulário para este componente-filho
+function RelatorioForm() {
   
   const [gruposList, setGruposList] = useState([]); 
   const [formData, setFormData] = useState({
@@ -30,41 +32,34 @@ export default function RelatorioMensal() {
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
 
-  // 2. Pegar os parâmetros da URL
+  // 4. O useSearchParams agora está DENTRO do componente que será "suspenso"
   const searchParams = useSearchParams();
   const publicadorId = searchParams.get('publicadorId');
   
-  // Criamos um estado para saber se é entrada manual
   const [isManualEntry, setIsManualEntry] = useState(!!publicadorId);
-
 
   // Efeito para carregar os grupos
   useEffect(() => {
-    // Só carrega a lista completa de grupos se NÃO for entrada manual
     if (!publicadorId) {
       const fetchGrupos = async () => {
         try {
           const response = await fetch('/api/get-grupos');
-          if (!response.ok) {
-            throw new Error('Falha ao carregar grupos');
-          }
+          if (!response.ok) throw new Error('Falha ao carregar grupos');
           const data = await response.json();
           setGruposList(data); 
           
           if (data.length > 0) {
             setFormData(prev => ({ ...prev, nome_grupo: data[0] }));
           }
-
         } catch (err) {
           console.error(err);
         }
       };
-
       fetchGrupos();
     }
-  }, [publicadorId]); // Roda se publicadorId mudar (para não rodar se for manual)
+  }, [publicadorId]);
 
-  // 3. NOVO EFEITO: Carregar dados do publicador se publicadorId existir
+  // Efeito para carregar dados do publicador se publicadorId existir
   useEffect(() => {
     if (publicadorId) {
       setIsLoading(true);
@@ -73,15 +68,12 @@ export default function RelatorioMensal() {
       const fetchPublicadorData = async () => {
         try {
           const res = await fetch(`/api/enviar-relatorio-mensal/manual?publicadorId=${publicadorId}`);
-          
           if (!res.ok) {
             const errData = await res.json();
             throw new Error(errData.message || 'Não foi possível encontrar os dados do publicador.');
           }
-          
           const data = await res.json();
           
-          // Preenche o formulário com os dados recebidos
           setFormData(prev => ({
             ...prev,
             nome_completo: data.nome_completo,
@@ -89,7 +81,7 @@ export default function RelatorioMensal() {
             nome_grupo: data.nome_grupo,
           }));
           
-          setMessage(''); // Limpa a mensagem de "carregando"
+          setMessage(''); 
           setIsError(false);
           
         } catch (err) {
@@ -103,8 +95,9 @@ export default function RelatorioMensal() {
       
       fetchPublicadorData();
     }
-  }, [publicadorId]); // Roda apenas se publicadorId existir
+  }, [publicadorId]); 
 
+  // Handler de Submit (Exatamente como antes)
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.nome_grupo) {
@@ -118,27 +111,13 @@ export default function RelatorioMensal() {
     setIsError(false);
     
     try {
-      // 4. Determina qual API usar
-      const apiUrl = isManualEntry 
-        ? '/api/enviar-relatorio-mensal/manual' 
-        : '/api/enviar-relatorio-mensal';
-        
-      const bodyPayload = isManualEntry
-        ? { publicadorId: publicadorId, ...formData } // API Manual espera o ID
-        : { ...formData }; // API Pública espera os dados de texto
-
-      // A API pública (route2.js) é a que espera os campos de texto
-      // A API manual (route.js) espera o publicadorId
-      // Vamos decidir qual API e qual payload enviar
-      
       let finalApiUrl;
       let finalBody;
 
       if (isManualEntry) {
-         // Se é manual, enviamos para a API /manual com o ID
         finalApiUrl = '/api/enviar-relatorio-mensal/manual';
         finalBody = JSON.stringify({
-          publicadorId: publicadorId, // A API manual POST espera o ID
+          publicadorId: publicadorId,
           mes: formData.mes,
           ano_servico: formData.ano_servico,
           participou_ministerio: formData.participou_ministerio,
@@ -148,7 +127,6 @@ export default function RelatorioMensal() {
           observacoes: formData.observacoes || null
         });
       } else {
-        // Se é público, enviamos para a API /enviar-relatorio-mensal
         finalApiUrl = '/api/enviar-relatorio-mensal';
         finalBody = JSON.stringify({
           ...formData,
@@ -170,13 +148,11 @@ export default function RelatorioMensal() {
         setIsError(false);
         setFormData(prev => ({
           ...prev,
-          // Limpa apenas os campos de relatório
           participou_ministerio: false,
           pioneiro_auxiliar: false,
           estudos_biblicos: '',
           horas: '',
           observacoes: ''
-          // Mantém os dados de identificação preenchidos (se for manual)
         }));
       } else {
         setMessage(data.message || 'Ocorreu um erro.');
@@ -190,6 +166,7 @@ export default function RelatorioMensal() {
     }
   };
 
+  // Handler de Change (Exatamente como antes)
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prevData) => ({
@@ -204,151 +181,145 @@ export default function RelatorioMensal() {
   const checkboxLabelClass = "ml-2 text-sm text-neutral-100 select-none";
   const checkboxClass = "h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-neutral-900";
   
+  // 5. O JSX do formulário é retornado aqui
   return (
-    // Fundo aplicado pelo layout
-    <main className="min-h-screen w-full p-4 md:p-8">
-      {/* Cartão do formulário com estilo dark */}
-      <div className="max-w-2xl mx-auto bg-neutral-900 p-6 md:p-8 rounded-xl shadow-2xl border border-neutral-800">
+    <div className="max-w-2xl mx-auto bg-neutral-900 p-6 md:p-8 rounded-xl shadow-2xl border border-neutral-800">
+      <h2 className="text-3xl font-bold text-center mb-6 text-white">
+        {isManualEntry ? 'Enviar Relatório (Manual)' : 'Enviar Relatório Mensal'}
+      </h2>
+      
+      {message && (
+        <div className={`p-3 rounded-md mb-6 text-sm ${isError 
+          ? 'bg-red-900 bg-opacity-30 text-red-300 border border-red-800' 
+          : 'bg-green-900 bg-opacity-30 text-green-300 border border-green-800'}`
+        }>
+          {message}
+        </div>
+      )}
 
-        <h2 className="text-3xl font-bold text-center mb-6 text-white">
-          {/* Título dinâmico */}
-          {isManualEntry ? 'Enviar Relatório (Manual)' : 'Enviar Relatório Mensal'}
-        </h2>
+      <form onSubmit={handleSubmit} className="space-y-6">
         
-        {message && (
-          <div className={`p-3 rounded-md mb-6 text-sm ${isError 
-            ? 'bg-red-900 bg-opacity-30 text-red-300 border border-red-800' 
-            : 'bg-green-900 bg-opacity-30 text-green-300 border border-green-800'}`
-          }>
-            {message}
+        <div className="space-y-4">
+          <h3 className="text-xl font-semibold text-white border-b border-neutral-700 pb-2">
+            Identificação
+          </h3>
+          <div>
+            <label htmlFor="nome_completo" className={labelClass}>Nome Completo</label>
+            <input 
+              type="text" id="nome_completo" name="nome_completo" 
+              value={formData.nome_completo} onChange={handleChange} 
+              className={baseInputClass} required 
+              disabled={isManualEntry}
+              readOnly={isManualEntry}
+            />
           </div>
-        )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="nome_grupo" className={labelClass}>Grupo de Campo</label>
+            <select 
+              id="nome_grupo" name="nome_grupo" 
+              value={formData.nome_grupo} onChange={handleChange} 
+              className={baseInputClass} required
+              disabled={isManualEntry}
+            >
+              <option value="" disabled>Selecione seu grupo...</option>
+              {isManualEntry && formData.nome_grupo ? (
+                <option value={formData.nome_grupo}>{formData.nome_grupo}</option>
+              ) : (
+                gruposList.map(grupo => (
+                  <option key={grupo} value={grupo}>{grupo}</option>
+                ))
+              )}
+            </select>
+          </div>
           
-          <div className="space-y-4">
-            <h3 className="text-xl font-semibold text-white border-b border-neutral-700 pb-2">
-              Identificação
-            </h3>
+          <div>
+            <label htmlFor="data_nascimento" className={labelClass}>Data de Nascimento</label>
+            <input 
+              type="text" id="data_nascimento" name="data_nascimento" 
+              value={formData.data_nascimento} onChange={handleChange} 
+              className={baseInputClass} placeholder="dd/mm/aaaa" required 
+              disabled={isManualEntry}
+              readOnly={isManualEntry}
+            />
+          </div>
+        </div>
+        
+        <div className="space-y-4">
+          <h3 className="text-xl font-semibold text-white border-b border-neutral-700 pb-2">
+            Relatório
+          </h3>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="nome_completo" className={labelClass}>Nome Completo</label>
-              <input 
-                type="text" 
-                id="nome_completo" 
-                name="nome_completo" 
-                value={formData.nome_completo} 
-                onChange={handleChange} 
-                className={baseInputClass} 
-                required 
-                // 5. Desabilitar se for manual
-                disabled={isManualEntry}
-                readOnly={isManualEntry}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="nome_grupo" className={labelClass}>Grupo de Campo</label>
-              <select 
-                id="nome_grupo" 
-                name="nome_grupo" 
-                value={formData.nome_grupo} 
-                onChange={handleChange} 
-                className={baseInputClass}
-                required
-                // 5. Desabilitar se for manual
-                disabled={isManualEntry}
-              >
-                <option value="" disabled>Selecione seu grupo...</option>
-                
-                {/* 6. Lógica de opções atualizada */}
-                {isManualEntry && formData.nome_grupo ? (
-                  // Se for manual, mostra apenas o grupo carregado
-                  <option value={formData.nome_grupo}>{formData.nome_grupo}</option>
-                ) : (
-                  // Se for público, lista todos os grupos
-                  gruposList.map(grupo => (
-                    <option key={grupo} value={grupo}>
-                      {grupo}
-                    </option>
-                  ))
-                )}
+              <label htmlFor="mes" className={labelClass}>Mês</label>
+              <select id="mes" name="mes" value={formData.mes} onChange={handleChange} className={baseInputClass}>
+                {meses.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
               </select>
             </div>
-            
             <div>
-              <label htmlFor="data_nascimento" className={labelClass}>Data de Nascimento</label>
-              <input 
-                type="text" 
-                id="data_nascimento" 
-                name="data_nascimento" 
-                value={formData.data_nascimento} 
-                onChange={handleChange} 
-                className={baseInputClass} 
-                placeholder="dd/mm/aaaa" 
-                required 
-                // 5. Desabilitar se for manual
-                disabled={isManualEntry}
-                readOnly={isManualEntry}
-              />
+              <label htmlFor="ano_servico" className={labelClass}>Ano de Serviço</label>
+              <input type="number" id="ano_servico" name="ano_servico" placeholder="Ex: 2025" value={formData.ano_servico} onChange={handleChange} className={baseInputClass} required />
             </div>
           </div>
-          
-          <div className="space-y-4">
-            <h3 className="text-xl font-semibold text-white border-b border-neutral-700 pb-2">
-              Relatório
-            </h3>
-            
-            {/* Campos de Relatório (inalterados) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="mes" className={labelClass}>Mês</label>
-                <select id="mes" name="mes" value={formData.mes} onChange={handleChange} className={baseInputClass}>
-                  {meses.map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="ano_servico" className={labelClass}>Ano de Serviço</label>
-                <input type="number" id="ano_servico" name="ano_servico" placeholder="Ex: 2025" value={formData.ano_servico} onChange={handleChange} className={baseInputClass} required />
-              </div>
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center">
+              <input id="participou_ministerio" name="participou_ministerio" type="checkbox" checked={formData.participou_ministerio} onChange={handleChange} className={checkboxClass} />
+              <label htmlFor="participou_ministerio" className={checkboxLabelClass}>Participei no ministério</label>
             </div>
-            <div className="space-y-3 pt-2">
-              <div className="flex items-center">
-                <input id="participou_ministerio" name="participou_ministerio" type="checkbox" checked={formData.participou_ministerio} onChange={handleChange} className={checkboxClass} />
-                <label htmlFor="participou_ministerio" className={checkboxLabelClass}>Participei no ministério</label>
-              </div>
-              <div className="flex items-center">
-                <input id="pioneiro_auxiliar" name="pioneiro_auxiliar" type="checkbox" checked={formData.pioneiro_auxiliar} onChange={handleChange} className={checkboxClass} />
-                <label htmlFor="pioneiro_auxiliar" className={checkboxLabelClass}>Pioneiro Auxiliar</label>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div>
-                <label htmlFor="estudos_biblicos" className={labelClass}>Estudos Bíblicos</label>
-                <input type="number" min="0" id="estudos_biblicos" name="estudos_biblicos" value={formData.estudos_biblicos} onChange={handleChange} className={baseInputClass} />
-              </div>
-              <div>
-                <label htmlFor="horas" className={labelClass}>Horas (Pioneiros/Missionários)</label>
-                <input type="number" min="0" id="horas" name="horas" value={formData.horas} onChange={handleChange} className={baseInputClass} />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="observacoes" className={labelClass}>Observações</label>
-              <textarea id="observacoes" name="observacoes" rows="3" value={formData.observacoes} onChange={handleChange} className={baseInputClass}></textarea>
+            <div className="flex items-center">
+              <input id="pioneiro_auxiliar" name="pioneiro_auxiliar" type="checkbox" checked={formData.pioneiro_auxiliar} onChange={handleChange} className={checkboxClass} />
+              <label htmlFor="pioneiro_auxiliar" className={checkboxLabelClass}>Pioneiro Auxiliar</label>
             </div>
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div>
+              <label htmlFor="estudos_biblicos" className={labelClass}>Estudos Bíblicos</label>
+              <input type="number" min="0" id="estudos_biblicos" name="estudos_biblicos" value={formData.estudos_biblicos} onChange={handleChange} className={baseInputClass} />
+            </div>
+            <div>
+              <label htmlFor="horas" className={labelClass}>Horas (Pioneiros/Missionários)</label>
+              <input type="number" min="0" id="horas" name="horas" value={formData.horas} onChange={handleChange} className={baseInputClass} />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="observacoes" className={labelClass}>Observações</label>
+            <textarea id="observacoes" name="observacoes" rows="3" value={formData.observacoes} onChange={handleChange} className={baseInputClass}></textarea>
+          </div>
+        </div>
 
-          <button 
-            type="submit" 
-            disabled={isLoading} 
-            className="w-full flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-neutral-900 disabled:opacity-50 transition-colors"
-          >
-            {/* O texto do botão agora se baseia no estado de loading */}
-            {isLoading ? (isManualEntry ? 'Carregando...' : 'Enviando...') : 'Enviar Relatório'}
-          </button>
-        </form>
+        <button 
+          type="submit" 
+          disabled={isLoading} 
+          className="w-full flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-neutral-900 disabled:opacity-50 transition-colors"
+        >
+          {isLoading ? (isManualEntry ? 'Carregando...' : 'Enviando...') : 'Enviar Relatório'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// 6. Este é o componente de "fallback" para o Suspense
+function LoadingFallback() {
+  return (
+    <div className="max-w-2xl mx-auto bg-neutral-900 p-6 md:p-8 rounded-xl shadow-2xl border border-neutral-800">
+      <div className="flex justify-center items-center h-96">
+        <p className="text-neutral-400">A carregar...</p>
       </div>
+    </div>
+  );
+}
+
+// 7. A página principal (export default) agora é simples e envolve o formulário no Suspense
+export default function RelatorioMensal() {
+  return (
+    <main className="min-h-screen w-full p-4 md:p-8">
+      <Suspense fallback={<LoadingFallback />}>
+        <RelatorioForm />
+      </Suspense>
     </main>
   );
 }
