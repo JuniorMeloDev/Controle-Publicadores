@@ -5,7 +5,13 @@ import { NextResponse } from 'next/server';
 async function callGeminiToParse(text) {
   // A chave da API é deixada em branco, pois será injetada
   // automaticamente pelo ambiente de produção (Vercel/Google).
-  const apiKey = ""; 
+  
+  // --- MUDANÇA CRÍTICA AQUI ---
+  // Em vez de uma string vazia, vamos ler a chave do ambiente da Vercel
+  // que você acabou de configurar (GEMINI_API_KEY)
+  const apiKey = process.env.GEMINI_API_KEY; 
+  // --- FIM DA MUDANÇA ---
+
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
   const systemPrompt = `
