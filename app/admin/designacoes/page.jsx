@@ -1,20 +1,12 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react'; // Importa Suspense
+// Corrigido: Importa o React corretamente
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, Printer, UploadCloud, ArrowLeft } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation'; // Importa useSearchParams
+import { useRouter } from 'next/navigation';
 
-// Componente de Fallback para o Suspense
-function LoadingFallback() {
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-neutral-900">
-      <Loader2 className="size-8 animate-spin text-neutral-400" />
-    </div>
-  );
-}
-
-// Componente principal movido para dentro para usar useSearchParams
-function DesignacoesContent() {
+// Componente principal da página
+export default function DesignacoesPage() {
   const [publicadores, setPublicadores] = useState([]);
   const [scheduleData, setScheduleData] = useState(null);
   const [assignments, setAssignments] = useState({});
@@ -22,9 +14,9 @@ function DesignacoesContent() {
   const [isParsing, setIsParsing] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
-  // const printRef = useRef(null); // Não é mais necessário com a correção de CSS
+  const printRef = useRef(null);
 
-  // Buscar a lista de publicadores
+  // 1. Buscar a lista de publicadores da sua API existente
   useEffect(() => {
     async function fetchPublicadores() {
       try {
@@ -41,7 +33,7 @@ function DesignacoesContent() {
     fetchPublicadores();
   }, []);
 
-  // Ler o arquivo RTF e chamar a API interna
+  // 2. Função para ler o arquivo RTF e chamar a NOSSA API INTERNA
   const handleFileParse = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -56,35 +48,46 @@ function DesignacoesContent() {
       try {
         const textContent = e.target.result;
 
+        // --- MUDANÇA PRINCIPAL ---
+        // Agora chamamos a NOSSA API interna, que é segura (server-side)
         const response = await fetch('/api/admin/parse-rtf', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ textContent })
+          body: JSON.stringify({ textContent }) // Enviamos o texto lido
         });
 
         if (!response.ok) {
           const errData = await response.json();
-          const errorMessage = errData.error?.message || errData.message || 'Falha no servidor ao processar o arquivo.';
+          // O errData.message virá da nossa API, que pode incluir o erro da Gemini
+          // Corrigido para verificar se o erro da Gemini está aninhado
+          const errorMessage = errData.error || errData.message || 'Falha no servidor ao processar o arquivo.';
           throw new Error(errorMessage);
         }
 
+        // A resposta já é o JSON processado
         const parsedData = await response.json();
+        // --- FIM DA MUDANÇA ---
+        
         setScheduleData(parsedData);
       } catch (err) {
+        // O erro agora será mais claro
         setError(`Falha ao processar o arquivo: ${err.message}`);
       } finally {
         setIsParsing(false);
       }
     };
-    reader.readAsText(file, 'ISO-8859-1');
+    reader.readAsText(file, 'ISO-8859-1'); // Encoding para ler RTF
   };
 
-  // Atualiza o state quando um publicador é selecionado
+  // 3. A função callGeminiToParse() FOI REMOVIDA DAQUI
+  //    Ela agora vive no arquivo /api/admin/parse-rtf/route.js
+
+  // 4. Atualiza o state quando um publicador é selecionado
   const handleAssignmentChange = (partId, name) => {
     setAssignments(prev => ({ ...prev, [partId]: name }));
   };
 
-  // Função de impressão (usa o print do navegador)
+  // 5. Função de impressão
   const handlePrint = () => {
     window.print();
   };
@@ -92,19 +95,14 @@ function DesignacoesContent() {
   // ----- Classes de Estilo -----
   const tdTime = "border border-gray-600 p-2 font-semibold w-20 align-top";
   const tdPart = "border border-gray-600 p-2 align-top";
-  
-  // CORREÇÃO 1: A célula <td> que contém o nome. Removido o p-0.
   const tdName = "border border-gray-600 p-0 w-2/5 md:w-1/3 name-cell align-top";
-  
-  // CORREÇÃO 1: O <select> agora tem p-2 para ter padding.
   const selectClass = "w-full bg-neutral-100 border-none p-2 text-black focus:outline-none focus:ring-2 focus:ring-blue-500 print:hidden";
-  
-  const printedNameClass = "hidden print:block p-2 text-black font-medium";
+  const printedNameClass = "hidden print:block p-2 text-black font-medium"; // Mostra o nome selecionado ao imprimir
   const headerClass = "bg-blue-800 text-white p-2 text-center font-bold text-lg";
 
-  // CORREÇÃO 1: Componente de seleção foi simplificado para não incluir o <td>
+  // Componente para o dropdown de seleção
   const AssignmentSelect = ({ partId }) => (
-    <>
+    <div className={tdName}>
       <select
         value={assignments[partId] || ''}
         onChange={(e) => handleAssignmentChange(partId, e.target.value)}
@@ -115,24 +113,27 @@ function DesignacoesContent() {
           <option key={p.id} value={p.nome_completo}>{p.nome_completo}</option>
         ))}
       </select>
+      {/* Isso só aparece na impressão */}
       <div className={printedNameClass}>
         {assignments[partId] || '...'}
       </div>
-    </>
+    </div>
   );
   
   // Renderização
   if (isLoading) {
-    return <LoadingFallback />; // Usa o fallback
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-neutral-900">
+        <Loader2 className="size-8 animate-spin text-neutral-400" />
+      </div>
+    );
   }
 
   return (
-    // CORREÇÃO 2: Removido print:bg-white e print:text-black daqui.
-    <main className="min-h-screen w-full bg-neutral-900 text-neutral-100 p-4 md:p-8">
+    <main className="min-h-screen w-full bg-neutral-900 text-neutral-100 p-4 md:p-8 print:bg-white print:text-black">
       
-      {/* === CABEÇALHO DE CONTROLE === */}
-      {/* CORREÇÃO 2: Adicionado 'print:hidden' para esconder este bloco na impressão */}
-      <div className="max-w-4xl mx-auto mb-6 p-6 bg-neutral-800 rounded-lg shadow-md print:hidden">
+      {/* === CABEÇALHO DE CONTROLE (NÃO IMPRIME) === */}
+      <div className="no-print max-w-4xl mx-auto mb-6 p-6 bg-neutral-800 rounded-lg shadow-md">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">Designações da Reunião</h2>
           <button
@@ -169,8 +170,7 @@ function DesignacoesContent() {
 
       {/* === PROGRAMA GERADO (SÓ APARECE DEPOIS DE PROCESSAR) === */}
       {scheduleData && (
-        // CORREÇÃO 2: Adicionada a classe 'printable-content' que o seu globals.css espera.
-        <div className="printable-content bg-white text-black rounded-lg shadow-lg overflow-hidden border border-gray-300 max-w-4xl mx-auto" id="schedule-container">
+        <div ref={printRef} className="print-container bg-white text-black rounded-lg shadow-lg overflow-hidden border border-gray-300 max-w-4xl mx-auto" id="schedule-container">
           <div className="p-4 md:p-6">
             
             {/* TÍTULOS DA SEMANA */}
@@ -187,7 +187,6 @@ function DesignacoesContent() {
                 <div className="space-y-1">
                   <div className="flex justify-between items-center">
                     <label className="font-semibold text-gray-700">Presidente:</label>
-                    {/* CORREÇÃO 1: O div w-2/3 agora contém o <AssignmentSelect> */}
                     <div className="w-2/3">
                       <AssignmentSelect partId="presidente" />
                     </div>
@@ -206,24 +205,19 @@ function DesignacoesContent() {
             <table className="w-full border-collapse border-2 border-gray-700">
               <tbody className="text-gray-900">
                 
-                {/* CORREÇÃO 1: O <AssignmentSelect> está agora DENTRO do <td> */}
                 <tr>
                   <td className={tdTime}></td>
                   <td className={tdPart}>
                     {scheduleData.initialSong}
                     <span className="float-right font-bold text-gray-700">Oração</span>
                   </td>
-                  <td className={tdName}>
-                    <AssignmentSelect partId="oracao_inicial" />
-                  </td>
+                  <AssignmentSelect partId="oracao_inicial" />
                 </tr>
                 
                 <tr>
                   <td className={tdTime}></td>
                   <td className={tdPart}>{scheduleData.openingComments}</td>
-                  <td className={tdName}>
-                    <AssignmentSelect partId="comentarios_iniciais" />
-                  </td>
+                  <AssignmentSelect partId="comentarios_iniciais" />
                 </tr>
 
                 {/* Tesouros */}
@@ -232,9 +226,7 @@ function DesignacoesContent() {
                   <tr key={`t-${index}`}>
                     <td className={tdTime}></td>
                     <td className={tdPart}>{part.title}</td>
-                    <td className={tdName}>
-                      <AssignmentSelect partId={`tesouro_${index}`} />
-                    </td>
+                    <AssignmentSelect partId={`tesouro_${index}`} />
                   </tr>
                 ))}
                 
@@ -243,10 +235,8 @@ function DesignacoesContent() {
                 {scheduleData.ministry?.map((part, index) => (
                   <tr key={`m-${index}`}>
                     <td className={tdTime}></td>
-                    <td className={tdPart}>{part.title}</td>
-                    <td className={tdName}>
-                      <AssignmentSelect partId={`ministerio_${index}`} />
-                    </td>
+                    <td className="border border-gray-600 p-2 align-top">{part.title}</td>
+                    <AssignmentSelect partId={`ministerio_${index}`} />
                   </tr>
                 ))}
 
@@ -256,9 +246,7 @@ function DesignacoesContent() {
                   <tr key={`v-${index}`}>
                     <td className={tdTime}></td>
                     <td className={tdPart}>{part.title}</td>
-                    <td className={tdName}>
-                      <AssignmentSelect partId={`vida_${index}`} />
-                    </td>
+                    <AssignmentSelect partId={`vida_${index}`} />
                   </tr>
                 ))}
 
@@ -266,9 +254,7 @@ function DesignacoesContent() {
                 <tr>
                   <td className={tdTime}></td>
                   <td className={tdPart}>{scheduleData.finalComments}</td>
-                  <td className={tdName}>
-                    <AssignmentSelect partId="comentarios_finais" />
-                  </td>
+                  <AssignmentSelect partId="comentarios_finais" />
                 </tr>
                 
                 <tr>
@@ -277,17 +263,14 @@ function DesignacoesContent() {
                     {scheduleData.finalSong}
                     <span className="float-right font-bold text-gray-700">Oração</span>
                   </td>
-                  <td className={tdName}>
-                    <AssignmentSelect partId="oracao_final" />
-                  </td>
+                  <AssignmentSelect partId="oracao_final" />
                 </tr>
 
               </tbody>
             </table>
             
             {/* Botão de Impressão */}
-            {/* CORREÇÃO 2: Adicionado 'print:hidden' */}
-            <div className="mt-6 flex justify-center print:hidden">
+            <div className="mt-6 flex justify-center no-print">
               <button
                 onClick={handlePrint}
                 className="flex items-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-colors"
@@ -301,14 +284,5 @@ function DesignacoesContent() {
         </div>
       )}
     </main>
-  );
-}
-
-// Componente da página principal que "suspende" o conteúdo
-export default function DesignacoesPage() {
-  return (
-    <Suspense fallback={<LoadingFallback />}>
-      <DesignacoesContent />
-    </Suspense>
   );
 }
