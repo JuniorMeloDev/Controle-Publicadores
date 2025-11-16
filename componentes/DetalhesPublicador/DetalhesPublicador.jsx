@@ -5,8 +5,34 @@ import { Loader2, Printer } from 'lucide-react';
 import FormularioInformacoes from '@/componentes/DetalhesPublicador/FormularioInformacoes';
 import AtividadesTeocraticas from '@/componentes/DetalhesPublicador/AtividadesTeocraticas';
 import RelatorioImprimivel from './RelatorioImprimivel';
+import HistoricoPublicador from './HistoricoPublicador'; 
+
+// --- 1. NOVA FUNÇÃO AUXILIAR DE DATA ---
+/**
+ * Converte 'yyyy-mm-dd' (ou Date object) para 'dd/mm/yyyy' ou "".
+ */
+function isoToDMY(date) {
+  if (!date) return ''; // Retorna string vazia se a data for nula
+  try {
+    const d = new Date(date);
+    // Ajusta o fuso para evitar erro de "dia anterior"
+    const dLocal = new Date(d.valueOf() + d.getTimezoneOffset() * 60000);
+    const year = dLocal.getFullYear();
+    // Se o ano for muito antigo, é provável que a data seja inválida
+    if (year < 1900) return ''; 
+    
+    const month = String(dLocal.getMonth() + 1).padStart(2, '0');
+    const day = String(dLocal.getDate()).padStart(2, '0');
+    return `${day}/${month}/${year}`;
+  } catch (e) {
+    return ''; // Retorna string vazia se a data for inválida
+  }
+}
+// --- FIM DA FUNÇÃO ---
+
 
 export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClose }) {
+  // ... (states permanecem os mesmos) ...
   const [activeTab, setActiveTab] = useState('informacoes');
   const [gruposList, setGruposList] = useState([]);  
   const [formData, setFormData] = useState({
@@ -29,15 +55,17 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
   const numeroInputRef = useRef(null);
   const printRef = useRef(null);
 
-  // Função de busca (sem o loop infinito)
-  const fetchTudo = useCallback(async () => {
+  const fetchTudo = useCallback(async (isRefresh = false) => {
     if (!publicadorId) {
       setIsPageLoading(false);
       return;
     }
     
-    // Define o loading apenas se não for uma atualização silenciosa
-    if (!isPageLoading) setIsLoading(true); 
+    if (isRefresh) {
+      setIsLoading(true); 
+    } else {
+      setIsPageLoading(true);
+    }
     
     setMessage('');
     setIsError(false);
@@ -54,10 +82,13 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
       if (!pubRes.ok) throw new Error('Falha ao carregar dados do publicador.');
       const pubData = await pubRes.json();
 
+      // --- 2. APLICA A CORREÇÃO AQUI ---
       setFormData({
         ...pubData,
-        data_nascimento: pubData.data_nascimento || '',
-        data_batismo: pubData.data_batismo || '',
+        // Converte de volta para DD/MM/YYYY para o formulário
+        data_nascimento: isoToDMY(pubData.data_nascimento) || '',
+        data_batismo: isoToDMY(pubData.data_batismo) || '',
+        // O resto dos dados
         sexo: pubData.sexo || '',
         esperanca: pubData.esperanca || '',
         telefone: pubData.telefone || '',
@@ -73,6 +104,7 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
         privilegios: pubData.privilegios || [],
         designacoes: pubData.designacoes || [],
       });
+      // --- FIM DA CORREÇÃO ---
 
       const relRes = await fetch(`/api/admin/get-relatorios/${publicadorId}`);
       if (!relRes.ok) throw new Error('Falha ao buscar relatórios');
@@ -87,11 +119,14 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
       setIsPageLoading(false);
       setIsLoading(false); 
     }
-  }, [publicadorId]); // Removido 'isPageLoading' da dependência
+  }, [publicadorId]);
 
+  // ... (Resto do arquivo: useEffect, Handlers, return()... permanece o mesmo) ...
+  // useEffect de carregamento inicial
   useEffect(() => {
-    setIsPageLoading(true); 
-    fetchTudo();
+    if (publicadorId) {
+      fetchTudo(false); // Chama com 'isRefresh = false'
+    }
   }, [publicadorId, fetchTudo]);
   
   // Handlers (sem alteração)
@@ -140,9 +175,11 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
       setIsCepLoading(false);
     }
   };
+  
+  // handleSubmit (agora chama fetchTudo(true))
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsLoading(true); // Usa o spinner interno
     setMessage('');
     setIsError(false);
     
@@ -158,7 +195,8 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
       if (response.ok) {
         setMessage('Publicador alterado com sucesso');
         setIsError(false);
-        onSaveSuccess();
+        onSaveSuccess(true); // Mantém o drawer aberto
+        fetchTudo(true); // Chama um refresh interno (spinner pequeno)
       } else {
         setMessage(data?.message || 'Erro ao salvar');
         setIsError(true);
@@ -167,9 +205,10 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
       setMessage('Não foi possível conectar ao servidor.');
       setIsError(true);
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); // Desliga o spinner interno
     }
   };
+  
   const handlePrint = () => {
     const el = document.querySelector('.printable-content');
     if (!el) {
@@ -191,19 +230,12 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
     );
   }
 
-  // --- MUDANÇA PRINCIPAL NO LAYOUT ---
- // ... (mantenha todo o código de 'use client' até 'if (isPageLoading) { ... }')
-
-  // --- MUDANÇA PRINCIPAL NO LAYOUT ---
   return (
-    // 1. Container flex-col para travar o header e deixar o conteúdo rolar
     <div className="flex flex-col h-full overflow-hidden">
       
-      {/* 2. CABEÇALHO (agora é 'shrink-0' e tem padding) */}
+      {/* CABEÇALHO */}
       <div className="shrink-0 p-6 md:p-8 pb-6 border-b border-neutral-700">
         <div className="flex items-center justify-between">
-
-          {/* --- NOVO: Botão Voltar (Aparece só no Mobile) --- */}
           {onClose && (
             <button
               onClick={onClose}
@@ -214,8 +246,7 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
             </button>
           )}
 
-          {/* Conteúdo do Título */}
-          <div className="flex-1 min-w-0"> {/* Adicionado flex-1 e min-w-0 para truncar nomes longos */}
+          <div className="flex-1 min-w-0">
             <h2 className="text-2xl md:text-3xl font-bold text-white truncate">
               {formData.nome_completo || 'Editar Publicador'}
             </h2>
@@ -224,7 +255,6 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
             </p>
           </div>
 
-          {/* Botão Imprimir (Agora esconde no mobile) */}
           <button
             onClick={handlePrint}
             className="hidden md:flex items-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold text-neutral-100 bg-neutral-700 hover:bg-neutral-600 transition-colors ml-4"
@@ -235,9 +265,8 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
         </div>
       </div>
       
-      {/* 3. CONTEÚDO ROLÁVEL (wrapper de antes, mas agora funciona) */}
+      {/* CONTEÚDO ROLÁVEL */}
       <div className="flex-1 overflow-y-auto p-6 md:p-8">
-        {/* ... (o resto do seu JSX com as abas 'Informações Pessoais' e 'Atividades Teocráticas' vai aqui) ... */}
         {message && (
           <div className={`p-3 rounded-md mb-6 text-sm ${isError 
             ? 'bg-red-900 bg-opacity-30 text-red-300 border border-red-800' 
@@ -250,7 +279,7 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
         {/* Navegação das Abas */}
         <div className="border-b border-neutral-700">
           <nav className="-mb-px flex space-x-6" aria-label="Abas">
-            {/* ... seus botões de aba ... */}
+            
             <button
               onClick={() => setActiveTab('informacoes')}
               className={`${activeTab === 'informacoes' 
@@ -260,6 +289,7 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
             >
               Informações Pessoais
             </button>
+            
             <button
               onClick={() => setActiveTab('atividades')}
               className={`${activeTab === 'atividades' 
@@ -269,10 +299,21 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
             >
               Atividades Teocráticas
             </button>
+
+            <button
+              onClick={() => setActiveTab('historico')}
+              className={`${activeTab === 'historico' 
+                ? 'border-blue-500 text-blue-400' 
+                : 'border-transparent text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}
+                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              Linha do Tempo
+            </button>
+
           </nav>
         </div>
-
-        {/* Conteúdo da Aba 1 */}
+        
+        {/* Aba 1: Informações Pessoais */}
         {activeTab === 'informacoes' && (
           <FormularioInformacoes
             formData={formData}
@@ -284,7 +325,7 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
             handleDesignacaoChange={handleDesignacaoChange}
             handleCepBlur={handleCepBlur}
             gruposList={gruposList}
-            isLoading={isLoading}
+            isLoading={isLoading} // Passa o spinner interno
             isCepLoading={isCepLoading}
             cepError={cepError}
             numeroInputRef={numeroInputRef}
@@ -293,19 +334,27 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClos
           />
         )}
 
-        {/* Conteúdo da Aba 2 */}
+        {/* Aba 2: Atividades Teocráticas (agora chama fetchTudo(true)) */}
         {activeTab === 'atividades' && (
           <AtividadesTeocraticas 
             publicadorId={publicadorId} 
             publicadorNome={formData.nome_completo}
             relatorios={relatorios}
             publicador={formData}
-            onRefreshData={fetchTudo}
+            onRefreshData={() => fetchTudo(true)} 
           />
         )}
+
+        {/* Aba 3: Histórico */}
+        {activeTab === 'historico' && (
+          <HistoricoPublicador 
+            publicadorId={publicadorId}
+          />
+        )}
+
       </div>
 
-      {/* Componente de Impressão (oculto) - Fica fora da área de rolagem */}
+      {/* Componente de Impressão (oculto) */}
       <div className="printable-content">
         <div ref={printRef}>
           <RelatorioImprimivel 

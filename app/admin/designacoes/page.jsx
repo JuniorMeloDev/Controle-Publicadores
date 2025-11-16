@@ -1,43 +1,40 @@
 'use client';
 
-// Importações do React e Lucide (sem shadcn)
+// Importações do React e Lucide (adicionado Save)
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Loader2, 
   Printer, 
   UploadCloud, 
   ArrowLeft,
-  ChevronsUpDown // Ícone para o botão
+  ChevronsUpDown,
+  Save // <-- NOVO ÍCONE
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-// --- ATUALIZADO: Componente Combobox (NÃO RENDERIZA MAIS O <td>) ---
+// --- Componente AssignmentSelect (Permanece IDÊNTICO ao anterior) ---
 const AssignmentSelect = ({ partId, publicadores, assignments, handleAssignmentChange }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const wrapperRef = useRef(null); // Ref para detectar clique fora
+  const wrapperRef = useRef(null); 
 
   const currentValue = assignments[partId] || "";
   const selectedPublicador = publicadores.find(
     (p) => p.nome_completo.toLowerCase() === currentValue.toLowerCase()
   );
 
-  // Filtra a lista de publicadores com base na busca
   const filteredPublicadores = useMemo(() => {
-    if (!searchTerm) {
-      return publicadores;
-    }
+    if (!searchTerm) return publicadores;
     return publicadores.filter((p) =>
       p.nome_completo.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [publicadores, searchTerm]);
 
-  // Efeito para fechar o dropdown ao clicar fora
   useEffect(() => {
     function handleClickOutside(event) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
         setIsOpen(false);
-        setSearchTerm(""); // Limpa a busca ao fechar
+        setSearchTerm("");
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -46,15 +43,11 @@ const AssignmentSelect = ({ partId, publicadores, assignments, handleAssignmentC
     };
   }, [wrapperRef]);
 
-  // Classe para o nome impresso
   const printedNameClass = "hidden print:block p-2 text-black font-medium";
   
-  // O <td> foi REMOVIDO daqui. O componente agora retorna os <div>s diretamente.
   return (
     <>
-      {/* 1. O Wrapper e o Dropdown (para a tela) */}
       <div ref={wrapperRef} className="relative w-full print:hidden">
-        {/* 1a. O Botão que abre o dropdown */}
         <button
           type="button"
           // eslint-disable-next-line jsx-a11y/role-has-required-aria-props
@@ -69,10 +62,8 @@ const AssignmentSelect = ({ partId, publicadores, assignments, handleAssignmentC
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </button>
 
-        {/* 1b. O Dropdown Pesquisável (só aparece se isOpen) */}
         {isOpen && (
           <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
-            {/* O Campo de Busca */}
             <input
               type="text"
               placeholder="Buscar publicador..."
@@ -81,7 +72,6 @@ const AssignmentSelect = ({ partId, publicadores, assignments, handleAssignmentC
               className="w-full p-2 text-black border-b border-gray-200 outline-none"
               autoFocus
             />
-            {/* A Lista de Resultados */}
             <ul className="max-h-60 overflow-y-auto">
               {filteredPublicadores.length > 0 ? (
                 filteredPublicadores.map((publicador) => (
@@ -109,14 +99,13 @@ const AssignmentSelect = ({ partId, publicadores, assignments, handleAssignmentC
         )}
       </div>
 
-      {/* 2. O nome que aparece na impressão (sem alteração) */}
       <div className={printedNameClass}>
         {currentValue || '...'}
       </div>
     </>
   );
 };
-// --- FIM DO COMPONENTE ATUALIZADO ---
+// --- FIM DO COMPONENTE AssignmentSelect ---
 
 
 // Componente principal da página
@@ -129,6 +118,12 @@ export default function DesignacoesPage() {
   const [error, setError] = useState('');
   const router = useRouter();
   const printRef = useRef(null);
+
+  // --- NOVOS STATES ---
+  const [meetingDate, setMeetingDate] = useState(''); // Data da reunião (ex: 2025-11-10)
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState({ text: '', isError: false });
+  // --- FIM DOS NOVOS STATES ---
 
   // 1. Buscar a lista de publicadores (sem alteração)
   useEffect(() => {
@@ -147,7 +142,7 @@ export default function DesignacoesPage() {
     fetchPublicadores();
   }, []);
 
-  // 2. Função para ler o arquivo RTF (sem alteração)
+  // 2. Função para ler o arquivo RTF (limpa os states novos)
   const handleFileParse = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -156,6 +151,8 @@ export default function DesignacoesPage() {
     setError('');
     setScheduleData(null);
     setAssignments({});
+    setSaveMessage({ text: '', isError: false }); // Limpa msg de save
+    setMeetingDate(''); // Limpa data
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -194,10 +191,50 @@ export default function DesignacoesPage() {
     window.print();
   };
 
-  // ----- Classes de Estilo -----
+  // --- 5. NOVA FUNÇÃO: Salvar Designações no Histórico ---
+  const handleSaveAssignments = async () => {
+    if (!meetingDate) {
+      setSaveMessage({ text: 'Por favor, selecione a data de início da semana da reunião.', isError: true });
+      return;
+    }
+    if (!scheduleData || Object.keys(assignments).length === 0) {
+      setSaveMessage({ text: 'Não há dados de programa ou designações para salvar.', isError: true });
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveMessage({ text: '', isError: false });
+
+    try {
+      const response = await fetch('/api/admin/salvar-designacoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scheduleData,
+          assignments,
+          meetingDate
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Erro desconhecido ao salvar.');
+      }
+
+      setSaveMessage({ text: data.message, isError: false });
+
+    } catch (err) {
+      setSaveMessage({ text: err.message, isError: true });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  // --- FIM DA NOVA FUNÇÃO ---
+
+
+  // ----- Classes de Estilo (sem alteração) -----
   const tdTime = "border border-gray-600 p-2 font-semibold w-20 align-top";
   const tdPart = "border border-gray-600 p-2 align-top";
-  // A classe do <td> de nome agora é definida aqui
   const tdName = "border border-gray-600 p-0 w-2/5 md:w-1/3 name-cell align-top";
   const headerClass = "bg-blue-800 text-white p-2 text-center font-bold text-lg";
 
@@ -231,6 +268,17 @@ export default function DesignacoesPage() {
           </div>
         )}
 
+        {/* --- MENSAGEM DE SALVAMENTO --- */}
+        {saveMessage.text && (
+          <div className={`p-3 rounded-md mb-4 text-sm ${
+            saveMessage.isError 
+              ? 'bg-red-900/30 text-red-300 border border-red-800' 
+              : 'bg-green-900/30 text-green-300 border border-green-800'
+          }`}>
+            {saveMessage.text}
+          </div>
+        )}
+
         <label 
           htmlFor="rtf-upload" 
           className="cursor-pointer w-full p-6 border-2 border-dashed border-neutral-600 rounded-lg flex flex-col items-center justify-center text-center hover:bg-neutral-700 transition"
@@ -247,6 +295,23 @@ export default function DesignacoesPage() {
             Processando arquivo com IA...
           </div>
         )}
+
+        {/* --- NOVO: CAMPO DE DATA (Aparece com o programa) --- */}
+        {scheduleData && (
+          <div className="mt-4">
+            <label htmlFor="meeting-date" className="block text-sm font-medium text-neutral-300 mb-1">
+              Data de Início da Semana (Segunda-feira)
+            </label>
+            <input
+              type="date"
+              id="meeting-date"
+              value={meetingDate}
+              onChange={(e) => setMeetingDate(e.target.value)}
+              className="w-full max-w-xs rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+        )}
+        {/* --- FIM DO CAMPO DE DATA --- */}
       </div>
 
       {/* === PROGRAMA GERADO (SÓ APARECE DEPOIS DE PROCESSAR) === */}
@@ -268,7 +333,6 @@ export default function DesignacoesPage() {
                 <div className="space-y-1">
                   <div className="flex justify-between items-center">
                     <label className="font-semibold text-gray-700">Presidente:</label>
-                    {/* AQUI ESTÁ CORRETO: O componente é filho de um <div> */}
                     <div className="w-2/3">
                       <AssignmentSelect 
                         partId="presidente" 
@@ -280,7 +344,6 @@ export default function DesignacoesPage() {
                   </div>
                   <div className="flex justify-between items-center">
                     <label className="font-semibold text-gray-700">Ajudante:</label>
-                    {/* AQUI ESTÁ CORRETO: O componente é filho de um <div> */}
                     <div className="w-2/3">
                       <AssignmentSelect 
                         partId="ajudante" 
@@ -294,7 +357,7 @@ export default function DesignacoesPage() {
               </div>
             </div>
 
-            {/* TABELA DE DESIGNAÇÕES */}
+            {/* TABELA DE DESIGNAÇÕES (Idêntica à anterior) */}
             <table className="w-full border-collapse border-2 border-gray-700">
               <tbody className="text-gray-900">
                 
@@ -304,7 +367,6 @@ export default function DesignacoesPage() {
                     {scheduleData.initialSong}
                     <span className="float-right font-bold text-gray-700">Oração</span>
                   </td>
-                  {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
                   <td className={tdName}>
                     <AssignmentSelect 
                       partId="oracao_inicial"
@@ -318,7 +380,6 @@ export default function DesignacoesPage() {
                 <tr>
                   <td className={tdTime}></td>
                   <td className={tdPart}>{scheduleData.openingComments}</td>
-                  {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
                   <td className={tdName}>
                     <AssignmentSelect 
                       partId="comentarios_iniciais"
@@ -329,13 +390,11 @@ export default function DesignacoesPage() {
                   </td>
                 </tr>
 
-                {/* Tesouros */}
                 <tr><td colSpan="3" className={headerClass}>TESOUROS DA PALAVRA DE DEUS</td></tr>
                 {scheduleData.treasures?.map((part, index) => (
                   <tr key={`t-${index}`}>
                     <td className={tdTime}></td>
                     <td className={tdPart}>{part.title}</td>
-                    {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
                     <td className={tdName}>
                       <AssignmentSelect 
                         partId={`tesouro_${index}`}
@@ -347,13 +406,11 @@ export default function DesignacoesPage() {
                   </tr>
                 ))}
                 
-                {/* Ministério */}
                 <tr><td colSpan="3" className={headerClass}>FAÇA SEU MELHOR NO MINISTÉRIO</td></tr>
                 {scheduleData.ministry?.map((part, index) => (
                   <tr key={`m-${index}`}>
                     <td className={tdTime}></td>
                     <td className="border border-gray-600 p-2 align-top">{part.title}</td>
-                    {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
                     <td className={tdName}>
                       <AssignmentSelect 
                         partId={`ministerio_${index}`}
@@ -365,13 +422,11 @@ export default function DesignacoesPage() {
                   </tr>
                 ))}
 
-                {/* Nossa Vida */}
                 <tr><td colSpan="3" className={headerClass}>NOSSA VIDA CRISTÃ</td></tr>
                 {scheduleData.living?.map((part, index) => (
                   <tr key={`v-${index}`}>
                     <td className={tdTime}></td>
                     <td className={tdPart}>{part.title}</td>
-                    {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
                     <td className={tdName}>
                       <AssignmentSelect 
                         partId={`vida_${index}`}
@@ -383,11 +438,9 @@ export default function DesignacoesPage() {
                   </tr>
                 ))}
 
-                {/* Finais */}
                 <tr>
                   <td className={tdTime}></td>
                   <td className={tdPart}>{scheduleData.finalComments}</td>
-                  {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
                   <td className={tdName}>
                     <AssignmentSelect 
                       partId="comentarios_finais"
@@ -404,7 +457,6 @@ export default function DesignacoesPage() {
                     {scheduleData.finalSong}
                     <span className="float-right font-bold text-gray-700">Oração</span>
                   </td>
-                  {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
                   <td className={tdName}>
                     <AssignmentSelect 
                       partId="oracao_final"
@@ -418,16 +470,26 @@ export default function DesignacoesPage() {
               </tbody>
             </table>
             
-            {/* Botão de Impressão */}
-            <div className="mt-6 flex justify-center no-print">
+            {/* --- BOTÕES DE AÇÃO ATUALIZADOS --- */}
+            <div className="mt-6 flex flex-col sm:flex-row justify-center gap-4 no-print">
+              <button
+                onClick={handleSaveAssignments}
+                disabled={isSaving}
+                className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-500 transition-colors disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                {isSaving ? 'Salvando...' : 'Salvar no Histórico'}
+              </button>
+              
               <button
                 onClick={handlePrint}
-                className="flex items-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-colors"
+                className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-colors"
               >
                 <Printer size={18} />
                 Imprimir Programa
               </button>
             </div>
+            {/* --- FIM DOS BOTÕES DE AÇÃO --- */}
 
           </div>
         </div>
