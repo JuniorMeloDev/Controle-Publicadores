@@ -1,9 +1,123 @@
 'use client';
 
-// Corrigido: Importa o React corretamente
-import { useState, useEffect, useRef } from 'react';
-import { Loader2, Printer, UploadCloud, ArrowLeft } from 'lucide-react';
+// Importações do React e Lucide (sem shadcn)
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { 
+  Loader2, 
+  Printer, 
+  UploadCloud, 
+  ArrowLeft,
+  ChevronsUpDown // Ícone para o botão
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
+
+// --- ATUALIZADO: Componente Combobox (NÃO RENDERIZA MAIS O <td>) ---
+const AssignmentSelect = ({ partId, publicadores, assignments, handleAssignmentChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const wrapperRef = useRef(null); // Ref para detectar clique fora
+
+  const currentValue = assignments[partId] || "";
+  const selectedPublicador = publicadores.find(
+    (p) => p.nome_completo.toLowerCase() === currentValue.toLowerCase()
+  );
+
+  // Filtra a lista de publicadores com base na busca
+  const filteredPublicadores = useMemo(() => {
+    if (!searchTerm) {
+      return publicadores;
+    }
+    return publicadores.filter((p) =>
+      p.nome_completo.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [publicadores, searchTerm]);
+
+  // Efeito para fechar o dropdown ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm(""); // Limpa a busca ao fechar
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [wrapperRef]);
+
+  // Classe para o nome impresso
+  const printedNameClass = "hidden print:block p-2 text-black font-medium";
+  
+  // O <td> foi REMOVIDO daqui. O componente agora retorna os <div>s diretamente.
+  return (
+    <>
+      {/* 1. O Wrapper e o Dropdown (para a tela) */}
+      <div ref={wrapperRef} className="relative w-full print:hidden">
+        {/* 1a. O Botão que abre o dropdown */}
+        <button
+          type="button"
+          // eslint-disable-next-line jsx-a11y/role-has-required-aria-props
+          role="combobox"
+          aria-expanded={isOpen}
+          onClick={() => setIsOpen(!isOpen)}
+          className="w-full flex justify-between items-center bg-neutral-100 border-none p-2 text-black font-normal hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <span className="truncate">
+            {selectedPublicador ? selectedPublicador.nome_completo : "Selecione..."}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </button>
+
+        {/* 1b. O Dropdown Pesquisável (só aparece se isOpen) */}
+        {isOpen && (
+          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
+            {/* O Campo de Busca */}
+            <input
+              type="text"
+              placeholder="Buscar publicador..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full p-2 text-black border-b border-gray-200 outline-none"
+              autoFocus
+            />
+            {/* A Lista de Resultados */}
+            <ul className="max-h-60 overflow-y-auto">
+              {filteredPublicadores.length > 0 ? (
+                filteredPublicadores.map((publicador) => (
+                  <li key={publicador.id}>
+                    <button
+                      type="button"
+                      className="w-full text-left p-2 text-black hover:bg-neutral-100 truncate"
+                      onClick={() => {
+                        handleAssignmentChange(partId, publicador.nome_completo);
+                        setIsOpen(false);
+                        setSearchTerm("");
+                      }}
+                    >
+                      {publicador.nome_completo}
+                    </button>
+                  </li>
+                ))
+              ) : (
+                <li className="p-2 text-sm text-gray-500 text-center">
+                  Nenhum publicador encontrado.
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* 2. O nome que aparece na impressão (sem alteração) */}
+      <div className={printedNameClass}>
+        {currentValue || '...'}
+      </div>
+    </>
+  );
+};
+// --- FIM DO COMPONENTE ATUALIZADO ---
+
 
 // Componente principal da página
 export default function DesignacoesPage() {
@@ -16,7 +130,7 @@ export default function DesignacoesPage() {
   const router = useRouter();
   const printRef = useRef(null);
 
-  // 1. Buscar a lista de publicadores da sua API existente
+  // 1. Buscar a lista de publicadores (sem alteração)
   useEffect(() => {
     async function fetchPublicadores() {
       try {
@@ -33,7 +147,7 @@ export default function DesignacoesPage() {
     fetchPublicadores();
   }, []);
 
-  // 2. Função para ler o arquivo RTF e chamar a NOSSA API INTERNA
+  // 2. Função para ler o arquivo RTF (sem alteração)
   const handleFileParse = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -47,47 +161,35 @@ export default function DesignacoesPage() {
     reader.onload = async (e) => {
       try {
         const textContent = e.target.result;
-
-        // --- MUDANÇA PRINCIPAL ---
-        // Agora chamamos a NOSSA API interna, que é segura (server-side)
         const response = await fetch('/api/admin/parse-rtf', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ textContent }) // Enviamos o texto lido
+          body: JSON.stringify({ textContent })
         });
 
         if (!response.ok) {
           const errData = await response.json();
-          // O errData.message virá da nossa API, que pode incluir o erro da Gemini
-          // Corrigido para verificar se o erro da Gemini está aninhado
           const errorMessage = errData.error || errData.message || 'Falha no servidor ao processar o arquivo.';
           throw new Error(errorMessage);
         }
 
-        // A resposta já é o JSON processado
         const parsedData = await response.json();
-        // --- FIM DA MUDANÇA ---
-        
         setScheduleData(parsedData);
       } catch (err) {
-        // O erro agora será mais claro
         setError(`Falha ao processar o arquivo: ${err.message}`);
       } finally {
         setIsParsing(false);
       }
     };
-    reader.readAsText(file, 'ISO-8859-1'); // Encoding para ler RTF
+    reader.readAsText(file, 'ISO-8859-1');
   };
 
-  // 3. A função callGeminiToParse() FOI REMOVIDA DAQUI
-  //    Ela agora vive no arquivo /api/admin/parse-rtf/route.js
-
-  // 4. Atualiza o state quando um publicador é selecionado
+  // 3. Atualiza o state (sem alteração)
   const handleAssignmentChange = (partId, name) => {
     setAssignments(prev => ({ ...prev, [partId]: name }));
   };
 
-  // 5. Função de impressão
+  // 4. Função de impressão (sem alteração)
   const handlePrint = () => {
     window.print();
   };
@@ -95,31 +197,10 @@ export default function DesignacoesPage() {
   // ----- Classes de Estilo -----
   const tdTime = "border border-gray-600 p-2 font-semibold w-20 align-top";
   const tdPart = "border border-gray-600 p-2 align-top";
+  // A classe do <td> de nome agora é definida aqui
   const tdName = "border border-gray-600 p-0 w-2/5 md:w-1/3 name-cell align-top";
-  const selectClass = "w-full bg-neutral-100 border-none p-2 text-black focus:outline-none focus:ring-2 focus:ring-blue-500 print:hidden";
-  const printedNameClass = "hidden print:block p-2 text-black font-medium"; // Mostra o nome selecionado ao imprimir
   const headerClass = "bg-blue-800 text-white p-2 text-center font-bold text-lg";
 
-  // Componente para o dropdown de seleção
-  const AssignmentSelect = ({ partId }) => (
-    <div className={tdName}>
-      <select
-        value={assignments[partId] || ''}
-        onChange={(e) => handleAssignmentChange(partId, e.target.value)}
-        className={selectClass}
-      >
-        <option value="" disabled>Selecione...</option>
-        {publicadores.map(p => (
-          <option key={p.id} value={p.nome_completo}>{p.nome_completo}</option>
-        ))}
-      </select>
-      {/* Isso só aparece na impressão */}
-      <div className={printedNameClass}>
-        {assignments[partId] || '...'}
-      </div>
-    </div>
-  );
-  
   // Renderização
   if (isLoading) {
     return (
@@ -156,7 +237,7 @@ export default function DesignacoesPage() {
         >
           <UploadCloud size={40} className="text-neutral-400 mb-2" />
           <span className="font-semibold">Clique para carregar o arquivo .RTF</span>
-          <span className="text-xs text-neutral-400">Envie o arquivo RTF da semana (ex: mwb_T_202511_02.rtf)</span>
+          <span className="text-xs text-neutral-400">Envie o arquivo RTF da semana</span>
         </label>
         <input id="rtf-upload" type="file" accept=".rtf, .txt" className="hidden" onChange={handleFileParse} />
         
@@ -187,14 +268,26 @@ export default function DesignacoesPage() {
                 <div className="space-y-1">
                   <div className="flex justify-between items-center">
                     <label className="font-semibold text-gray-700">Presidente:</label>
+                    {/* AQUI ESTÁ CORRETO: O componente é filho de um <div> */}
                     <div className="w-2/3">
-                      <AssignmentSelect partId="presidente" />
+                      <AssignmentSelect 
+                        partId="presidente" 
+                        publicadores={publicadores}
+                        assignments={assignments}
+                        handleAssignmentChange={handleAssignmentChange}
+                      />
                     </div>
                   </div>
                   <div className="flex justify-between items-center">
                     <label className="font-semibold text-gray-700">Ajudante:</label>
+                    {/* AQUI ESTÁ CORRETO: O componente é filho de um <div> */}
                     <div className="w-2/3">
-                      <AssignmentSelect partId="ajudante" />
+                      <AssignmentSelect 
+                        partId="ajudante" 
+                        publicadores={publicadores}
+                        assignments={assignments}
+                        handleAssignmentChange={handleAssignmentChange}
+                      />
                     </div>
                   </div>
                 </div>
@@ -211,13 +304,29 @@ export default function DesignacoesPage() {
                     {scheduleData.initialSong}
                     <span className="float-right font-bold text-gray-700">Oração</span>
                   </td>
-                  <AssignmentSelect partId="oracao_inicial" />
+                  {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
+                  <td className={tdName}>
+                    <AssignmentSelect 
+                      partId="oracao_inicial"
+                      publicadores={publicadores}
+                      assignments={assignments}
+                      handleAssignmentChange={handleAssignmentChange}
+                    />
+                  </td>
                 </tr>
                 
                 <tr>
                   <td className={tdTime}></td>
                   <td className={tdPart}>{scheduleData.openingComments}</td>
-                  <AssignmentSelect partId="comentarios_iniciais" />
+                  {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
+                  <td className={tdName}>
+                    <AssignmentSelect 
+                      partId="comentarios_iniciais"
+                      publicadores={publicadores}
+                      assignments={assignments}
+                      handleAssignmentChange={handleAssignmentChange}
+                    />
+                  </td>
                 </tr>
 
                 {/* Tesouros */}
@@ -226,7 +335,15 @@ export default function DesignacoesPage() {
                   <tr key={`t-${index}`}>
                     <td className={tdTime}></td>
                     <td className={tdPart}>{part.title}</td>
-                    <AssignmentSelect partId={`tesouro_${index}`} />
+                    {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
+                    <td className={tdName}>
+                      <AssignmentSelect 
+                        partId={`tesouro_${index}`}
+                        publicadores={publicadores}
+                        assignments={assignments}
+                        handleAssignmentChange={handleAssignmentChange}
+                      />
+                    </td>
                   </tr>
                 ))}
                 
@@ -236,7 +353,15 @@ export default function DesignacoesPage() {
                   <tr key={`m-${index}`}>
                     <td className={tdTime}></td>
                     <td className="border border-gray-600 p-2 align-top">{part.title}</td>
-                    <AssignmentSelect partId={`ministerio_${index}`} />
+                    {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
+                    <td className={tdName}>
+                      <AssignmentSelect 
+                        partId={`ministerio_${index}`}
+                        publicadores={publicadores}
+                        assignments={assignments}
+                        handleAssignmentChange={handleAssignmentChange}
+                      />
+                    </td>
                   </tr>
                 ))}
 
@@ -246,7 +371,15 @@ export default function DesignacoesPage() {
                   <tr key={`v-${index}`}>
                     <td className={tdTime}></td>
                     <td className={tdPart}>{part.title}</td>
-                    <AssignmentSelect partId={`vida_${index}`} />
+                    {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
+                    <td className={tdName}>
+                      <AssignmentSelect 
+                        partId={`vida_${index}`}
+                        publicadores={publicadores}
+                        assignments={assignments}
+                        handleAssignmentChange={handleAssignmentChange}
+                      />
+                    </td>
                   </tr>
                 ))}
 
@@ -254,7 +387,15 @@ export default function DesignacoesPage() {
                 <tr>
                   <td className={tdTime}></td>
                   <td className={tdPart}>{scheduleData.finalComments}</td>
-                  <AssignmentSelect partId="comentarios_finais" />
+                  {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
+                  <td className={tdName}>
+                    <AssignmentSelect 
+                      partId="comentarios_finais"
+                      publicadores={publicadores}
+                      assignments={assignments}
+                      handleAssignmentChange={handleAssignmentChange}
+                    />
+                  </td>
                 </tr>
                 
                 <tr>
@@ -263,7 +404,15 @@ export default function DesignacoesPage() {
                     {scheduleData.finalSong}
                     <span className="float-right font-bold text-gray-700">Oração</span>
                   </td>
-                  <AssignmentSelect partId="oracao_final" />
+                  {/* --- ATUALIZADO: O <td> agora envolve o componente --- */}
+                  <td className={tdName}>
+                    <AssignmentSelect 
+                      partId="oracao_final"
+                      publicadores={publicadores}
+                      assignments={assignments}
+                      handleAssignmentChange={handleAssignmentChange}
+                    />
+                  </td>
                 </tr>
 
               </tbody>

@@ -157,16 +157,32 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
       {/* HEADER */}
       <div className="shrink-0 border-b border-neutral-800 bg-neutral-800/50">
         <div className="flex items-center justify-between px-4 py-3">
-          <div>
-            <h2 className="text-base font-bold text-white">Novo Publicador</h2>
-            <p className="text-xs text-neutral-400">Preencha os dados abaixo</p>
-          </div>
+          
+          {/* --- Botão Voltar (Mobile) --- */}
           {onClose && (
             <button
               onClick={onClose}
-              className="ml-2 p-1 text-neutral-400 hover:text-neutral-100 transition"
+              className="mr-3 text-neutral-400 hover:text-neutral-100 transition md:hidden"
+              aria-label="Voltar para a lista"
             >
-              <X size={18} />
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+            </button>
+          )}
+
+          {/* Título */}
+          <div className="flex-1">
+            <h2 className="text-base font-bold text-white">Novo Publicador</h2>
+            <p className="text-xs text-neutral-400">Preencha os dados abaixo</p>
+          </div>
+
+          {/* --- Botão Fechar (Desktop) --- */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="ml-2 p-1 text-neutral-400 hover:text-neutral-100 transition hidden md:block"
+              aria-label="Fechar"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
           )}
         </div>

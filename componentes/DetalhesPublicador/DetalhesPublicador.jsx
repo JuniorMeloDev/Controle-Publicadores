@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2, Printer } from 'lucide-react';
 import FormularioInformacoes from '@/componentes/DetalhesPublicador/FormularioInformacoes';
 import AtividadesTeocraticas from '@/componentes/DetalhesPublicador/AtividadesTeocraticas';
 import RelatorioImprimivel from './RelatorioImprimivel';
 
-export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
+export default function DetalhesPublicador({ publicadorId, onSaveSuccess, onClose }) {
   const [activeTab, setActiveTab] = useState('informacoes');
   const [gruposList, setGruposList] = useState([]);  
   const [formData, setFormData] = useState({
@@ -29,73 +29,80 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
   const numeroInputRef = useRef(null);
   const printRef = useRef(null);
 
-  useEffect(() => {
+  // Função de busca (sem o loop infinito)
+  const fetchTudo = useCallback(async () => {
     if (!publicadorId) {
       setIsPageLoading(false);
       return;
     }
     
-    const fetchTudo = async () => {
-      setIsPageLoading(true);
-      setMessage('');
-      setIsError(false);
-      try {
-        const gruposRes = await fetch('/api/get-grupos');
-        if (!gruposRes.ok) throw new Error('Falha ao carregar grupos.');
-        const gruposData = await gruposRes.json();
-        setGruposList(gruposData);
+    // Define o loading apenas se não for uma atualização silenciosa
+    if (!isPageLoading) setIsLoading(true); 
+    
+    setMessage('');
+    setIsError(false);
+    try {
+      const [gruposRes, pubRes] = await Promise.all([
+        fetch('/api/get-grupos'),
+        fetch(`/api/admin/get-publicador/${publicadorId}`)
+      ]);
+      
+      if (!gruposRes.ok) throw new Error('Falha ao carregar grupos.');
+      const gruposData = await gruposRes.json();
+      setGruposList(gruposData);
 
-        const pubRes = await fetch(`/api/admin/get-publicador/${publicadorId}`);
-        if (!pubRes.ok) throw new Error('Falha ao carregar dados do publicador.');
-        const pubData = await pubRes.json();
+      if (!pubRes.ok) throw new Error('Falha ao carregar dados do publicador.');
+      const pubData = await pubRes.json();
 
-        setFormData({
-          ...pubData,
-          data_nascimento: pubData.data_nascimento || '',
-          data_batismo: pubData.data_batismo || '',
-          sexo: pubData.sexo || '',
-          esperanca: pubData.esperanca || '',
-          telefone: pubData.telefone || '',
-          email: pubData.email || '',
-          cep: pubData.cep || '',
-          logradouro: pubData.logradouro || '',
-          numero: pubData.numero || '',
-          complemento: pubData.complemento || '',
-          bairro: pubData.bairro || '',
-          cidade: pubData.cidade || '',
-          estado: pubData.estado || '',
-          senha: '', 
-          privilegios: pubData.privilegios || [],
-          designacoes: pubData.designacoes || [],
-        });
+      setFormData({
+        ...pubData,
+        data_nascimento: pubData.data_nascimento || '',
+        data_batismo: pubData.data_batismo || '',
+        sexo: pubData.sexo || '',
+        esperanca: pubData.esperanca || '',
+        telefone: pubData.telefone || '',
+        email: pubData.email || '',
+        cep: pubData.cep || '',
+        logradouro: pubData.logradouro || '',
+        numero: pubData.numero || '',
+        complemento: pubData.complemento || '',
+        bairro: pubData.bairro || '',
+        cidade: pubData.cidade || '',
+        estado: pubData.estado || '',
+        senha: '', 
+        privilegios: pubData.privilegios || [],
+        designacoes: pubData.designacoes || [],
+      });
 
-        const relRes = await fetch(`/api/admin/get-relatorios/${publicadorId}`);
-        if (!relRes.ok) throw new Error('Falha ao buscar relatórios');
-        const relData = await relRes.json();
-        setRelatorios(relData);
+      const relRes = await fetch(`/api/admin/get-relatorios/${publicadorId}`);
+      if (!relRes.ok) throw new Error('Falha ao buscar relatórios');
+      const relData = await relRes.json();
+      setRelatorios(relData);
 
-      } catch (err) {
-        console.error(err);
-        setMessage('Erro ao carregar dados. ' + err.message);
-        setIsError(true);
-      } finally {
-        setIsPageLoading(false);
-      }
-    };
+    } catch (err) {
+      console.error(err);
+      setMessage('Erro ao carregar dados. ' + err.message);
+      setIsError(true);
+    } finally {
+      setIsPageLoading(false);
+      setIsLoading(false); 
+    }
+  }, [publicadorId]); // Removido 'isPageLoading' da dependência
 
+  useEffect(() => {
+    setIsPageLoading(true); 
     fetchTudo();
-  }, [publicadorId]);
-
+  }, [publicadorId, fetchTudo]);
+  
+  // Handlers (sem alteração)
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prevData => ({ ...prevData, [name]: value }));
   };
-
   const handleMaskChange = (value, name) => {
     setFormData(prevData => ({ ...prevData, [name]: value }));
     if (name === 'cep') setCepError('');
   };
-
   const handlePrivilegioChange = (e) => {
     const { value, checked } = e.target;
     setFormData(prevData => {
@@ -103,7 +110,6 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
       return { ...prevData, privilegios: prevData.privilegios.filter(p => p !== value) };
     });
   };
-
   const handleDesignacaoChange = (e) => {
     const { value, checked } = e.target;
     setFormData(prevData => {
@@ -111,7 +117,6 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
       return { ...prevData, designacoes: prevData.designacoes.filter(d => d !== value) };
     });
   };
-
   const handleCepBlur = async () => {
     const cep = formData.cep.replace(/\D/g, ''); 
     if (cep.length !== 8) { setCepError(''); return; }
@@ -135,7 +140,6 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
       setIsCepLoading(false);
     }
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -166,23 +170,19 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
       setIsLoading(false);
     }
   };
-
-  // Função de impressão simplificada: usa media print + .printable-content do globals.css
   const handlePrint = () => {
     const el = document.querySelector('.printable-content');
     if (!el) {
       console.error('handlePrint: container imprimível não encontrado');
       return;
     }
-
-    // garante que o DOM esteja atualizado antes de abrir o diálogo de impressão
-    // (pequeno delay ajuda em casos de render assíncrona)
     setTimeout(() => {
       window.focus();
       window.print();
     }, 100);
   };
 
+  // Loading da página inteira
   if (isPageLoading) {
     return (
       <div className="flex-1 flex items-center justify-center p-8 h-full">
@@ -191,93 +191,127 @@ export default function DetalhesPublicador({ publicadorId, onSaveSuccess }) {
     );
   }
 
+  // --- MUDANÇA PRINCIPAL NO LAYOUT ---
+ // ... (mantenha todo o código de 'use client' até 'if (isPageLoading) { ... }')
+
+  // --- MUDANÇA PRINCIPAL NO LAYOUT ---
   return (
-    <div className="flex-1 p-6 md:p-8">
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-neutral-700">
-        <div>
-          <h2 className="text-3xl font-bold text-white">
-            {formData.nome_completo || 'Editar Publicador'}
-          </h2>
-          <p className="text-neutral-400 text-sm mt-1">
-            ID do Publicador: {publicadorId}
-          </p>
+    // 1. Container flex-col para travar o header e deixar o conteúdo rolar
+    <div className="flex flex-col h-full overflow-hidden">
+      
+      {/* 2. CABEÇALHO (agora é 'shrink-0' e tem padding) */}
+      <div className="shrink-0 p-6 md:p-8 pb-6 border-b border-neutral-700">
+        <div className="flex items-center justify-between">
+
+          {/* --- NOVO: Botão Voltar (Aparece só no Mobile) --- */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="mr-4 text-neutral-400 hover:text-neutral-100 md:hidden"
+              aria-label="Voltar para a lista"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+            </button>
+          )}
+
+          {/* Conteúdo do Título */}
+          <div className="flex-1 min-w-0"> {/* Adicionado flex-1 e min-w-0 para truncar nomes longos */}
+            <h2 className="text-2xl md:text-3xl font-bold text-white truncate">
+              {formData.nome_completo || 'Editar Publicador'}
+            </h2>
+            <p className="text-neutral-400 text-sm mt-1">
+              ID do Publicador: {publicadorId}
+            </p>
+          </div>
+
+          {/* Botão Imprimir (Agora esconde no mobile) */}
+          <button
+            onClick={handlePrint}
+            className="hidden md:flex items-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold text-neutral-100 bg-neutral-700 hover:bg-neutral-600 transition-colors ml-4"
+          >
+            <Printer size={18} />
+            Imprimir
+          </button>
         </div>
-        <button
-          onClick={handlePrint}
-          className="flex items-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold text-neutral-100 bg-neutral-700 hover:bg-neutral-600 transition-colors"
-        >
-          <Printer size={18} />
-          Imprimir
-        </button>
       </div>
       
-      {message && (
-        <div className={`p-3 rounded-md mb-6 text-sm ${isError 
-          ? 'bg-red-900 bg-opacity-30 text-red-300 border border-red-800' 
-          : 'bg-green-900 bg-opacity-30 text-green-300 border border-green-800'}`
-        }>
-          {message}
-        </div>
-      )}
+      {/* 3. CONTEÚDO ROLÁVEL (wrapper de antes, mas agora funciona) */}
+      <div className="flex-1 overflow-y-auto p-6 md:p-8">
+        {/* ... (o resto do seu JSX com as abas 'Informações Pessoais' e 'Atividades Teocráticas' vai aqui) ... */}
+        {message && (
+          <div className={`p-3 rounded-md mb-6 text-sm ${isError 
+            ? 'bg-red-900 bg-opacity-30 text-red-300 border border-red-800' 
+            : 'bg-green-900 bg-opacity-30 text-green-300 border border-green-800'}`
+          }>
+            {message}
+          </div>
+        )}
 
-      <div className="border-b border-neutral-700">
-        <nav className="-mb-px flex space-x-6" aria-label="Abas">
-          <button
-            onClick={() => setActiveTab('informacoes')}
-            className={`${activeTab === 'informacoes' 
-              ? 'border-blue-500 text-blue-400' 
-              : 'border-transparent text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}
-              whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-          >
-            Informações Pessoais
-          </button>
-          <button
-            onClick={() => setActiveTab('atividades')}
-            className={`${activeTab === 'atividades' 
-              ? 'border-blue-500 text-blue-400' 
-              : 'border-transparent text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}
-              whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-          >
-            Atividades Teocráticas
-          </button>
-        </nav>
+        {/* Navegação das Abas */}
+        <div className="border-b border-neutral-700">
+          <nav className="-mb-px flex space-x-6" aria-label="Abas">
+            {/* ... seus botões de aba ... */}
+            <button
+              onClick={() => setActiveTab('informacoes')}
+              className={`${activeTab === 'informacoes' 
+                ? 'border-blue-500 text-blue-400' 
+                : 'border-transparent text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}
+                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              Informações Pessoais
+            </button>
+            <button
+              onClick={() => setActiveTab('atividades')}
+              className={`${activeTab === 'atividades' 
+                ? 'border-blue-500 text-blue-400' 
+                : 'border-transparent text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}
+                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              Atividades Teocráticas
+            </button>
+          </nav>
+        </div>
+
+        {/* Conteúdo da Aba 1 */}
+        {activeTab === 'informacoes' && (
+          <FormularioInformacoes
+            formData={formData}
+            setFormData={setFormData}
+            handleSubmit={handleSubmit}
+            handleChange={handleChange}
+            handleMaskChange={handleMaskChange}
+            handlePrivilegioChange={handlePrivilegioChange}
+            handleDesignacaoChange={handleDesignacaoChange}
+            handleCepBlur={handleCepBlur}
+            gruposList={gruposList}
+            isLoading={isLoading}
+            isCepLoading={isCepLoading}
+            cepError={cepError}
+            numeroInputRef={numeroInputRef}
+            showPassword={showPassword}
+            setShowPassword={setShowPassword}
+          />
+        )}
+
+        {/* Conteúdo da Aba 2 */}
+        {activeTab === 'atividades' && (
+          <AtividadesTeocraticas 
+            publicadorId={publicadorId} 
+            publicadorNome={formData.nome_completo}
+            relatorios={relatorios}
+            publicador={formData}
+            onRefreshData={fetchTudo}
+          />
+        )}
       </div>
 
-      {activeTab === 'informacoes' && (
-        <FormularioInformacoes
-          formData={formData}
-          setFormData={setFormData}
-          handleSubmit={handleSubmit}
-          handleChange={handleChange}
-          handleMaskChange={handleMaskChange}
-          handlePrivilegioChange={handlePrivilegioChange}
-          handleDesignacaoChange={handleDesignacaoChange}
-          handleCepBlur={handleCepBlur}
-          gruposList={gruposList}
-          isLoading={isLoading}
-          isCepLoading={isCepLoading}
-          cepError={cepError}
-          numeroInputRef={numeroInputRef}
-          showPassword={showPassword}
-          setShowPassword={setShowPassword}
-        />
-      )}
-
-      {activeTab === 'atividades' && (
-        <AtividadesTeocraticas 
-          publicadorId={publicadorId} 
-          publicadorNome={formData.nome_completo}
-          relatorios={relatorios}
-          publicador={formData}
-        />
-      )}
-
-      {/* Componente de Impressão (oculto) */}
+      {/* Componente de Impressão (oculto) - Fica fora da área de rolagem */}
       <div className="printable-content">
         <div ref={printRef}>
           <RelatorioImprimivel 
             publicador={formData} 
             relatorios={relatorios} 
+            isEditing={false}
           />
         </div>
       </div>

@@ -12,11 +12,9 @@ export default function GerenciarPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [modoNovo, setModoNovo] = useState(false);
 
-  // 🔄 Buscar todos os publicadores
   const fetchPublicadores = async () => {
     setIsLoadingList(true);
     try {
-      // Adicionado cache: 'no-store' aqui também por segurança
       const res = await fetch('/api/admin/get-publicadores', { cache: 'no-store' });
       if (!res.ok) throw new Error('Falha ao buscar publicadores');
       const data = await res.json();
@@ -46,13 +44,15 @@ export default function GerenciarPage() {
 
   const handleCloseDrawer = () => {
     setIsDrawerOpen(false);
-    setSelectedPublicadorId(null);
-    setModoNovo(false);
+    // Um pequeno delay para a transição ficar suave antes de limpar o ID
+    setTimeout(() => {
+      setSelectedPublicadorId(null);
+      setModoNovo(false);
+    }, 150);
   };
 
   const handleSaveSuccess = (keepOpen = false) => {
     fetchPublicadores();
-    // Se keepOpen for true, apenas atualiza a lista e mantém o drawer aberto
     if (!keepOpen) {
       handleCloseDrawer();
     }
@@ -67,9 +67,17 @@ export default function GerenciarPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-neutral-900 text-white overflow-hidden">
+    // Layout principal: flex, altura da tela, overflow escondido
+    <div className="flex h-screen bg-neutral-900 text-white overflow-hidden">
+      
       {/* === PAINEL LATERAL: LISTA === */}
-      <div className="w-96 border-r border-neutral-800 flex flex-col shrink-0">
+      {/* - Telas pequenas: Ocupa 100% da largura. É 'hidden' se o drawer estiver aberto.
+        - Telas médias (md): Fica fixo em 'w-96' e 'flex' (sempre visível).
+      */}
+      <div className={`
+        ${isDrawerOpen ? 'hidden' : 'flex w-full'} 
+        md:flex md:w-96 h-full flex-col shrink-0 border-r border-neutral-800
+      `}>
         <FiltroELista
           publicadores={publicadores}
           selectedId={selectedPublicadorId}
@@ -79,25 +87,35 @@ export default function GerenciarPage() {
       </div>
 
       {/* === PAINEL PRINCIPAL: DETALHES OU NOVO === */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {!isDrawerOpen && (
-          <div className="flex items-center justify-center h-full">
+      {/* - Telas pequenas: Ocupa 100% da largura. É 'hidden' se o drawer estiver fechado.
+        - Telas médias (md): Fica como 'flex-1' (ocupa o resto) e 'flex' (sempre visível).
+      */}
+      <div className={`
+        ${isDrawerOpen ? 'flex w-full' : 'hidden'} 
+        md:flex md:flex-1 h-full flex-col overflow-hidden
+      `}>
+        {/* Estado vazio (só aparece em desktop) */}
+        {!selectedPublicadorId && !modoNovo && (
+          <div className="flex-1 flex items-center justify-center h-full">
             <div className="text-center">
               <p className="text-neutral-400 text-lg">Selecione um publicador ou clique em Novo Publicador</p>
             </div>
           </div>
         )}
 
-        {isDrawerOpen && modoNovo && (
-          <FormularioCadastro onSaveSuccess={handleSaveSuccess} onClose={handleCloseDrawer} />
+        {modoNovo && (
+          <FormularioCadastro 
+            onSaveSuccess={handleSaveSuccess} 
+            onClose={handleCloseDrawer} // Passa a função de fechar
+          />
         )}
 
-        {isDrawerOpen && !modoNovo && selectedPublicadorId && (
+        {selectedPublicadorId && !modoNovo && (
           <DetalhesPublicador
-            key={selectedPublicadorId} // <-- ESTA É A CORREÇÃO CRÍTICA
+            key={selectedPublicadorId}
             publicadorId={selectedPublicadorId}
             onSaveSuccess={handleSaveSuccess}
-            onClose={handleCloseDrawer}
+            onClose={handleCloseDrawer} // Passa a função de fechar
           />
         )}
       </div>

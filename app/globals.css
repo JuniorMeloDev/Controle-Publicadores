@@ -3,32 +3,25 @@
 /* Importa as animações que você já tinha */
 @import "tw-animate-css";
 
-/* Camada base opcional: 
-  Você pode manter ou remover isso. 
-  Isso define algumas cores de fundo e fonte padrão para o body.
-*/
 @layer base {
   body {
-    /* Usa as cores padrão do Tailwind (branco/preto) */
     background-color: theme('colors.white');
     color: theme('colors.black');
   }
 
   .dark body {
-    /* Usa as cores padrão do Tailwind para dark mode */
     background-color: theme('colors.black');
     color: theme('colors.white');
   }
 }
 
 /* ==============================================
-    CÓDIGO DE IMPRESSÃO - (COLAR NO FINAL)
+    CÓDIGO DE IMPRESSÃO - (CORRIGIDO)
    ==============================================
 */
 
-/* NOVO: Estilos para esconder o componente de impressão na TELA.
-  Usamos 'visibility' e 'position' em vez de 'display: none'
-  para que o Ref do componente continue acessível.
+/* NA TELA: Esconde APENAS .printable-content (do DetalhesPublicador).
+  O .print-container (das Designações) NÃO é afetado e permanece visível.
 */
 .printable-content {
   visibility: hidden;
@@ -37,12 +30,12 @@
   left: -9999px;
   height: 0;
   overflow: hidden;
-  background-color: #ffffff; /* Garante fundo branco para o componente */
-  color: #000000; /* Garante texto preto */
+  background-color: #ffffff;
+  color: #000000;
 }
 
 @media print {
-  /* Força fundo branco e texto preto para impressão */
+  /* 1. Força fundo branco e texto preto */
   body {
     background-color: #ffffff !important;
     color: #000000 !important;
@@ -50,33 +43,43 @@
     print-color-adjust: exact;
   }
   
-  /* Esconde tudo por padrão na impressão */
+  /* 2. Esconde TUDO por padrão */
   body * {
     visibility: hidden;
   }
 
-  /* Mostra o container de impressão e tudo dentro dele */
-  .printable-content, .printable-content * {
+  /* 3. Mostra o container de impressão (qualquer um dos dois) e tudo dentro dele */
+  .printable-content, .printable-content *,
+  .print-container, .print-container * {
     visibility: visible;
   }
   
-  /* Posiciona o container de impressão no topo da página */
-  .printable-content {
+  /* 4. Posiciona o container de impressão (qualquer um dos dois) no topo da página */
+  .printable-content,
+  .print-container {
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
-    height: auto; /* Reseta a altura */
-    overflow: visible; /* Reseta o overflow */
-    padding: 1rem; /* Adiciona uma margem de impressão */
+    height: auto;
+    overflow: visible;
+    padding: 1rem;
   }
 
-  /* Garante que cada "página" comece em uma nova folha */
+  /* 5. Regra CRÍTICA: Garante que qualquer coisa marcada como .no-print 
+     (como o cabeçalho e o botão "Imprimir") seja escondida na impressão,
+     mesmo que esteja dentro do .print-container.
+  */
+  .no-print, .no-print * {
+     display: none !important;
+     visibility: hidden !important;
+  }
+
+  /* --- Regras de quebra de página (sem alteração) --- */
   .page-break {
     page-break-after: always;
   }
 
-  /* Evita quebras de página ruins */
   table, tr, td, th, h1, h2, p, div {
     page-break-inside: avoid !important;
   }
