@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Loader2, Printer, Edit, Save, AlertCircle } from 'lucide-react';
+import { Loader2, Printer, Edit, Save, AlertCircle, Calendar, ChevronLeft } from 'lucide-react';
 import RelatorioImprimivel from './RelatorioImprimivel';
 
 // Define os meses
@@ -9,55 +9,80 @@ const MESES_ANO_SERVICO = [
   'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto'
 ];
 
+// Função para obter o ano de serviço atual
+const getCurrentServiceYear = () => {
+  const data = new Date();
+  // O ano de serviço começa em Setembro (mês 8)
+  return data.getMonth() >= 8 ? data.getFullYear() + 1 : data.getFullYear();
+};
+
 export default function AtividadesTeocraticas({ 
   publicadorId, 
   publicadorNome, 
-  relatorios: relatoriosInicial,
+  relatorios: relatoriosInicial, // Esta é a lista COMPLETA de relatórios
   publicador, 
   onRefreshData
 }) {
   const [activeSubTab, setActiveSubTab] = useState('relatorios');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Loading inicial da aba
   const [error, setError] = useState('');
   const printRef = useRef(null); 
 
+  // --- STATES PARA GERENCIAR OS ANOS ---
+  const [selectedYear, setSelectedYear] = useState(null); // Ano selecionado (ex: 2025)
   const [isEditing, setIsEditing] = useState(false);
   const [isLoadingSave, setIsLoadingSave] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
-
-  const anoServico = useMemo(() => {
-    return relatoriosInicial[0]?.ano_servico || 
-           (new Date().getMonth() >= 8 ? new Date().getFullYear() + 1 : new Date().getFullYear());
-  }, [relatoriosInicial]);
-
-  const relatoriosMap = useMemo(() => {
-    return new Map(relatoriosInicial.map(rel => [rel.mes, rel]));
-  }, [relatoriosInicial]);
-
-  const [editableRelatorios, setEditableRelatorios] = useState(() => 
-    MESES_ANO_SERVICO.map(mes => {
-      const existente = relatoriosMap.get(mes);
-      if (existente) return { ...existente };
-      return {
-        mes: mes,
-        ano_servico: anoServico,
-        participou_ministerio: false,
-        pioneiro_auxiliar: false,
-        estudos_biblicos: null,
-        horas: null,
-        observacoes: null
-      };
-    })
-  );
   
+  // 1. Agrupa todos os relatórios por ano de serviço
+  const { reportsByYear, availableYears } = useMemo(() => {
+    const grouped = (relatoriosInicial || []).reduce((acc, rel) => {
+      const year = rel.ano_servico;
+      if (!acc[year]) {
+        acc[year] = [];
+      }
+      acc[year].push(rel);
+      return acc;
+    }, {});
+    
+    // Pega os anos disponíveis e ordena do mais novo para o mais antigo
+    const years = Object.keys(grouped).map(Number).sort((a, b) => b - a);
+
+    // Garante que o ano de serviço atual esteja na lista, mesmo se não tiver relatórios
+    const currentYear = getCurrentServiceYear();
+    if (years.length === 0 || !years.includes(currentYear)) {
+      years.unshift(currentYear);
+    }
+    
+    return { reportsByYear: grouped, availableYears: years };
+  }, [relatoriosInicial]);
+
+  // 2. Define o ano selecionado como o mais recente na primeira vez
   useEffect(() => {
-    const map = new Map(relatoriosInicial.map(rel => [rel.mes, rel]));
+    if (!selectedYear && availableYears.length > 0) {
+      setSelectedYear(availableYears[0]); // Seleciona o ano mais recente por padrão
+    }
+  }, [availableYears, selectedYear]);
+
+  // 3. O estado dos relatórios editáveis agora depende do ano selecionado
+  const [editableRelatorios, setEditableRelatorios] = useState([]);
+  
+  // 4. Efeito que atualiza os relatórios editáveis QUANDO o ano selecionado muda
+  useEffect(() => {
+    if (!selectedYear) {
+      setEditableRelatorios([]);
+      return;
+    }
+
+    const map = new Map((reportsByYear[selectedYear] || []).map(rel => [rel.mes, rel]));
+    
     setEditableRelatorios(MESES_ANO_SERVICO.map(mes => {
       const existente = map.get(mes);
       if (existente) return { ...existente };
+      // Cria um registro padrão para um mês em branco
       return {
         mes: mes,
-        ano_servico: anoServico,
+        ano_servico: selectedYear, // Usa o ano selecionado
         participou_ministerio: false,
         pioneiro_auxiliar: false,
         estudos_biblicos: null,
@@ -65,8 +90,13 @@ export default function AtividadesTeocraticas({
         observacoes: null
       };
     }));
-  }, [relatoriosInicial, anoServico]);
+    // Reseta o modo de edição ao trocar de ano
+    setIsEditing(false);
+    setMessage({ text: '', type: '' });
 
+  }, [selectedYear, reportsByYear]);
+
+  // Função chamada pelo RelatorioImprimivel
   const handleRelatorioChange = (mes, field, value) => {
     setEditableRelatorios(prevData =>
       prevData.map(row =>
@@ -75,6 +105,7 @@ export default function AtividadesTeocraticas({
     );
   };
 
+  // Função Salvar
   const handleSave = async () => {
     setIsLoadingSave(true);
     setMessage({ text: '', type: '' });
@@ -84,7 +115,7 @@ export default function AtividadesTeocraticas({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           publicadorId: publicadorId,
-          relatorios: editableRelatorios
+          relatorios: editableRelatorios // Envia apenas os 12 meses do ano selecionado
         })
       });
 
@@ -93,7 +124,7 @@ export default function AtividadesTeocraticas({
 
       setMessage({ text: data.message, type: 'success' });
       setIsEditing(false); 
-      if (onRefreshData) onRefreshData(); 
+      if (onRefreshData) onRefreshData(); // Recarrega os dados no componente pai
 
     } catch (err) {
       setMessage({ text: err.message, type: 'error' });
@@ -102,6 +133,7 @@ export default function AtividadesTeocraticas({
     }
   };
 
+  // Função de impressão
   const handlePrint = () => {
     const el = document.querySelector('.printable-content');
     if (!el) {
@@ -116,6 +148,7 @@ export default function AtividadesTeocraticas({
 
   return (
     <div className="mt-6">
+      {/* Navegação da Sub-Aba (Relatórios) */}
       <div className="border-b border-neutral-700">
         <nav className="-mb-px flex space-x-4" aria-label="Abas">
           <button
@@ -132,9 +165,11 @@ export default function AtividadesTeocraticas({
         </nav>
       </div>
 
+      {/* Conteúdo da Sub-Aba */}
       <div className="mt-6">
         {activeSubTab === 'relatorios' && (
           <div>
+            {/* Mensagens de Loading e Erro Iniciais */}
             {isLoading && (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="size-6 animate-spin text-neutral-400" />
@@ -146,6 +181,7 @@ export default function AtividadesTeocraticas({
               </div>
             )}
 
+            {/* Mensagem de Salvar (Sucesso ou Erro) */}
             {message.text && (
               <div className={`flex items-center gap-2 p-3 rounded-md mb-4 text-sm ${
                 message.type === 'error'
@@ -157,19 +193,37 @@ export default function AtividadesTeocraticas({
               </div>
             )}
 
-            {!isLoading && !error && (
-              <div className="space-y-6">
+            {/* --- SELETOR DE ANO DE SERVIÇO --- */}
+            <div className="mb-4">
+              <label htmlFor="service-year-select" className="block text-xs font-medium text-neutral-400 mb-1">
+                Selecione o Ano de Serviço
+              </label>
+              <select
+                id="service-year-select"
+                value={selectedYear || ''}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="w-full max-w-xs rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                {availableYears.map(year => (
+                  <option key={year} value={year}>
+                    Ano de Serviço {year}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                {/* --- CORREÇÃO 3 AQUI --- */}
-                {/* Adicionado 'overflow-x-auto' para criar a rolagem horizontal na tabela */}
+            {/* --- CONTEÚDO DO ANO SELECIONADO --- */}
+            {selectedYear && (
+              <div className="space-y-6">
                 <div 
                   ref={printRef} 
                   className={`bg-white text-black rounded-lg border border-neutral-300 shadow-lg ${isEditing ? 'ring-2 ring-blue-500' : ''} overflow-x-auto`}
                 >
-                  <div className="p-4 md:p-8 min-w-[700px]"> {/* min-w-[...] garante que a tabela tenha um tamanho mínimo antes de rolar */}
+                  <div className="p-4 md:p-8 min-w-[700px]">
                     <RelatorioImprimivel 
                       publicador={publicador || { nome_completo: publicadorNome }}
-                      relatorios={editableRelatorios}
+                      relatorios={editableRelatorios} // Passa os 12 meses do ano selecionado
+                      anoServico={selectedYear} // Passa o ano selecionado
                       isEditing={isEditing}
                       onRelatorioChange={handleRelatorioChange}
                     />
@@ -203,19 +257,10 @@ export default function AtividadesTeocraticas({
                     <Printer size={18} />
                     Imprimir Registro
                   </button>
-                  
-                  <button
-                    onClick={() => {
-                      window.location.href = `/relatorio-mensal?publicadorId=${publicadorId}`
-                    }}
-                    disabled={isEditing}
-                    className="flex items-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-neutral-800 bg-yellow-400 hover:bg-yellow-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Enviar Relatório Manual
-                  </button>
                 </div>
               </div>
             )}
+            
           </div>
         )}
       </div>

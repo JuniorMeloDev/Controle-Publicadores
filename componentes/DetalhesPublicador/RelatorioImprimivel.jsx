@@ -6,16 +6,14 @@ const MESES_ANO_SERVICO = [
   'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto'
 ];
 
-// --- COMPONENTE ATUALIZADO ---
-// Agora ele aceita props para edição
 export default function RelatorioImprimivel({ 
   publicador, 
-  relatorios, 
+  relatorios,
+  anoServico, 
   isEditing = false, 
   onRelatorioChange = () => {} 
 }) {
 
-  // Mapear valores para exibição (sem alteração)
   const mapSexo = (sexo) => {
     const map = { 'Masculino': 'Masculino', 'Feminino': 'Feminino' };
     return map[sexo] || 'Não informado';
@@ -25,35 +23,29 @@ export default function RelatorioImprimivel({
     return map[esperanca] || 'Não informado';
   };
 
-  // Extrair dados do publicador (sem alteração)
   const nome = publicador?.nome_completo || '';
   const dataNasc = publicador?.data_nascimento || 'Não informado';
   const dataBatismo = publicador?.data_batismo || 'Não batizado';
   const sexo = mapSexo(publicador?.sexo);
   const esperanca = mapEsperanca(publicador?.esperanca);
 
-  // --- LÓGICA DE EDIÇÃO ---
-  // Transforma a lista de relatórios em um "mapa" para acesso rápido
   const relatoriosPorMes = new Map(relatorios.map(rel => [rel.mes, rel]));
 
-  // Classes de estilo para os inputs
   const inputBaseClass = "w-full text-center outline-none focus:ring-1 focus:ring-blue-500 focus:bg-blue-50";
   const inputDisabledClass = "bg-transparent disabled:border-none";
   const inputEnabledClass = "bg-neutral-100 border border-neutral-300 rounded-sm";
   const checkboxClass = "h-4 w-4 accent-blue-600";
   
-  // --- INÍCIO DO JSX ---
   return (
     <div className="w-full max-w-4xl mx-auto p-0">
-      {/* CABEÇALHO (sem alteração) */}
+      {/* CABEÇALHO */}
       <div className="text-center mb-6 border-b-2 border-black pb-4">
         <h1 className="text-xl font-bold mb-2">REGISTRO DE PUBLICADOR DE CONGREGAÇÃO</h1>
-        <p className="text-sm">Ano de Serviço {relatorios[0]?.ano_servico || new Date().getFullYear()}</p>
       </div>
 
-      {/* INFORMAÇÕES PESSOAIS (sem alteração) */}
+      {/* --- INFORMAÇÕES PESSOAIS (LAYOUT CORRIGIDO) --- */}
       <div className="mb-6 border border-black p-4">
-        {/* ... (todo o bloco de 'Informações Pessoais' continua igual) ... */}
+        {/* Linha 1: Nome e Data de Nascimento */}
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
             <p className="text-xs font-bold">Nome:</p>
@@ -64,49 +56,103 @@ export default function RelatorioImprimivel({
             <p className="text-sm border-b border-black">{dataNasc}</p>
           </div>
         </div>
+
+        {/* Linha 2: Batismo, Sexo e Esperança */}
         <div className="grid grid-cols-2 gap-4 mb-4">
+          {/* Coluna 1: Batismo */}
           <div>
             <p className="text-xs font-bold">Data de Batismo:</p>
             <p className="text-sm border-b border-black">{dataBatismo}</p>
           </div>
-          <div className="flex gap-4">
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={sexo === 'Masculino'} disabled className="h-4 w-4" />
-              <label className="text-xs font-bold">Masculino</label>
+          
+          {/* Coluna 2: Sexo e Esperança (Empilhados) */}
+          <div className="flex flex-col gap-2"> {/* Alterado para flex-col */}
+            {/* Sexo */}
+            <div className="flex gap-11">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={sexo === 'Masculino'} disabled className="h-4 w-4" />
+                <label className="text-xs font-bold">Masculino</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={sexo === 'Feminino'} disabled className="h-4 w-4" />
+                <label className="text-xs font-bold">Feminino</label>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={sexo === 'Feminino'} disabled className="h-4 w-4" />
-              <label className="text-xs font-bold">Feminino</label>
+            {/* Esperança (Movido para cá) */}
+            <div className="flex gap-4">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={esperanca === 'Outras Ovelhas'} disabled className="h-4 w-4" />
+                <label className="text-xs font-bold">Outras Ovelhas</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={esperanca === 'Ungido'} disabled className="h-4 w-4" />
+                <label className="text-xs font-bold">Ungido</label>
+              </div>
+              
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex gap-4">
+
+        {/* Linha 3: Privilégios e Designações (Combinados) */}
+        <div className="grid grid-cols-1 gap-4 mt-4">
+          <div className="flex flex-wrap gap-x-4 gap-y-2 col-span-2">
+            {/* Privilégios */}
             <div className="flex items-center gap-2">
-              <input type="checkbox" checked={esperanca === 'Ungido'} disabled className="h-4 w-4" />
-              <label className="text-xs font-bold">Ungido</label>
-            </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={esperanca === 'Outras Ovelhas'} disabled className="h-4 w-4" />
-              <label className="text-xs font-bold">Outras Ovelhas</label>
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={publicador?.privilegios?.includes('anciao') || false} disabled className="h-4 w-4" />
+              <input 
+                type="checkbox" 
+                checked={publicador?.privilegios?.includes('anciao') || false} 
+                disabled 
+                className="h-4 w-4" 
+              />
               <label className="text-xs font-bold">Ancião</label>
             </div>
             <div className="flex items-center gap-2">
-              <input type="checkbox" checked={publicador?.privilegios?.includes('servo_ministerial') || false} disabled className="h-4 w-4" />
+              <input 
+                type="checkbox" 
+                checked={publicador?.privilegios?.includes('servo_ministerial') || false} 
+                disabled 
+                className="h-4 w-4" 
+              />
               <label className="text-xs font-bold">Servo Ministerial</label>
+            </div>
+            
+            {/* Designações */}
+            <div className="flex items-center gap-2">
+              <input 
+                type="checkbox" 
+                checked={publicador?.designacoes?.includes('pioneiro_regular') || false}
+                disabled
+                className="h-4 w-4"
+              />
+              <label className="text-xs font-bold">Pioneiro Regular</label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input 
+                type="checkbox" 
+                checked={publicador?.designacoes?.includes('pioneiro_especial') || false}
+                disabled
+                className="h-4 w-4"
+              />
+              <label className="text-xs font-bold">Pioneiro Especial</label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input 
+                type="checkbox" 
+                checked={publicador?.designacoes?.includes('missionario') || false}
+                disabled
+                className="h-4 w-4"
+              />
+              <label className="text-xs font-bold">Missionário em Campo</label>
             </div>
           </div>
         </div>
       </div>
+      {/* --- FIM DAS INFORMAÇÕES PESSOAIS --- */}
 
-      {/* --- TABELA DE SERVIÇO (MODIFICADA) --- */}
+
+      {/* TABELA DE SERVIÇO (Sem alteração) */}
       <div className="mb-4">
-        <h2 className="font-bold text-sm mb-2">Ano de Serviço {relatorios[0]?.ano_servico || new Date().getFullYear()}</h2>
+        <h2 className="font-bold text-sm mb-2">Ano de Serviço {anoServico}</h2>
         <table className="w-full border-collapse border border-black">
           <thead>
             <tr className="bg-gray-200">
@@ -120,13 +166,12 @@ export default function RelatorioImprimivel({
           </thead>
           <tbody>
             {MESES_ANO_SERVICO.map((mes) => {
-              const rel = relatoriosPorMes.get(mes) || { mes }; // Pega o relatório ou cria um objeto vazio
+              const rel = relatoriosPorMes.get(mes) || { mes }; 
 
               return (
                 <tr key={mes}>
                   <td className="border border-black p-2 text-xs">{mes}</td>
                   
-                  {/* Participou (Checkbox) */}
                   <td className="border border-black p-0 text-center text-xs">
                     <input
                       type="checkbox"
@@ -137,7 +182,6 @@ export default function RelatorioImprimivel({
                     />
                   </td>
                   
-                  {/* Estudos (Number) */}
                   <td className="border border-black p-0 text-center text-xs">
                     <input
                       type="number"
@@ -149,7 +193,6 @@ export default function RelatorioImprimivel({
                     />
                   </td>
                   
-                  {/* Pioneiro Auxiliar (Checkbox) */}
                   <td className="border border-black p-0 text-center text-xs">
                     <input
                       type="checkbox"
@@ -160,7 +203,6 @@ export default function RelatorioImprimivel({
                     />
                   </td>
                   
-                  {/* Horas (Number) */}
                   <td className="border border-black p-0 text-center text-xs">
                     <input
                       type="number"
@@ -172,7 +214,6 @@ export default function RelatorioImprimivel({
                     />
                   </td>
                   
-                  {/* Observações (Text) */}
                   <td className="border border-black p-0 text-xs text-gray-600">
                     <input
                       type="text"
@@ -186,14 +227,13 @@ export default function RelatorioImprimivel({
               );
             })}
             
-            {/* Linha Total (Não editável) */}
             <tr className="font-bold bg-gray-100">
               <td className="border border-black p-2 text-xs">Total</td>
               <td className="border border-black p-2 text-center text-xs">
                 {relatorios?.filter(r => r.participou_ministerio).length || 0}
               </td>
               <td className="border border-black p-2 text-center text-xs">
-                {/* O total de estudos é a média dos últimos 3 meses, ou o último valor */}
+                {/* Deixado em branco */}
               </td>
               <td className="border border-black p-2 text-center text-xs">
                 {relatorios?.filter(r => r.pioneiro_auxiliar).length || 0}
