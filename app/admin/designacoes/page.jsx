@@ -1,6 +1,6 @@
 'use client';
 
-// Importações do React e Lucide (adicionado Save)
+// Importações do React e Lucide
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Loader2, 
@@ -8,25 +8,40 @@ import {
   UploadCloud, 
   ArrowLeft,
   ChevronsUpDown,
-  Save // <-- NOVO ÍCONE
+  Save 
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-// --- Componente AssignmentSelect (Permanece IDÊNTICO ao anterior) ---
+// --- 1. FUNÇÃO: Pegar Primeiro e Último Nome ---
+function getShortName(fullName) {
+  if (!fullName || typeof fullName !== 'string') return '';
+  const parts = fullName.split(' ').filter(Boolean);
+  if (parts.length === 1) return fullName;
+  return `${parts[0]} ${parts[parts.length - 1]}`;
+}
+// --- FIM DA FUNÇÃO ---
+
+
+// --- Componente AssignmentSelect (ATUALIZADO) ---
 const AssignmentSelect = ({ partId, publicadores, assignments, handleAssignmentChange }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const wrapperRef = useRef(null); 
+  const wrapperRef = useRef(null);
 
-  const currentValue = assignments[partId] || "";
+  const currentValue = assignments[partId] || ""; // NOME COMPLETO
+  
   const selectedPublicador = publicadores.find(
     (p) => p.nome_completo.toLowerCase() === currentValue.toLowerCase()
   );
 
   const filteredPublicadores = useMemo(() => {
-    if (!searchTerm) return publicadores;
+    const searchLower = searchTerm.toLowerCase();
+    if (!searchLower) {
+      return publicadores;
+    }
     return publicadores.filter((p) =>
-      p.nome_completo.toLowerCase().includes(searchTerm.toLowerCase())
+      p.nome_completo.toLowerCase().includes(searchLower) ||
+      p.nome_curto.toLowerCase().includes(searchLower)
     );
   }, [publicadores, searchTerm]);
 
@@ -43,7 +58,7 @@ const AssignmentSelect = ({ partId, publicadores, assignments, handleAssignmentC
     };
   }, [wrapperRef]);
 
-  const printedNameClass = "hidden print:block p-2 text-black font-medium";
+  const printedNameClass = "hidden print:block p-1 text-black font-medium";
   
   return (
     <>
@@ -54,10 +69,10 @@ const AssignmentSelect = ({ partId, publicadores, assignments, handleAssignmentC
           role="combobox"
           aria-expanded={isOpen}
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex justify-between items-center bg-neutral-100 border-none p-2 text-black font-normal hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full flex justify-between items-center bg-neutral-100 border-none py-1 px-2 text-black font-normal hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <span className="truncate">
-            {selectedPublicador ? selectedPublicador.nome_completo : "Selecione..."}
+            {selectedPublicador ? selectedPublicador.nome_curto : "Selecione..."}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </button>
@@ -69,7 +84,7 @@ const AssignmentSelect = ({ partId, publicadores, assignments, handleAssignmentC
               placeholder="Buscar publicador..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full p-2 text-black border-b border-gray-200 outline-none"
+              className="w-full py-1 px-2 text-black border-b border-gray-200 outline-none"
               autoFocus
             />
             <ul className="max-h-60 overflow-y-auto">
@@ -78,14 +93,14 @@ const AssignmentSelect = ({ partId, publicadores, assignments, handleAssignmentC
                   <li key={publicador.id}>
                     <button
                       type="button"
-                      className="w-full text-left p-2 text-black hover:bg-neutral-100 truncate"
+                      className="w-full text-left py-1 px-2 text-black hover:bg-neutral-100 truncate"
                       onClick={() => {
                         handleAssignmentChange(partId, publicador.nome_completo);
                         setIsOpen(false);
                         setSearchTerm("");
                       }}
                     >
-                      {publicador.nome_completo}
+                      {publicador.nome_curto}
                     </button>
                   </li>
                 ))
@@ -100,7 +115,7 @@ const AssignmentSelect = ({ partId, publicadores, assignments, handleAssignmentC
       </div>
 
       <div className={printedNameClass}>
-        {currentValue || '...'}
+        {selectedPublicador ? selectedPublicador.nome_curto : '...'}
       </div>
     </>
   );
@@ -119,20 +134,25 @@ export default function DesignacoesPage() {
   const router = useRouter();
   const printRef = useRef(null);
 
-  // --- NOVOS STATES ---
-  const [meetingDate, setMeetingDate] = useState(''); // Data da reunião (ex: 2025-11-10)
+  const [meetingDate, setMeetingDate] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState({ text: '', isError: false });
-  // --- FIM DOS NOVOS STATES ---
 
-  // 1. Buscar a lista de publicadores (sem alteração)
+  // 1. Buscar a lista de publicadores
   useEffect(() => {
     async function fetchPublicadores() {
       try {
         const res = await fetch('/api/admin/get-publicadores');
         if (!res.ok) throw new Error('Falha ao buscar publicadores');
         const data = await res.json();
-        setPublicadores(data);
+        
+        const publicadoresComNomeCurto = data.map(p => ({
+          ...p,
+          // Se tiver 'nome_chamado', usa ele. Senão, usa a função getShortName.
+          nome_curto: p.nome_chamado ? p.nome_chamado : getShortName(p.nome_completo)
+        }));
+        setPublicadores(publicadoresComNomeCurto);
+
       } catch (err) {
         setError(err.message);
       } finally {
@@ -142,7 +162,7 @@ export default function DesignacoesPage() {
     fetchPublicadores();
   }, []);
 
-  // 2. Função para ler o arquivo RTF (limpa os states novos)
+  // 2. Função para ler o arquivo RTF (sem alteração)
   const handleFileParse = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -151,8 +171,8 @@ export default function DesignacoesPage() {
     setError('');
     setScheduleData(null);
     setAssignments({});
-    setSaveMessage({ text: '', isError: false }); // Limpa msg de save
-    setMeetingDate(''); // Limpa data
+    setSaveMessage({ text: '', isError: false });
+    setMeetingDate('');
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -191,7 +211,7 @@ export default function DesignacoesPage() {
     window.print();
   };
 
-  // --- 5. NOVA FUNÇÃO: Salvar Designações no Histórico ---
+  // 5. Função: Salvar Designações (sem alteração)
   const handleSaveAssignments = async () => {
     if (!meetingDate) {
       setSaveMessage({ text: 'Por favor, selecione a data de início da semana da reunião.', isError: true });
@@ -229,12 +249,11 @@ export default function DesignacoesPage() {
       setIsSaving(false);
     }
   };
-  // --- FIM DA NOVA FUNÇÃO ---
 
 
-  // ----- Classes de Estilo (sem alteração) -----
-  const tdTime = "border border-gray-600 p-2 font-semibold w-20 align-top";
-  const tdPart = "border border-gray-600 p-2 align-top";
+  // Classes de Estilo (com padding reduzido)
+  const tdTime = "border border-gray-600 py-1 px-2 font-semibold w-20 align-top";
+  const tdPart = "border border-gray-600 py-1 px-2 align-top";
   const tdName = "border border-gray-600 p-0 w-2/5 md:w-1/3 name-cell align-top";
   const headerClass = "bg-blue-800 text-white p-2 text-center font-bold text-lg";
 
@@ -268,7 +287,6 @@ export default function DesignacoesPage() {
           </div>
         )}
 
-        {/* --- MENSAGEM DE SALVAMENTO --- */}
         {saveMessage.text && (
           <div className={`p-3 rounded-md mb-4 text-sm ${
             saveMessage.isError 
@@ -296,7 +314,6 @@ export default function DesignacoesPage() {
           </div>
         )}
 
-        {/* --- NOVO: CAMPO DE DATA (Aparece com o programa) --- */}
         {scheduleData && (
           <div className="mt-4">
             <label htmlFor="meeting-date" className="block text-sm font-medium text-neutral-300 mb-1">
@@ -311,7 +328,6 @@ export default function DesignacoesPage() {
             />
           </div>
         )}
-        {/* --- FIM DO CAMPO DE DATA --- */}
       </div>
 
       {/* === PROGRAMA GERADO (SÓ APARECE DEPOIS DE PROCESSAR) === */}
@@ -319,16 +335,19 @@ export default function DesignacoesPage() {
         <div ref={printRef} className="print-container bg-white text-black rounded-lg shadow-lg overflow-hidden border border-gray-300 max-w-4xl mx-auto" id="schedule-container">
           <div className="p-4 md:p-6">
             
-            {/* TÍTULOS DA SEMANA */}
-            <div className="mb-4 text-center">
-              <h2 className="text-xl md:text-2xl font-bold text-blue-700">{scheduleData.weekDate}</h2>
-              <h3 className="text-lg md:text-xl font-semibold text-gray-800">{scheduleData.bibleReading}</h3>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Nossa Vida e Ministério Cristão</h1>
-            </div>
+            {/* === CABEÇALHO E CAIXA (NOVO LAYOUT) === */}
+            <div className="flex justify-between items-start mb-4">
+              
+              <div className="flex-1 pr-4 text-center">
+                <h2 className="text-lg font-bold text-blue-700">
+                  {scheduleData.weekDate} - {scheduleData.bibleReading}
+                </h2>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Nossa Vida e Ministério Cristão
+                </h1>
+              </div>
 
-            {/* CAIXA DO SALÃO PRINCIPAL */}
-            <div className="flex justify-end mb-2 print:justify-end">
-              <div className="w-full md:w-2/5 lg:w-1/3 border-2 border-gray-700 rounded-lg p-3">
+              <div className="w-2/5 lg:w-1/3 border-2 border-gray-700 rounded-lg p-3 shrink-0">
                 <h3 className="text-center font-bold text-lg mb-2">Salão Principal</h3>
                 <div className="space-y-1">
                   <div className="flex justify-between items-center">
@@ -356,8 +375,10 @@ export default function DesignacoesPage() {
                 </div>
               </div>
             </div>
+            {/* === FIM DO NOVO LAYOUT DO CABEÇALHO === */}
 
-            {/* TABELA DE DESIGNAÇÕES (Idêntica à anterior) */}
+
+            {/* TABELA DE DESIGNAÇÕES */}
             <table className="w-full border-collapse border-2 border-gray-700">
               <tbody className="text-gray-900">
                 
@@ -390,6 +411,7 @@ export default function DesignacoesPage() {
                   </td>
                 </tr>
 
+                {/* Tesouros */}
                 <tr><td colSpan="3" className={headerClass}>TESOUROS DA PALAVRA DE DEUS</td></tr>
                 {scheduleData.treasures?.map((part, index) => (
                   <tr key={`t-${index}`}>
@@ -406,38 +428,88 @@ export default function DesignacoesPage() {
                   </tr>
                 ))}
                 
+                {/* Ministério */}
                 <tr><td colSpan="3" className={headerClass}>FAÇA SEU MELHOR NO MINISTÉRIO</td></tr>
-                {scheduleData.ministry?.map((part, index) => (
-                  <tr key={`m-${index}`}>
-                    <td className={tdTime}></td>
-                    <td className="border border-gray-600 p-2 align-top">{part.title}</td>
-                    <td className={tdName}>
-                      <AssignmentSelect 
-                        partId={`ministerio_${index}`}
-                        publicadores={publicadores}
-                        assignments={assignments}
-                        handleAssignmentChange={handleAssignmentChange}
-                      />
-                    </td>
-                  </tr>
-                ))}
+                {scheduleData.ministry?.map((part, index) => {
+                  const isDiscurso = part.title.toLowerCase().includes('discurso:');
+                  
+                  return (
+                    <tr key={`m-${index}`}>
+                      <td className={tdTime}></td>
+                      <td className="border border-gray-600 py-1 px-2 align-top">{part.title}</td>
+                      
+                      <td className={tdName}>
+                        {isDiscurso ? (
+                          <AssignmentSelect 
+                            partId={`ministerio_${index}`}
+                            publicadores={publicadores}
+                            assignments={assignments}
+                            handleAssignmentChange={handleAssignmentChange}
+                          />
+                        ) : (
+                          <div className="flex flex-col gap-0.5">
+                            <AssignmentSelect 
+                              partId={`ministerio_${index}_1`}
+                              publicadores={publicadores}
+                              assignments={assignments}
+                              handleAssignmentChange={handleAssignmentChange}
+                            />
+                            <AssignmentSelect 
+                              partId={`ministerio_${index}_2`}
+                              publicadores={publicadores}
+                              assignments={assignments}
+                              handleAssignmentChange={handleAssignmentChange}
+                            />
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
 
+                {/* --- SEÇÃO NOSSA VIDA CRISTÃ ATUALIZADA --- */}
                 <tr><td colSpan="3" className={headerClass}>NOSSA VIDA CRISTÃ</td></tr>
-                {scheduleData.living?.map((part, index) => (
-                  <tr key={`v-${index}`}>
-                    <td className={tdTime}></td>
-                    <td className={tdPart}>{part.title}</td>
-                    <td className={tdName}>
-                      <AssignmentSelect 
-                        partId={`vida_${index}`}
-                        publicadores={publicadores}
-                        assignments={assignments}
-                        handleAssignmentChange={handleAssignmentChange}
-                      />
-                    </td>
-                  </tr>
-                ))}
+                {scheduleData.living?.map((part, index) => {
+                  // --- ATUALIZADO: Verifica se é o Estudo Bíblico ---
+                  const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
+                  
+                  return (
+                    <tr key={`v-${index}`}>
+                      <td className={tdTime}></td>
+                      <td className={tdPart}>{part.title}</td>
+                      <td className={tdName}>
+                        {isBibleStudy ? (
+                          // Se for Estudo Bíblico, renderiza DOIS
+                          <div className="flex flex-col gap-0.5">
+                            <AssignmentSelect 
+                              partId={`vida_${index}_1`}
+                              publicadores={publicadores}
+                              assignments={assignments}
+                              handleAssignmentChange={handleAssignmentChange}
+                            />
+                            <AssignmentSelect 
+                              partId={`vida_${index}_2`}
+                              publicadores={publicadores}
+                              assignments={assignments}
+                              handleAssignmentChange={handleAssignmentChange}
+                            />
+                          </div>
+                        ) : (
+                          // Senão, renderiza SÓ UM
+                          <AssignmentSelect 
+                            partId={`vida_${index}`}
+                            publicadores={publicadores}
+                            assignments={assignments}
+                            handleAssignmentChange={handleAssignmentChange}
+                          />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {/* --- FIM DA SEÇÃO --- */}
 
+                {/* Finais */}
                 <tr>
                   <td className={tdTime}></td>
                   <td className={tdPart}>{scheduleData.finalComments}</td>
@@ -470,7 +542,7 @@ export default function DesignacoesPage() {
               </tbody>
             </table>
             
-            {/* --- BOTÕES DE AÇÃO ATUALIZADOS --- */}
+            {/* Botões de Ação */}
             <div className="mt-6 flex flex-col sm:flex-row justify-center gap-4 no-print">
               <button
                 onClick={handleSaveAssignments}
@@ -489,7 +561,6 @@ export default function DesignacoesPage() {
                 Imprimir Programa
               </button>
             </div>
-            {/* --- FIM DOS BOTÕES DE AÇÃO --- */}
 
           </div>
         </div>

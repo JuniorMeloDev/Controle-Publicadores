@@ -75,12 +75,16 @@
      visibility: hidden !important;
   }
 
-  /* --- Regras de quebra de página (sem alteração) --- */
+  /* --- Regras de quebra de página (CORRIGIDAS) --- */
   .page-break {
     page-break-after: always;
   }
 
-  table, tr, td, th, h1, h2, p, div {
+  /* A MUDANÇA ESTÁ AQUI: 
+    Removemos 'div', 'h1', 'h2', 'p', etc.
+    Queremos apenas evitar quebras DENTRO das linhas da tabela.
+  */
+  tr, td, th {
     page-break-inside: avoid !important;
   }
 }

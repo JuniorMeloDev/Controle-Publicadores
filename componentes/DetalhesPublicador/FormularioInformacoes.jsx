@@ -20,8 +20,6 @@ export default function FormularioInformacoes({
   showPassword, setShowPassword 
 }) {
   
-  // Log para mostrar EXATAMENTE o que o formulário está recebendo
-  console.log('[FormularioInformacoes] Renderizando com formData:', formData);
   
   const labelClass = "block text-xs font-semibold text-neutral-300 mb-1";
   const baseInputClass = "w-full rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-sm text-neutral-100 placeholder-neutral-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50";
@@ -49,6 +47,19 @@ export default function FormularioInformacoes({
               onChange={handleChange} 
               className={baseInputClass} 
               required 
+            />
+          </div>
+
+          <div>
+            <label htmlFor="nome_chamado" className={labelClass}>Como gostaria de ser chamado?</label>
+            <input 
+              type="text" 
+              id="nome_chamado" 
+              name="nome_chamado" 
+              value={formData.nome_chamado || ''} 
+              onChange={handleChange} 
+              className={baseInputClass} 
+              placeholder="Ex: João Júnior (Deixe em branco para usar o padrão)"
             />
           </div>
 

@@ -5,7 +5,7 @@ const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 });
 
-// Função auxiliar para mapear IDs de partes para títulos legíveis
+// --- FUNÇÃO getPartTitles ATUALIZADA ---
 function getPartTitles(scheduleData) {
   const titles = {
     'presidente': 'Presidente',
@@ -19,15 +19,32 @@ function getPartTitles(scheduleData) {
   scheduleData.treasures?.forEach((part, index) => {
     titles[`tesouro_${index}`] = part.title;
   });
+  
+  // --- LÓGICA ATUALIZADA AQUI ---
   scheduleData.ministry?.forEach((part, index) => {
-    titles[`ministerio_${index}`] = part.title;
+    // Verifica se é um discurso
+    const isDiscurso = part.title.toLowerCase().includes('discurso');
+    
+    if (isDiscurso) {
+      // Se for discurso, registra apenas uma chave
+      titles[`ministerio_${index}`] = part.title;
+    } else {
+      // Se NÃO for discurso, registra duas chaves (_1 e _2)
+      // ambas apontando para o mesmo título de parte.
+      titles[`ministerio_${index}_1`] = part.title;
+      titles[`ministerio_${index}_2`] = part.title;
+    }
   });
+  // --- FIM DA LÓGICA ATUALIZADA ---
+
   scheduleData.living?.forEach((part, index) => {
     titles[`vida_${index}`] = part.title;
   });
 
   return titles;
 }
+// --- FIM DA FUNÇÃO ---
+
 
 export async function POST(request) {
   const body = await request.json();
@@ -45,32 +62,35 @@ export async function POST(request) {
     const partTitles = getPartTitles(scheduleData);
     const weekDateString = scheduleData.weekDate || 'Semana';
 
-    // 1. Buscar todos os publicadores de uma vez para evitar múltiplas queries
+    // 1. Buscar publicadores (sem alteração)
     const pubRes = await client.query('SELECT id, nome_completo FROM publicadores');
     const publicadorMap = new Map(pubRes.rows.map(p => [p.nome_completo, p.id]));
 
-    // 2. Preparar os INSERTS
+    // 2. Preparar INSERTS (sem alteração)
     const insertQuery = `
       INSERT INTO designacoes_reuniao (publicador_id, data_reuniao, descricao_semana, nome_parte)
       VALUES ($1, $2, $3, $4)
       ON CONFLICT (publicador_id, data_reuniao, nome_parte) DO NOTHING
     `;
-
+    
+    // 3. Loop de Inserção (sem alteração)
+    // Este loop já funciona, pois 'partTitles' agora resolve
+    // 'ministerio_1_1' e 'ministerio_1_2' para o título correto.
     for (const [partId, nomeCompleto] of Object.entries(assignments)) {
       if (nomeCompleto && publicadorMap.has(nomeCompleto)) {
         const publicadorId = publicadorMap.get(nomeCompleto);
-        const nomeParte = partTitles[partId] || partId; // Usa o título legível ou o ID como fallback
+        const nomeParte = partTitles[partId] || partId; 
 
         await client.query(insertQuery, [
           publicadorId,
-          meetingDate,       // ex: '2025-11-10'
-          weekDateString,    // ex: '10-16 DE NOVEMBRO'
-          nomeParte          // ex: 'A importância da beleza interior (10 min)'
+          meetingDate,
+          weekDateString,
+          nomeParte
         ]);
       }
     }
 
-    // 3. Confirmar a transação
+    // 4. Confirmar transação (sem alteração)
     await client.query('COMMIT');
 
     return NextResponse.json({ message: 'Designações salvas no histórico com sucesso!' }, { status: 201 });

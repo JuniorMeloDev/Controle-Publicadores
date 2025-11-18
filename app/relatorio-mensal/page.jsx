@@ -4,23 +4,54 @@
 import { useState, useEffect, Suspense } from 'react';
 // 2. Importar o useSearchParams
 import { useSearchParams } from 'next/navigation';
+// --- 3. NOVA IMPORTAÇÃO ---
+import { IMaskInput } from 'react-imask';
 
 const meses = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
-const mesAtual = meses[new Date().getMonth()];
 
-// 3. Movemos toda a lógica do formulário para este componente-filho
+// --- 4. LÓGICA DO MÊS ATUALIZADA ---
+const getPreviousMonth = () => {
+  const data = new Date();
+  data.setMonth(data.getMonth() - 1); // Pega o mês anterior
+  return meses[data.getMonth()];
+};
+const mesAnterior = getPreviousMonth();
+
+// --- 5. LÓGICA DO ANO DE SERVIÇO ATUALIZADA (baseada no mês) ---
+const getServiceYearForMonth = (nomeMes) => {
+  const dataAtual = new Date();
+  const anoAtual = dataAtual.getFullYear();
+  const mesIndex = meses.indexOf(nomeMes);
+  
+  // Se o mês for de Setembro (8) a Dezembro (11)
+  if (mesIndex >= 8) {
+    // Se o mês atual também for Set-Dez, o ano de serviço é o próximo
+    // Ex: Em Nov/2025, o relatório de Out/2025 é do ano de serviço 2026
+    if (dataAtual.getMonth() >= 8) {
+      return anoAtual + 1;
+    }
+    // Ex: Em Jan/2026, o relatório de Dez/2025 é do ano de serviço 2026
+    return anoAtual;
+  }
+  
+  // Se o mês for de Janeiro (0) a Agosto (7)
+  // Ex: Em Fev/2026, o relatório de Jan/2026 é do ano de serviço 2026
+  return anoAtual;
+};
+
+// 6. Componente do formulário
 function RelatorioForm() {
   
   const [gruposList, setGruposList] = useState([]); 
   const [formData, setFormData] = useState({
     nome_completo: '',
     data_nascimento: '',
-    nome_grupo: '',
-    mes: mesAtual, 
-    ano_servico: new Date().getMonth() >= 8 ? new Date().getFullYear() + 1 : new Date().getFullYear(),
+    nome_grupo: '', // <-- ATUALIZADO: Padrão é 'Selecione'
+    mes: mesAnterior, // <-- ATUALIZADO: Padrão é mês anterior
+    ano_servico: getServiceYearForMonth(mesAnterior), // <-- ATUALIZADO: Ano baseado no mês anterior
     participou_ministerio: false,
     pioneiro_auxiliar: false,
     estudos_biblicos: '',
@@ -32,7 +63,6 @@ function RelatorioForm() {
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
 
-  // 4. O useSearchParams agora está DENTRO do componente que será "suspenso"
   const searchParams = useSearchParams();
   const publicadorId = searchParams.get('publicadorId');
   
@@ -48,9 +78,8 @@ function RelatorioForm() {
           const data = await response.json();
           setGruposList(data); 
           
-          if (data.length > 0) {
-            setFormData(prev => ({ ...prev, nome_grupo: data[0] }));
-          }
+          // --- REMOVIDO: Não define mais um grupo padrão ---
+          
         } catch (err) {
           console.error(err);
         }
@@ -74,10 +103,15 @@ function RelatorioForm() {
           }
           const data = await res.json();
           
+          // Formata a data de nascimento vinda do banco (YYYY-MM-DD) para (DD/MM/YYYY)
+          const dataNascFormatada = data.data_nascimento ? 
+            new Date(data.data_nascimento).toLocaleDateString('pt-BR', { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' }) 
+            : '';
+
           setFormData(prev => ({
             ...prev,
             nome_completo: data.nome_completo,
-            data_nascimento: data.data_nascimento,
+            data_nascimento: dataNascFormatada, // Usa data formatada
             nome_grupo: data.nome_grupo,
           }));
           
@@ -97,7 +131,7 @@ function RelatorioForm() {
     }
   }, [publicadorId]); 
 
-  // Handler de Submit (Exatamente como antes)
+  // Handler de Submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.nome_grupo) {
@@ -113,13 +147,16 @@ function RelatorioForm() {
     try {
       let finalApiUrl;
       let finalBody;
+      
+      // --- ATUALIZADO: Recalcula o ano de serviço no momento do envio ---
+      const anoServicoFinal = getServiceYearForMonth(formData.mes);
 
       if (isManualEntry) {
         finalApiUrl = '/api/enviar-relatorio-mensal/manual';
         finalBody = JSON.stringify({
           publicadorId: publicadorId,
           mes: formData.mes,
-          ano_servico: formData.ano_servico,
+          ano_servico: anoServicoFinal, // --- Usa ano recalculado
           participou_ministerio: formData.participou_ministerio,
           pioneiro_auxiliar: formData.pioneiro_auxiliar,
           estudos_biblicos: formData.estudos_biblicos || null,
@@ -130,6 +167,7 @@ function RelatorioForm() {
         finalApiUrl = '/api/enviar-relatorio-mensal';
         finalBody = JSON.stringify({
           ...formData,
+          ano_servico: anoServicoFinal, // --- Usa ano recalculado
           estudos_biblicos: formData.estudos_biblicos || null,
           horas: formData.horas || null,
         });
@@ -148,6 +186,8 @@ function RelatorioForm() {
         setIsError(false);
         setFormData(prev => ({
           ...prev,
+          nome_completo: '', // Limpa o nome
+          data_nascimento: '', // Limpa a data
           participou_ministerio: false,
           pioneiro_auxiliar: false,
           estudos_biblicos: '',
@@ -166,7 +206,7 @@ function RelatorioForm() {
     }
   };
 
-  // Handler de Change (Exatamente como antes)
+  // Handler de Change
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prevData) => ({
@@ -174,14 +214,19 @@ function RelatorioForm() {
       [name]: type === 'checkbox' ? checked : value
     }));
   };
+  
+  // --- NOVO HANDLER: Para IMaskInput ---
+  const handleMaskChange = (value, name) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
-  // ----- CLASSES DO TAILWIND (INALTERADAS) -----
+
+  // ----- CLASSES DO TAILWIND -----
   const labelClass = "block text-sm font-medium text-neutral-300";
   const baseInputClass = "mt-1 block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-neutral-100 placeholder-neutral-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50";
   const checkboxLabelClass = "ml-2 text-sm text-neutral-100 select-none";
   const checkboxClass = "h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-neutral-900";
   
-  // 5. O JSX do formulário é retornado aqui
   return (
     <div className="max-w-2xl mx-auto bg-neutral-900 p-6 md:p-8 rounded-xl shadow-2xl border border-neutral-800">
       <h2 className="text-3xl font-bold text-center mb-6 text-white">
@@ -204,7 +249,7 @@ function RelatorioForm() {
             Identificação
           </h3>
           <div>
-            <label htmlFor="nome_completo" className={labelClass}>Nome Completo</label>
+            <label htmlFor="nome_completo" className={labelClass}>Nome Completo (ou parte dele)</label>
             <input 
               type="text" id="nome_completo" name="nome_completo" 
               value={formData.nome_completo} onChange={handleChange} 
@@ -235,10 +280,16 @@ function RelatorioForm() {
           
           <div>
             <label htmlFor="data_nascimento" className={labelClass}>Data de Nascimento</label>
-            <input 
-              type="text" id="data_nascimento" name="data_nascimento" 
-              value={formData.data_nascimento} onChange={handleChange} 
-              className={baseInputClass} placeholder="dd/mm/aaaa" required 
+            {/* --- ATUALIZADO: Usando IMaskInput --- */}
+            <IMaskInput
+              mask="00/00/0000"
+              id="data_nascimento" 
+              name="data_nascimento"
+              value={formData.data_nascimento}
+              onAccept={(value) => handleMaskChange(value, 'data_nascimento')}
+              className={baseInputClass} 
+              placeholder="dd/mm/aaaa" 
+              required
               disabled={isManualEntry}
               readOnly={isManualEntry}
             />
@@ -250,7 +301,8 @@ function RelatorioForm() {
             Relatório
           </h3>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* --- ATUALIZADO: Grid com apenas 1 coluna --- */}
+          <div className="grid grid-cols-1 gap-4">
             <div>
               <label htmlFor="mes" className={labelClass}>Mês</label>
               <select id="mes" name="mes" value={formData.mes} onChange={handleChange} className={baseInputClass}>
@@ -259,12 +311,11 @@ function RelatorioForm() {
                 ))}
               </select>
             </div>
-            <div>
-              <label htmlFor="ano_servico" className={labelClass}>Ano de Serviço</label>
-              <input type="number" id="ano_servico" name="ano_servico" placeholder="Ex: 2025" value={formData.ano_servico} onChange={handleChange} className={baseInputClass} required />
-            </div>
+            {/* --- REMOVIDO: Campo 'Ano de Serviço' --- */}
           </div>
+          
           <div className="space-y-3 pt-2">
+          <p className='font-bold'>Marque para SIM ou deixe em branco para NÃO</p>
             <div className="flex items-center">
               <input id="participou_ministerio" name="participou_ministerio" type="checkbox" checked={formData.participou_ministerio} onChange={handleChange} className={checkboxClass} />
               <label htmlFor="participou_ministerio" className={checkboxLabelClass}>Participei no ministério</label>
@@ -302,7 +353,7 @@ function RelatorioForm() {
   );
 }
 
-// 6. Este é o componente de "fallback" para o Suspense
+// 7. Componente de fallback
 function LoadingFallback() {
   return (
     <div className="max-w-2xl mx-auto bg-neutral-900 p-6 md:p-8 rounded-xl shadow-2xl border border-neutral-800">
@@ -313,7 +364,7 @@ function LoadingFallback() {
   );
 }
 
-// 7. A página principal (export default) agora é simples e envolve o formulário no Suspense
+// 8. Página principal
 export default function RelatorioMensal() {
   return (
     <main className="min-h-screen w-full p-4 md:p-8">

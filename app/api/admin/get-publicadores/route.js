@@ -14,11 +14,12 @@ export async function GET() {
         p.nome_completo, 
         p.data_nascimento, 
         p.data_batismo,
+        p.nome_chamado,
         g.nome_grupo, 
         p.privilegios, 
         p.designacoes,
-        p.sexo,         -- <-- ADICIONADO
-        p.esperanca     -- <-- ADICIONADO
+        p.sexo,         
+        p.esperanca    
       FROM publicadores p
       LEFT JOIN grupos g ON p.grupo_id = g.id
       ORDER BY p.nome_completo ASC

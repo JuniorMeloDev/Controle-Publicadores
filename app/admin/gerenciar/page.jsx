@@ -11,6 +11,10 @@ export default function GerenciarPage() {
   const [selectedPublicadorId, setSelectedPublicadorId] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [modoNovo, setModoNovo] = useState(false);
+  
+  // --- NOVOS ESTADOS PARA MENSAGEM PERSISTENTE ---
+  const [successMessage, setSuccessMessage] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const fetchPublicadores = async () => {
     setIsLoadingList(true);
@@ -34,29 +38,53 @@ export default function GerenciarPage() {
     setSelectedPublicadorId(id);
     setModoNovo(false);
     setIsDrawerOpen(true);
+    // Limpa a mensagem ao trocar de publicador
+    setSuccessMessage(null);
+    setErrorMessage(null);
   };
 
   const handleNovoPublicador = () => {
     setSelectedPublicadorId(null);
     setModoNovo(true);
     setIsDrawerOpen(true);
+    // Limpa a mensagem ao iniciar novo cadastro
+    setSuccessMessage(null);
+    setErrorMessage(null);
   };
 
   const handleCloseDrawer = () => {
     setIsDrawerOpen(false);
-    // Um pequeno delay para a transição ficar suave antes de limpar o ID
+    // Limpa a mensagem ao fechar o drawer
+    setSuccessMessage(null);
+    setErrorMessage(null);
     setTimeout(() => {
       setSelectedPublicadorId(null);
       setModoNovo(false);
     }, 150);
   };
 
-  const handleSaveSuccess = (keepOpen = false) => {
-    fetchPublicadores();
+  // --- FUNÇÃO ATUALIZADA PARA RECEBER A MENSAGEM DO FILHO ---
+  const handleSaveSuccess = ({ message, isError, keepOpen = false }) => {
+    fetchPublicadores(); // Recarrega a lista
+    
+    if (isError) {
+      setErrorMessage(message);
+      setSuccessMessage(null);
+    } else {
+      setSuccessMessage(message);
+      setErrorMessage(null);
+    }
+
     if (!keepOpen) {
       handleCloseDrawer();
     }
   };
+
+  // Função para limpar a mensagem quando o usuário interage
+  const handleMessageDismiss = () => {
+    setSuccessMessage(null);
+    setErrorMessage(null);
+  }
 
   if (isLoadingList) {
     return (
@@ -67,13 +95,9 @@ export default function GerenciarPage() {
   }
 
   return (
-    // Layout principal: flex, altura da tela, overflow escondido
     <div className="flex h-screen bg-neutral-900 text-white overflow-hidden">
       
       {/* === PAINEL LATERAL: LISTA === */}
-      {/* - Telas pequenas: Ocupa 100% da largura. É 'hidden' se o drawer estiver aberto.
-        - Telas médias (md): Fica fixo em 'w-96' e 'flex' (sempre visível).
-      */}
       <div className={`
         ${isDrawerOpen ? 'hidden' : 'flex w-full'} 
         md:flex md:w-96 h-full flex-col shrink-0 border-r border-neutral-800
@@ -87,14 +111,11 @@ export default function GerenciarPage() {
       </div>
 
       {/* === PAINEL PRINCIPAL: DETALHES OU NOVO === */}
-      {/* - Telas pequenas: Ocupa 100% da largura. É 'hidden' se o drawer estiver fechado.
-        - Telas médias (md): Fica como 'flex-1' (ocupa o resto) e 'flex' (sempre visível).
-      */}
       <div className={`
         ${isDrawerOpen ? 'flex w-full' : 'hidden'} 
         md:flex md:flex-1 h-full flex-col overflow-hidden
       `}>
-        {/* Estado vazio (só aparece em desktop) */}
+        {/* Estado vazio */}
         {!selectedPublicadorId && !modoNovo && (
           <div className="flex-1 flex items-center justify-center h-full">
             <div className="text-center">
@@ -105,17 +126,21 @@ export default function GerenciarPage() {
 
         {modoNovo && (
           <FormularioCadastro 
-            onSaveSuccess={handleSaveSuccess} 
-            onClose={handleCloseDrawer} // Passa a função de fechar
+            // Modificado para passar o formato de objeto {message, isError}
+            onSaveSuccess={(data) => handleSaveSuccess({ ...data, keepOpen: false })} 
+            onClose={handleCloseDrawer} 
           />
         )}
 
         {selectedPublicadorId && !modoNovo && (
           <DetalhesPublicador
-            key={selectedPublicadorId}
             publicadorId={selectedPublicadorId}
+            // --- PASSANDO MENSAGENS E HANDLERS PARA O FILHO ---
             onSaveSuccess={handleSaveSuccess}
-            onClose={handleCloseDrawer} // Passa a função de fechar
+            onClose={handleCloseDrawer}
+            persistedMessage={successMessage || errorMessage} // A mensagem a ser exibida
+            persistedError={!!errorMessage} // O status (é erro ou não?)
+            onMessageDismiss={handleMessageDismiss}
           />
         )}
       </div>

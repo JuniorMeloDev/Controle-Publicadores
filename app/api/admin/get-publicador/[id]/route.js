@@ -22,6 +22,7 @@ export async function GET(request, context) {
     const res = await client.query(
       `SELECT 
          p.id, p.nome_completo, p.data_nascimento, p.data_batismo,
+         p.nome_chamado,
          g.nome_grupo, p.privilegios, p.designacoes,
          p.sexo, p.esperanca,   -- <-- ADICIONADO: retornar sexo e esperanca
          p.telefone, p.email, p.cep, p.logradouro, 
