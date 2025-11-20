@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, Printer, UploadCloud, ArrowLeft, Save, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Loader2, Printer, UploadCloud, ArrowLeft, Save, ChevronLeft, ChevronRight, Calendar, RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import TabelaDesignacoes from '@/componentes/TabelaDesignacoes';
 
@@ -41,14 +41,76 @@ function parseDateFromWeekString(weekString) {
   } catch (e) { return ''; }
 }
 
+// --- LÓGICA DE RECONSTRUÇÃO ---
+// Mapeia os dados salvos no banco de volta para os IDs do frontend
+const mapSavedToAssignments = (savedRows, schedule) => {
+  const newAssignments = {};
+  if (!savedRows || savedRows.length === 0) return newAssignments;
+
+  // Agrupa por nome da parte (porque pode ter múltiplos, ex: estudante e ajudante)
+  const rowsByPart = {};
+  savedRows.forEach(row => {
+    if (!rowsByPart[row.nome_parte]) rowsByPart[row.nome_parte] = [];
+    rowsByPart[row.nome_parte].push(row.nome_completo);
+  });
+
+  // Função auxiliar para pegar e remover da lista (pop)
+  const popAssignment = (partName) => {
+    if (rowsByPart[partName] && rowsByPart[partName].length > 0) {
+      return rowsByPart[partName].shift(); // Pega o primeiro da fila (ordem de inserção)
+    }
+    return "";
+  };
+
+  // Mapeamento Manual
+  newAssignments['presidente'] = popAssignment('Presidente');
+  newAssignments['ajudante'] = popAssignment('Ajudante');
+  newAssignments['oracao_inicial'] = popAssignment('Oração Inicial');
+  newAssignments['oracao_final'] = popAssignment('Oração Final');
+  newAssignments['comentarios_iniciais'] = popAssignment(schedule.openingComments || 'Comentários Iniciais');
+  newAssignments['comentarios_finais'] = popAssignment(schedule.finalComments || 'Comentários Finais');
+
+  // Tesouros
+  schedule.treasures?.forEach((part, idx) => {
+    newAssignments[`tesouro_${idx}`] = popAssignment(part.title);
+  });
+
+  // Ministério
+  schedule.ministry?.forEach((part, idx) => {
+    const isDiscurso = part.title.toLowerCase().includes('discurso');
+    if (isDiscurso) {
+      newAssignments[`ministerio_${idx}`] = popAssignment(part.title);
+    } else {
+      newAssignments[`ministerio_${idx}_1`] = popAssignment(part.title);
+      newAssignments[`ministerio_${idx}_2`] = popAssignment(part.title);
+    }
+  });
+
+  // Vida Cristã
+  schedule.living?.forEach((part, idx) => {
+    const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
+    if (isBibleStudy) {
+      newAssignments[`vida_${idx}_1`] = popAssignment(part.title);
+      newAssignments[`vida_${idx}_2`] = popAssignment(part.title);
+    } else {
+      newAssignments[`vida_${idx}`] = popAssignment(part.title);
+    }
+  });
+
+  return newAssignments;
+};
+
+
 export default function DesignacoesPage() {
   const router = useRouter();
   const [publicadores, setPublicadores] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  
   const [schedules, setSchedules] = useState([]); 
   const [assignmentsList, setAssignmentsList] = useState([]); 
   const [weekDescriptions, setWeekDescriptions] = useState([]); 
   const [meetingDates, setMeetingDates] = useState([]); 
+  
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isParsing, setIsParsing] = useState(false);
   const [error, setError] = useState('');
@@ -84,11 +146,11 @@ export default function DesignacoesPage() {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
     files.sort((a, b) => a.name.localeCompare(b.name));
-    setIsParsing(true); setError(''); setSaveMessage({ text: '', isError: false });
-    setSchedules([]); setAssignmentsList([]); setWeekDescriptions([]); setMeetingDates([]); setCurrentIndex(0);
 
+    setIsParsing(true); setError(''); setSaveMessage({ text: '', isError: false });
+    
     const newSchedules = [];
-    const newAssignments = [];
+    const newAssignments = []; // Lista temporária
     const newDescriptions = [];
     const newDates = [];
 
@@ -102,19 +164,55 @@ export default function DesignacoesPage() {
         });
         if (!response.ok) throw new Error(`Erro em ${file.name}`);
         const parsedData = await response.json();
+        
         newSchedules.push(parsedData);
-        newAssignments.push({});
+        
+        // Calcula Data
         const autoDateSQL = parseDateFromWeekString(parsedData.weekDate);
         newDates.push(autoDateSQL);
+        
+        // Descrição
         let yearStr = '';
         if (autoDateSQL) yearStr = ` ${autoDateSQL.split('-')[0]}`;
         newDescriptions.push((parsedData.weekDate || 'Semana') + yearStr);
+
+        // --- RECUPERAÇÃO AUTOMÁTICA ---
+        // Se temos uma data válida, tentamos buscar do banco agora
+        let retrievedAssignments = {};
+        if (autoDateSQL) {
+          try {
+            const dbRes = await fetch(`/api/admin/recuperar-designacoes?date=${autoDateSQL}`);
+            if (dbRes.ok) {
+              const savedRows = await dbRes.json();
+              if (savedRows && savedRows.length > 0) {
+                retrievedAssignments = mapSavedToAssignments(savedRows, parsedData);
+              }
+            }
+          } catch (e) {
+            console.error("Erro ao recuperar dados salvos:", e);
+          }
+        }
+        newAssignments.push(retrievedAssignments);
       }
+
+      // Atualiza estados
       setSchedules(newSchedules);
       setAssignmentsList(newAssignments);
       setWeekDescriptions(newDescriptions);
       setMeetingDates(newDates);
-    } catch (err) { setError(`Falha: ${err.message}`); } finally { setIsParsing(false); }
+      setCurrentIndex(0);
+
+      // Mensagem discreta se recuperou algo
+      const totalRecuperados = newAssignments.filter(a => Object.keys(a).length > 0).length;
+      if (totalRecuperados > 0) {
+        setSaveMessage({ text: `${totalRecuperados} semana(s) recuperada(s) do banco de dados.`, isError: false });
+      }
+
+    } catch (err) {
+      setError(`Falha: ${err.message}`);
+    } finally {
+      setIsParsing(false);
+    }
   };
 
   const handleAssignmentChange = (partId, name) => {
@@ -125,9 +223,32 @@ export default function DesignacoesPage() {
     });
   };
 
-  const handleDescriptionChange = (newText) => {
+  // Quando muda a data manualmente, tentamos buscar de novo
+  const handleDescriptionChange = async (newText) => {
+    // Atualiza UI imediatamente
     setWeekDescriptions(prev => { const n = [...prev]; n[currentIndex] = newText; return n; });
-    setMeetingDates(prev => { const n = [...prev]; n[currentIndex] = parseDateFromWeekString(newText); return n; });
+    
+    const newDateSQL = parseDateFromWeekString(newText);
+    setMeetingDates(prev => { const n = [...prev]; n[currentIndex] = newDateSQL; return n; });
+
+    // Tenta recuperar do banco se a data for válida e diferente
+    if (newDateSQL && newDateSQL.length === 10) {
+      try {
+        const dbRes = await fetch(`/api/admin/recuperar-designacoes?date=${newDateSQL}`);
+        if (dbRes.ok) {
+          const savedRows = await dbRes.json();
+          if (savedRows && savedRows.length > 0) {
+            const mergedAssignments = mapSavedToAssignments(savedRows, schedules[currentIndex]);
+            setAssignmentsList(prev => {
+              const n = [...prev];
+              // Mescla com o que já estava digitado (prioridade pro banco ou pro que estava? Vamos sobrescrever com o banco)
+              n[currentIndex] = { ...n[currentIndex], ...mergedAssignments };
+              return n;
+            });
+          }
+        }
+      } catch(e) { console.error(e); }
+    }
   };
 
   const handleSaveCurrent = async () => {
@@ -135,8 +256,12 @@ export default function DesignacoesPage() {
     const currentAssignments = assignmentsList[currentIndex];
     const currentDescription = weekDescriptions[currentIndex];
     const currentDateSQL = meetingDates[currentIndex];
+
     if (!currentDateSQL) { setSaveMessage({ text: 'Data inválida.', isError: true }); return; }
-    if (Object.keys(currentAssignments).length === 0) { setSaveMessage({ text: 'Preencha designações.', isError: true }); return; }
+    
+    // Permite salvar mesmo vazio, caso queira limpar o registro
+    // if (Object.keys(currentAssignments).length === 0) ... 
+
     setIsSaving(true); setSaveMessage({ text: '', isError: false });
     try {
       await fetch('/api/admin/salvar-designacoes', {
@@ -148,7 +273,7 @@ export default function DesignacoesPage() {
           meetingDate: currentDateSQL
         })
       });
-      setSaveMessage({ text: `Semana de ${currentDescription} salva!`, isError: false });
+      setSaveMessage({ text: `Semana de ${currentDescription} salva/atualizada!`, isError: false });
     } catch (err) { setSaveMessage({ text: err.message, isError: true }); } finally { setIsSaving(false); }
   };
 
@@ -160,41 +285,15 @@ export default function DesignacoesPage() {
   return (
     <main className="min-h-screen w-full bg-neutral-900 text-neutral-100 p-4 md:p-8 print:bg-white print:p-0 print:text-black print:m-0">
       
-      {/* CSS ESPECIAL PARA IMPRESSÃO CORRETA NESTA PÁGINA */}
       <style jsx global>{`
         @media print {
-          @page {
-            size: A4 portrait;
-            margin: 0;
-          }
+          @page { size: A4 portrait; margin: 0; }
           body { margin: 0; padding: 0; }
           body * { visibility: hidden; }
-          
-          .designacoes-print-wrapper, .designacoes-print-wrapper * {
-            visibility: visible;
-          }
-          .designacoes-print-wrapper {
-            position: absolute;
-            top: 0; left: 0; width: 100%;
-          }
-          
-          /* Classe para cada página de designação */
-          .print-page-break {
-            page-break-after: always;
-            break-after: page;
-            height: 100vh; /* Altura fixa para forçar ocupação total */
-            width: 100%;
-            display: block;
-            padding: 5mm; /* Margem segura para a borda não cortar */
-            box-sizing: border-box;
-            overflow: hidden;
-          }
-          
-          /* A mágica: remove a quebra de página APÓS o último elemento */
-          .print-page-break:last-child {
-            page-break-after: auto;
-            break-after: auto;
-          }
+          .designacoes-print-wrapper, .designacoes-print-wrapper * { visibility: visible; }
+          .designacoes-print-wrapper { position: absolute; top: 0; left: 0; width: 100%; }
+          .print-page-break { page-break-after: always; break-after: page; height: 100vh; width: 100%; display: block; padding: 5mm; box-sizing: border-box; overflow: hidden; }
+          .print-page-break:last-child { page-break-after: auto; break-after: auto; }
         }
       `}</style>
 
@@ -221,13 +320,13 @@ export default function DesignacoesPage() {
               <label htmlFor="rtf-upload-multiple" className="cursor-pointer w-full p-6 border-2 border-dashed border-neutral-600 rounded-lg flex flex-col items-center justify-center text-center hover:bg-neutral-700 transition">
                 <UploadCloud size={40} className="text-neutral-400 mb-2" />
                 <span className="font-semibold">Carregar Arquivos RTF</span>
-                <span className="text-xs text-neutral-400">Selecione múltiplos arquivos para gerar o mês inteiro</span>
+                <span className="text-xs text-neutral-400">Selecione para gerar ou carregar histórico</span>
               </label>
               <input id="rtf-upload-multiple" type="file" multiple accept=".rtf, .txt" className="hidden" onChange={handleFilesParse} />
             </>
           )}
 
-          {isParsing && <div className="mt-4 text-center text-blue-300 flex justify-center gap-2"><Loader2 className="animate-spin" /> Processando...</div>}
+          {isParsing && <div className="mt-4 text-center text-blue-300 flex justify-center gap-2"><Loader2 className="animate-spin" /> Verificando histórico e processando...</div>}
           {error && <div className="mt-4 p-3 bg-red-900/30 text-red-300 rounded-md text-sm">{error}</div>}
         </div>
 
@@ -241,13 +340,20 @@ export default function DesignacoesPage() {
             <div className="flex items-center gap-2 w-full md:w-auto">
               <Calendar size={18} className="text-neutral-400" />
               <input type="text" value={weekDescriptions[currentIndex] || ''} onChange={(e) => handleDescriptionChange(e.target.value)} className="bg-neutral-800 border border-neutral-600 rounded px-2 py-1 text-sm text-white w-full md:w-64 text-center font-bold uppercase" />
+              {/* Botão manual de recarregar do banco caso mude a data e falhe */}
+              <button 
+                title="Tentar recuperar do banco para esta data"
+                onClick={() => handleDescriptionChange(weekDescriptions[currentIndex])}
+                className="p-1.5 bg-neutral-700 rounded hover:bg-neutral-600"
+              >
+                <RefreshCw size={14} />
+              </button>
             </div>
           </div>
         )}
         {saveMessage.text && <div className={`mx-6 mb-6 p-3 rounded-md text-sm ${saveMessage.isError ? 'bg-red-900/30 text-red-300' : 'bg-green-900/30 text-green-300'}`}>{saveMessage.text}</div>}
       </div>
 
-      {/* === MODO TELA === */}
       {hasData && (
         <div className="print:hidden">
            <TabelaDesignacoes 
@@ -259,7 +365,7 @@ export default function DesignacoesPage() {
            />
            <div className="max-w-4xl mx-auto mt-6 flex justify-center gap-4 pb-10">
              <button onClick={handleSaveCurrent} disabled={isSaving} className="flex items-center gap-2 py-3 px-6 rounded-lg font-bold text-white bg-green-600 hover:bg-green-500 disabled:opacity-50">
-               {isSaving ? <Loader2 className="animate-spin" /> : <Save />} Salvar Semana Atual
+               {isSaving ? <Loader2 className="animate-spin" /> : <Save />} Salvar Alterações
              </button>
              <button onClick={handlePrintAll} className="flex items-center gap-2 py-3 px-6 rounded-lg font-bold text-white bg-blue-600 hover:bg-blue-500">
                <Printer /> Imprimir Todas as Semanas
@@ -268,7 +374,6 @@ export default function DesignacoesPage() {
         </div>
       )}
 
-      {/* === MODO IMPRESSÃO === */}
       <div className="designacoes-print-wrapper hidden print:block">
         {schedules.map((schedule, idx) => (
           <div key={idx} className="print-page-break">
