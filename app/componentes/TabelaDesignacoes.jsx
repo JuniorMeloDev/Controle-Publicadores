@@ -14,7 +14,7 @@ const normalizeText = (text) => {
 const ConteudoParteEstilizado = ({ text, section }) => {
   if (!text) return null;
 
-  // Garante que "MIN" ou "Min" virem "min" minúsculo em todo o texto
+  // Garante que "MIN" ou "Min" virem "min" minúsculo
   const normalizeMinutes = (str) => {
     return str.replace(/(\d+)\s*MIN/g, '$1 min').replace(/(\d+)\s*Min/g, '$1 min');
   };
@@ -24,7 +24,7 @@ const ConteudoParteEstilizado = ({ text, section }) => {
     const parts = str.split(/(\([^)]+\))/g);
     return parts.map((part, i) => {
       if (part.startsWith('(') && part.endsWith(')')) {
-        // Se for apenas o tempo (ex: (10 min)), não colore de azul claro, deixa preto
+        // Se for apenas o tempo (ex: (10 min)), não colore de azul claro
         if (part.includes('min')) return part; 
         return <span key={i} className="text-cyan-700 font-normal">{part}</span>;
       }
@@ -34,16 +34,14 @@ const ConteudoParteEstilizado = ({ text, section }) => {
 
   const textFixed = normalizeMinutes(text);
 
-  // 1. TESOUROS: Azul Escuro (Padrão: "1. Título (10 min)")
+  // 1. TESOUROS: Azul Escuro
   if (section === 'treasures') {
-    // Procura: Título + (Tempo) + Resto
     const match = textFixed.match(/^(.*?)(\(\d+\s*min\))(.*)$/i);
     if (match) {
       const titulo = match[1];
       const tempo = match[2];
       const resto = match[3];
       
-      // Se tiver número no início, colore ele junto com o título
       const numMatch = titulo.match(/^(\d+\.)\s*(.*)$/);
       
       return (
@@ -66,14 +64,13 @@ const ConteudoParteEstilizado = ({ text, section }) => {
 
   // 2. MINISTÉRIO: Amarelo Escuro (Título) + Preto (Resto)
   if (section === 'ministry') {
-    // Regex flexível: Pega tudo até encontrar o tempo "(x min)"
     const match = textFixed.match(/^(.*?)(\(\d+\s*min\))(:?)\s*(.*)$/i);
 
     if (match) {
-      const titulo = match[1]; // "4. INICIANDO CONVERSAS"
-      const tempo = match[2];  // "(3 min)"
-      const doisPontos = match[3]; // ":"
-      const resto = match[4];  // "De casa em casa..."
+      const titulo = match[1];
+      const tempo = match[2];
+      const doisPontos = match[3];
+      const resto = match[4];
 
       return (
         <span className="leading-tight block">
@@ -85,8 +82,6 @@ const ConteudoParteEstilizado = ({ text, section }) => {
         </span>
       );
     }
-
-    // Fallback se não achar tempo (raro, mas previne erro)
     return <span className="text-amber-700 font-bold uppercase">{textFixed}</span>;
   }
 
@@ -96,15 +91,13 @@ const ConteudoParteEstilizado = ({ text, section }) => {
       return <span className="text-blue-800 font-bold">{textFixed}</span>;
     }
     
-    // Regex flexível: Pega tudo até encontrar o tempo "(x min)"
-    // Não exige mais que comece com número "7."
     const match = textFixed.match(/^(.*?)(\(\d+\s*min\))(:?)\s*(.*)$/i);
 
     if (match) {
-       const titlePart = match[1]; // "Torne-se Amigo..."
-       const timePart = match[2];  // "(15 min)"
-       const colon = match[3];     // ":"
-       const restPart = match[4];  // "Consideração..."
+       const titlePart = match[1];
+       const timePart = match[2];
+       const colon = match[3];
+       const restPart = match[4];
 
        return (
         <span className="leading-tight block">
@@ -116,21 +109,20 @@ const ConteudoParteEstilizado = ({ text, section }) => {
         </span>
        );
     }
-
-    // Se não achar tempo, tenta colorir tudo de vermelho como fallback
     return <span className="text-red-800 font-bold">{textFixed}</span>;
   }
 
   return <span className="font-bold text-black">{textFixed}</span>;
 };
 
-// --- SUB-COMPONENTE: Seleção (Mantido) ---
+// --- SUB-COMPONENTE: Seleção (Com Navegação TAB) ---
 const SelecaoPublicador = ({ partId, publicadores, assignments, handleAssignmentChange }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const wrapperRef = useRef(null);
   const listRef = useRef(null);
+  const buttonRef = useRef(null); // Referência para manter o foco no botão
   
   const currentValue = assignments[partId] || ""; 
   const selectedPublicador = publicadores.find(
@@ -168,17 +160,43 @@ const SelecaoPublicador = ({ partId, publicadores, assignments, handleAssignment
   }, [highlightedIndex, isOpen]);
 
   const handleKeyDown = (e) => {
+    // Se fechado, abre com Enter, Espaço ou Seta Baixo
     if (!isOpen) {
-      if (e.key === "Enter" || e.key === "ArrowDown") {
-        setIsOpen(true); e.preventDefault();
+      if (e.key === "Enter" || e.key === "ArrowDown" || e.key === " ") {
+        e.preventDefault();
+        setIsOpen(true);
       }
+      // Se for TAB, deixa o comportamento padrão (ir para o próximo campo)
       return;
     }
+
+    // Se aberto, navega na lista
     switch (e.key) {
-      case "ArrowDown": e.preventDefault(); setHighlightedIndex(prev => prev < filteredPublicadores.length - 1 ? prev + 1 : prev); break;
-      case "ArrowUp": e.preventDefault(); setHighlightedIndex(prev => prev > 0 ? prev - 1 : 0); break;
-      case "Enter": e.preventDefault(); if (filteredPublicadores.length > 0) handleSelect(filteredPublicadores[highlightedIndex].nome_completo); break;
-      case "Escape": setIsOpen(false); setSearchTerm(""); break;
+      case "ArrowDown": 
+        e.preventDefault(); 
+        setHighlightedIndex(prev => prev < filteredPublicadores.length - 1 ? prev + 1 : prev); 
+        break;
+      case "ArrowUp": 
+        e.preventDefault(); 
+        setHighlightedIndex(prev => prev > 0 ? prev - 1 : 0); 
+        break;
+      case "Enter": 
+        e.preventDefault(); 
+        if (filteredPublicadores.length > 0) {
+          handleSelect(filteredPublicadores[highlightedIndex].nome_completo);
+        }
+        break;
+      case "Escape": 
+        e.preventDefault();
+        setIsOpen(false); 
+        setSearchTerm(""); 
+        buttonRef.current?.focus(); // Devolve foco ao botão ao cancelar
+        break;
+      case "Tab":
+        // Fecha o menu e permite que o navegador foque o próximo elemento
+        setIsOpen(false);
+        setSearchTerm("");
+        break;
     }
   };
 
@@ -186,22 +204,46 @@ const SelecaoPublicador = ({ partId, publicadores, assignments, handleAssignment
     handleAssignmentChange(partId, nomeCompleto);
     setIsOpen(false);
     setSearchTerm("");
+    // Devolve o foco ao botão para que o próximo TAB vá para o próximo campo
+    setTimeout(() => {
+        buttonRef.current?.focus();
+    }, 0);
   };
 
   return (
     <>
       <div ref={wrapperRef} className="relative w-full print:hidden">
-        <button type="button" onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-center items-center bg-transparent hover:bg-neutral-100 border-none py-1 px-1 text-black font-bold text-center focus:outline-none cursor-pointer text-base">
+        <button 
+          ref={buttonRef}
+          type="button" 
+          onClick={() => setIsOpen(!isOpen)} 
+          onKeyDown={handleKeyDown}
+          className="w-full flex justify-center items-center bg-transparent hover:bg-neutral-100 border-none py-1 px-1 text-black font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-blue-50 cursor-pointer text-base rounded"
+        >
           <span className="truncate">{selectedPublicador ? selectedPublicador.nome_curto : "Selecione..."}</span>
           <ChevronsUpDown className="ml-1 h-3 w-3 opacity-50" />
         </button>
         {isOpen && (
           <div className="absolute z-50 w-64 left-1/2 -translate-x-1/2 mt-1 bg-white border border-gray-300 rounded-md shadow-2xl flex flex-col max-h-80">
-            <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} onKeyDown={handleKeyDown} className="w-full py-3 px-3 text-black border-b border-gray-200 outline-none text-base" autoFocus />
+            <input 
+              type="text" 
+              placeholder="Buscar..." 
+              value={searchTerm} 
+              onChange={(e) => setSearchTerm(e.target.value)} 
+              onKeyDown={handleKeyDown} 
+              className="w-full py-3 px-3 text-black border-b border-gray-200 outline-none text-base" 
+              autoFocus 
+            />
             <ul ref={listRef} className="overflow-y-auto flex-1">
               {filteredPublicadores.map((publicador, index) => (
                 <li key={publicador.id}>
-                  <button type="button" className={`w-full text-left py-2 px-3 text-black truncate text-base ${index === highlightedIndex ? 'bg-blue-100' : 'hover:bg-blue-50'}`} onClick={() => handleSelect(publicador.nome_completo)} onMouseEnter={() => setHighlightedIndex(index)}>
+                  <button 
+                    type="button" 
+                    tabIndex={-1} // Remove do fluxo de TAB para não atrapalhar a navegação
+                    className={`w-full text-left py-2 px-3 text-black truncate text-base ${index === highlightedIndex ? 'bg-blue-100' : 'hover:bg-blue-50'}`} 
+                    onClick={() => handleSelect(publicador.nome_completo)} 
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                  >
                     {publicador.nome_curto}
                   </button>
                 </li>
@@ -267,7 +309,7 @@ export default function TabelaDesignacoes({ schedule, assignments, weekText, pub
         </div>
       </div>
 
-      {/* Tabela (CORRIGIDO: Colgroup sem espaços para evitar erro de hydration) */}
+      {/* Tabela */}
       <table className="w-full border-collapse border-2 border-black text-base flex-1 h-full table-fixed">
         <colgroup><col className="w-16" /><col /><col className={widthNameCol} /></colgroup>
         <tbody>
@@ -287,6 +329,7 @@ export default function TabelaDesignacoes({ schedule, assignments, weekText, pub
             <td className={tdName}><SelecaoPublicador partId="comentarios_iniciais" publicadores={publicadores} assignments={assignments} handleAssignmentChange={handleChange} /></td>
           </tr>
 
+          {/* SEÇÃO TESOUROS */}
           <tr><td colSpan="3" className={sectionHeader}>TESOUROS DA PALAVRA DE DEUS</td></tr>
           {schedule.treasures?.map((part, index) => (
             <tr key={`t-${index}`}>
@@ -296,6 +339,7 @@ export default function TabelaDesignacoes({ schedule, assignments, weekText, pub
             </tr>
           ))}
 
+          {/* SEÇÃO MINISTÉRIO */}
           <tr><td colSpan="3" className={sectionHeader}>FAÇA SEU MELHOR NO MINISTÉRIO</td></tr>
           {schedule.ministry?.map((part, index) => {
             const isDiscurso = part.title.toLowerCase().includes('discurso:');
@@ -317,8 +361,29 @@ export default function TabelaDesignacoes({ schedule, assignments, weekText, pub
               </tr>
             );
           })}
-
+          
+          {/* SEÇÃO NOSSA VIDA CRISTÃ */}
           <tr><td colSpan="3" className={sectionHeader}>NOSSA VIDA CRISTÃ</td></tr>
+
+          {/* CÂNTICO DO MEIO (CORRIGIDO) */}
+          <tr>
+            <td className={tdTime}></td>
+            <td className={tdPart}>
+               <span className="text-blue-800 font-bold text-lg">
+                  {schedule.middleSong || "Cântico"}
+               </span>
+            </td>
+            <td className={tdName}>
+              <SelecaoPublicador 
+                partId="cantico_meio" 
+                publicadores={publicadores} 
+                assignments={assignments} 
+                handleAssignmentChange={handleChange} 
+              />
+            </td>
+          </tr>
+
+          {/* PARTES DA VIDA CRISTÃ */}
           {schedule.living?.map((part, index) => {
              const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
              return (
@@ -340,6 +405,7 @@ export default function TabelaDesignacoes({ schedule, assignments, weekText, pub
             );
           })}
 
+          {/* ENCERRAMENTO */}
           <tr>
             <td className={tdTime}>20:50</td>
             <td className={tdPart}><span className="font-bold text-black">{schedule.finalComments}</span></td>

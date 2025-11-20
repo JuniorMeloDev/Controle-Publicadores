@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import FiltroELista from '@/componentes/FiltroELista';
-import DetalhesPublicador from '@/componentes/DetalhesPublicador/DetalhesPublicador';
-import FormularioCadastro from '@/componentes/DetalhesPublicador/FormularioCadastro';
+import FiltroELista from '@/app/componentes/FiltroELista';
+import DetalhesPublicador from '@/app/componentes/DetalhesPublicador/DetalhesPublicador';
+import FormularioCadastro from '@/app/componentes/DetalhesPublicador/FormularioCadastro';
 
 export default function GerenciarPage() {
   const [publicadores, setPublicadores] = useState([]);

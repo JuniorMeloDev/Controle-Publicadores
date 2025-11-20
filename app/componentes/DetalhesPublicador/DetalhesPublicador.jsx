@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2, Printer } from 'lucide-react';
-import FormularioInformacoes from '@/componentes/DetalhesPublicador/FormularioInformacoes';
-import AtividadesTeocráticas from '@/componentes/DetalhesPublicador/AtividadesTeocraticas';
+import FormularioInformacoes from '@/app/componentes/DetalhesPublicador/FormularioInformacoes';
+import AtividadesTeocráticas from '@/app/componentes/DetalhesPublicador/AtividadesTeocraticas';
 import RelatorioImprimivel from './RelatorioImprimivel';
 import HistoricoPublicador from './HistoricoPublicador'; 
 

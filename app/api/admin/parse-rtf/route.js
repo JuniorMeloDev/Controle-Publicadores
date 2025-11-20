@@ -49,6 +49,10 @@ async function callGeminiToParse(text) {
           }
         }
       },
+
+      middleSong: { type: 'STRING', description: 'O cântico que ocorre entre a seção do Ministério e a seção Nossa Vida Cristã. Ex: "Cântico 105"' },
+
+      
       living: {
         type: 'ARRAY',
         items: {
