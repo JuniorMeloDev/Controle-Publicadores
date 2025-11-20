@@ -1,90 +1,130 @@
-/* Importa as classes base, de componentes e utilitários do Tailwind */
 @import "tailwindcss";
-/* Importa as animações que você já tinha */
-@import "tw-animate-css";
 
-@layer base {
-  body {
-    background-color: theme('colors.white');
-    color: theme('colors.black');
-  }
 
-  .dark body {
-    background-color: theme('colors.black');
-    color: theme('colors.white');
-  }
+:root {
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  --primary: 262 83% 58%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --ring: 262 83% 58%;
+  --radius: 0.5rem;
 }
 
-/* ==============================================
-    CÓDIGO DE IMPRESSÃO - (CORRIGIDO)
-   ==============================================
-*/
+.dark {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 262 83% 58%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 240 4.9% 83.9%;
+}
 
-/* NA TELA: Esconde APENAS .printable-content (do DetalhesPublicador).
-  O .print-container (das Designações) NÃO é afetado e permanece visível.
-*/
+
+/* --- CONFIGURAÇÃO DE IMPRESSÃO OTIMIZADA --- */
+
+/* 1. Oculta a área de impressão na tela normal */
 .printable-content {
-  visibility: hidden;
-  position: absolute;
-  top: -9999px;
-  left: -9999px;
-  height: 0;
-  overflow: hidden;
-  background-color: #ffffff;
-  color: #000000;
+  display: none;
 }
 
 @media print {
-  /* 1. Força fundo branco e texto preto */
-  body {
-    background-color: #ffffff !important;
-    color: #000000 !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+  @page {
+    size: A4 portrait;
+    margin: 0; /* Remove margens do navegador */
   }
-  
-  /* 2. Esconde TUDO por padrão */
+
+  /* 2. Reseta o layout do site para não interferir */
+  html, body {
+    width: 210mm;
+    height: 297mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important; /* Evita páginas extras */
+    background-color: white !important;
+  }
+
+  /* 3. Esconde tudo da tela do app */
   body * {
     visibility: hidden;
   }
 
-  /* 3. Mostra o container de impressão (qualquer um dos dois) e tudo dentro dele */
-  .printable-content, .printable-content *,
-  .print-container, .print-container * {
-    visibility: visible;
+  /* 4. Exibe e posiciona o relatório */
+  .printable-content, 
+  .printable-content * {
+    visibility: visible !important;
   }
+
+  .printable-content {
+    display: block !important;
+    position: fixed !important; /* Garante topo absoluto */
+    top: 0 !important;
+    left: 0 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    z-index: 9999;
+    background-color: white !important;
+  }
+
+  /* 5. Reseta layouts internos do relatório */
+  .printable-content .flex { display: flex !important; }
+  .printable-content .grid { display: grid !important; }
   
-  /* 4. Posiciona o container de impressão (qualquer um dos dois) no topo da página */
-  .printable-content,
-  .print-container {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: auto;
-    overflow: visible;
-    padding: 1rem;
+  /* 6. Força preto puro para texto e bordas */
+  .printable-content p, 
+  .printable-content span, 
+  .printable-content label, 
+  .printable-content td, 
+  .printable-content th, 
+  .printable-content h1, 
+  .printable-content h2, 
+  .printable-content div {
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* 5. Regra CRÍTICA: Garante que qualquer coisa marcada como .no-print 
-     (como o cabeçalho e o botão "Imprimir") seja escondida na impressão,
-     mesmo que esteja dentro do .print-container.
-  */
-  .no-print, .no-print * {
-     display: none !important;
-     visibility: hidden !important;
+  /* 7. Remove estilos de input */
+  .printable-content input {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: black !important;
   }
 
-  /* --- Regras de quebra de página (CORRIGIDAS) --- */
-  .page-break {
-    page-break-after: always;
-  }
-
-  /* A MUDANÇA ESTÁ AQUI: 
-    Removemos 'div', 'h1', 'h2', 'p', etc.
-    Queremos apenas evitar quebras DENTRO das linhas da tabela.
-  */
-  tr, td, th {
-    page-break-inside: avoid !important;
+  /* 8. Bordas pretas nítidas */
+  .printable-content table, 
+  .printable-content th, 
+  .printable-content td,
+  .printable-content .border,
+  .printable-content .border-2,
+  .printable-content .border-b {
+    border-color: #000000 !important;
   }
 }

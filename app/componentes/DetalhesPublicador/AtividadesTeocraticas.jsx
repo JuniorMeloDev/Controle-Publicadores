@@ -1,88 +1,70 @@
 'use client';
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { Loader2, Printer, Edit, Save, AlertCircle, Calendar, ChevronLeft } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Loader2, Printer, Edit, Save, AlertCircle } from 'lucide-react';
 import RelatorioImprimivel from './RelatorioImprimivel';
+import { Button } from '@/app/components/ui/button';
 
-// Define os meses
 const MESES_ANO_SERVICO = [
   'Setembro', 'Outubro', 'Novembro', 'Dezembro', 'Janeiro', 'Fevereiro',
   'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto'
 ];
 
-// Função para obter o ano de serviço atual
 const getCurrentServiceYear = () => {
   const data = new Date();
-  // O ano de serviço começa em Setembro (mês 8)
   return data.getMonth() >= 8 ? data.getFullYear() + 1 : data.getFullYear();
 };
 
 export default function AtividadesTeocraticas({ 
   publicadorId, 
   publicadorNome, 
-  relatorios: relatoriosInicial, // Esta é a lista COMPLETA de relatórios
+  relatorios: relatoriosInicial, 
   publicador, 
   onRefreshData
 }) {
-  const [activeSubTab, setActiveSubTab] = useState('relatorios');
-  const [isLoading, setIsLoading] = useState(false); // Loading inicial da aba
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const printRef = useRef(null); 
 
-  // --- STATES PARA GERENCIAR OS ANOS ---
-  const [selectedYear, setSelectedYear] = useState(null); // Ano selecionado (ex: 2025)
+  const [selectedYear, setSelectedYear] = useState(null); 
   const [isEditing, setIsEditing] = useState(false);
   const [isLoadingSave, setIsLoadingSave] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
   
-  // 1. Agrupa todos os relatórios por ano de serviço
   const { reportsByYear, availableYears } = useMemo(() => {
     const grouped = (relatoriosInicial || []).reduce((acc, rel) => {
       const year = rel.ano_servico;
-      if (!acc[year]) {
-        acc[year] = [];
-      }
+      if (!acc[year]) acc[year] = [];
       acc[year].push(rel);
       return acc;
     }, {});
     
-    // Pega os anos disponíveis e ordena do mais novo para o mais antigo
     const years = Object.keys(grouped).map(Number).sort((a, b) => b - a);
-
-    // Garante que o ano de serviço atual esteja na lista, mesmo se não tiver relatórios
     const currentYear = getCurrentServiceYear();
     if (years.length === 0 || !years.includes(currentYear)) {
       years.unshift(currentYear);
     }
-    
     return { reportsByYear: grouped, availableYears: years };
   }, [relatoriosInicial]);
 
-  // 2. Define o ano selecionado como o mais recente na primeira vez
   useEffect(() => {
     if (!selectedYear && availableYears.length > 0) {
-      setSelectedYear(availableYears[0]); // Seleciona o ano mais recente por padrão
+      setSelectedYear(availableYears[0]); 
     }
   }, [availableYears, selectedYear]);
 
-  // 3. O estado dos relatórios editáveis agora depende do ano selecionado
   const [editableRelatorios, setEditableRelatorios] = useState([]);
   
-  // 4. Efeito que atualiza os relatórios editáveis QUANDO o ano selecionado muda
   useEffect(() => {
     if (!selectedYear) {
       setEditableRelatorios([]);
       return;
     }
-
     const map = new Map((reportsByYear[selectedYear] || []).map(rel => [rel.mes, rel]));
-    
     setEditableRelatorios(MESES_ANO_SERVICO.map(mes => {
       const existente = map.get(mes);
       if (existente) return { ...existente };
-      // Cria um registro padrão para um mês em branco
       return {
         mes: mes,
-        ano_servico: selectedYear, // Usa o ano selecionado
+        ano_servico: selectedYear,
         participou_ministerio: false,
         pioneiro_auxiliar: false,
         estudos_biblicos: null,
@@ -90,13 +72,11 @@ export default function AtividadesTeocraticas({
         observacoes: null
       };
     }));
-    // Reseta o modo de edição ao trocar de ano
     setIsEditing(false);
     setMessage({ text: '', type: '' });
 
   }, [selectedYear, reportsByYear]);
 
-  // Função chamada pelo RelatorioImprimivel
   const handleRelatorioChange = (mes, field, value) => {
     setEditableRelatorios(prevData =>
       prevData.map(row =>
@@ -105,7 +85,6 @@ export default function AtividadesTeocraticas({
     );
   };
 
-  // Função Salvar
   const handleSave = async () => {
     setIsLoadingSave(true);
     setMessage({ text: '', type: '' });
@@ -115,7 +94,7 @@ export default function AtividadesTeocraticas({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           publicadorId: publicadorId,
-          relatorios: editableRelatorios // Envia apenas os 12 meses do ano selecionado
+          relatorios: editableRelatorios 
         })
       });
 
@@ -124,8 +103,7 @@ export default function AtividadesTeocraticas({
 
       setMessage({ text: data.message, type: 'success' });
       setIsEditing(false); 
-      if (onRefreshData) onRefreshData(); // Recarrega os dados no componente pai
-
+      if (onRefreshData) onRefreshData(); 
     } catch (err) {
       setMessage({ text: err.message, type: 'error' });
     } finally {
@@ -133,137 +111,114 @@ export default function AtividadesTeocraticas({
     }
   };
 
-  // Função de impressão
+  // CORREÇÃO DO PRINT: Chama o print do navegador. O CSS global ou a div oculta abaixo cuidará do resto.
   const handlePrint = () => {
-    const el = document.querySelector('.printable-content');
-    if (!el) {
-      console.error('handlePrint: container imprimível não encontrado');
-      return;
-    }
     setTimeout(() => {
-      window.focus();
       window.print();
     }, 100);
   };
 
   return (
     <div className="mt-6">
-      {/* Navegação da Sub-Aba (Relatórios) */}
-      <div className="border-b border-neutral-700">
-        <nav className="-mb-px flex space-x-4" aria-label="Abas">
-          <button
-            onClick={() => setActiveSubTab('relatorios')}
-            className={`
-              ${activeSubTab === 'relatorios' 
-                ? 'border-blue-500 text-blue-400' 
-                : 'border-transparent text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}
-              whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm
-            `}
-          >
-            Relatório de Serviço de Campo
-          </button>
-        </nav>
+      
+      {/* Mensagens */}
+      {message.text && (
+        <div className={`flex items-center gap-2 p-3 rounded-md mb-4 text-sm ${
+          message.type === 'error'
+            ? 'bg-red-50 text-red-700 border border-red-200'
+            : 'bg-green-50 text-green-700 border border-green-200'
+        }`}>
+          <AlertCircle size={16} />
+          {message.text}
+        </div>
+      )}
+
+      {/* SELETOR DE ANO */}
+      <div className="mb-6 flex items-center gap-3">
+        <label htmlFor="service-year-select" className="text-sm font-medium text-gray-700">
+          Ano de Serviço:
+        </label>
+        <select
+          id="service-year-select"
+          value={selectedYear || ''}
+          onChange={(e) => setSelectedYear(Number(e.target.value))}
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+        >
+          {availableYears.map(year => (
+            <option key={year} value={year}>
+              {year}
+            </option>
+          ))}
+        </select>
       </div>
 
-      {/* Conteúdo da Sub-Aba */}
-      <div className="mt-6">
-        {activeSubTab === 'relatorios' && (
-          <div>
-            {/* Mensagens de Loading e Erro Iniciais */}
-            {isLoading && (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="size-6 animate-spin text-neutral-400" />
-              </div>
-            )}
-            {error && (
-              <div className="p-4 bg-red-900/30 text-red-300 border border-red-800 rounded-lg">
-                {error}
-              </div>
-            )}
-
-            {/* Mensagem de Salvar (Sucesso ou Erro) */}
-            {message.text && (
-              <div className={`flex items-center gap-2 p-3 rounded-md mb-4 text-sm ${
-                message.type === 'error'
-                  ? 'bg-red-900/30 text-red-300 border border-red-800'
-                  : 'bg-green-900/30 text-green-300 border border-green-800'
-              }`}>
-                <AlertCircle size={16} />
-                {message.text}
-              </div>
-            )}
-
-            {/* --- SELETOR DE ANO DE SERVIÇO --- */}
-            <div className="mb-4">
-              <label htmlFor="service-year-select" className="block text-xs font-medium text-neutral-400 mb-1">
-                Selecione o Ano de Serviço
-              </label>
-              <select
-                id="service-year-select"
-                value={selectedYear || ''}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="w-full max-w-xs rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                {availableYears.map(year => (
-                  <option key={year} value={year}>
-                    Ano de Serviço {year}
-                  </option>
-                ))}
-              </select>
+      {/* CONTEÚDO DO ANO SELECIONADO */}
+      {selectedYear && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          
+          {/* VISUALIZAÇÃO DA TABELA (CARD) */}
+          <div className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${isEditing ? 'ring-2 ring-purple-500 ring-offset-2' : ''}`}>
+            <div className="p-1 overflow-x-auto">
+               {/* Reutilizamos o componente de impressão para visualização na tela também.
+                   Ele renderiza a tabela formatada.
+               */}
+               <div className="min-w-[700px] p-4">
+                  <RelatorioImprimivel 
+                    publicador={publicador || { nome_completo: publicadorNome }}
+                    relatorios={editableRelatorios} 
+                    anoServico={selectedYear} 
+                    isEditing={isEditing}
+                    onRelatorioChange={handleRelatorioChange}
+                  />
+               </div>
             </div>
-
-            {/* --- CONTEÚDO DO ANO SELECIONADO --- */}
-            {selectedYear && (
-              <div className="space-y-6">
-                <div 
-                  ref={printRef} 
-                  className={`bg-white text-black rounded-lg border border-neutral-300 shadow-lg ${isEditing ? 'ring-2 ring-blue-500' : ''} overflow-x-auto`}
-                >
-                  <div className="p-4 md:p-8 min-w-[700px]">
-                    <RelatorioImprimivel 
-                      publicador={publicador || { nome_completo: publicadorNome }}
-                      relatorios={editableRelatorios} // Passa os 12 meses do ano selecionado
-                      anoServico={selectedYear} // Passa o ano selecionado
-                      isEditing={isEditing}
-                      onRelatorioChange={handleRelatorioChange}
-                    />
-                  </div>
-                </div>
-
-                {/* Botões de Ação */}
-                <div className="flex flex-wrap justify-center gap-3">
-                  <button
-                    onClick={isEditing ? handleSave : () => { setIsEditing(true); setMessage({text:'', type:''}); }}
-                    disabled={isLoadingSave}
-                    className={`flex items-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-white transition-colors ${
-                      isEditing 
-                        ? 'bg-green-600 hover:bg-green-500 disabled:opacity-50'
-                        : 'bg-blue-600 hover:bg-blue-500'
-                    }`}
-                  >
-                    {isEditing ? (
-                      isLoadingSave ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />
-                    ) : (
-                      <Edit size={18} />
-                    )}
-                    {isLoadingSave ? 'Salvando...' : (isEditing ? 'Salvar Relatório' : 'Editar Relatório')}
-                  </button>
-
-                  <button
-                    onClick={handlePrint}
-                    disabled={isEditing}
-                    className="flex items-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-neutral-600 hover:bg-neutral-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Printer size={18} />
-                    Imprimir Registro
-                  </button>
-                </div>
-              </div>
-            )}
-            
           </div>
-        )}
-      </div>
+
+          {/* BOTÕES DE AÇÃO */}
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={isEditing ? handleSave : () => { setIsEditing(true); setMessage({text:'', type:''}); }}
+              disabled={isLoadingSave}
+              className={`
+                 ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}
+                 text-white shadow-md transition-all
+              `}
+            >
+              {isEditing ? (
+                isLoadingSave ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />
+              ) : (
+                <Edit className="w-4 h-4 mr-2" />
+              )}
+              {isLoadingSave ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Editar Relatório')}
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={handlePrint}
+              disabled={isEditing}
+              className="border-gray-300 text-gray-700 hover:bg-gray-50"
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Imprimir Este Ano
+            </Button>
+          </div>
+
+          {/* --- ÁREA ESPECÍFICA DE IMPRESSÃO DESTE COMPONENTE --- */}
+          {/* O CSS global oculta tudo com .no-print e mostra .print-block.
+             Aqui criamos um container que SÓ aparece na impressão para garantir que
+             o que o usuário vê (o ano selecionado) é o que sai no papel.
+          */}
+          <div className="hidden print:block print:absolute print:top-0 print:left-0 print:w-full print:bg-white print:z-50">
+             <RelatorioImprimivel 
+                publicador={publicador || { nome_completo: publicadorNome }}
+                relatorios={editableRelatorios} 
+                anoServico={selectedYear} 
+                isEditing={false}
+             />
+          </div>
+
+        </div>
+      )}
     </div>
   );
 }
