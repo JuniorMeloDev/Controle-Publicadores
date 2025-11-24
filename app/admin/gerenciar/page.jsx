@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-// --- CORREÇÃO DO IMPORT: Adicionado @/app ---
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import FiltroELista from '@/app/componentes/FiltroELista';
 import DetalhesPublicador from '@/app/componentes/DetalhesPublicador/DetalhesPublicador';
 import FormularioCadastro from '@/app/componentes/DetalhesPublicador/FormularioCadastro';
 import { Loader2, UserPlus, Users } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
-// --- CORREÇÃO DO IMPORT: Adicionado @/app ---
 import {
   Sheet,
   SheetContent,
@@ -17,7 +16,7 @@ import {
   SheetDescription
 } from "@/app/components/ui/sheet";
 
-export default function GerenciarPage() {
+function GerenciarContent() {
   const [publicadores, setPublicadores] = useState([]);
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [selectedPublicadorId, setSelectedPublicadorId] = useState(null);
@@ -25,6 +24,8 @@ export default function GerenciarPage() {
   
   const [successMessage, setSuccessMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+
+  const searchParams = useSearchParams();
 
   const fetchPublicadores = async () => {
       setIsLoadingList(true);
@@ -40,7 +41,17 @@ export default function GerenciarPage() {
       }
   };
 
-  useEffect(() => { fetchPublicadores(); }, []);
+  useEffect(() => { 
+    fetchPublicadores(); 
+  }, []);
+
+  // --- VERIFICA SE TEM ID NA URL ---
+  useEffect(() => {
+    const idNaUrl = searchParams.get('id');
+    if (idNaUrl) {
+      setSelectedPublicadorId(idNaUrl);
+    }
+  }, [searchParams]);
 
   const handleSelect = (id) => { 
     setSelectedPublicadorId(id); 
@@ -72,15 +83,12 @@ export default function GerenciarPage() {
 
   const handleMessageDismiss = () => { setSuccessMessage(null); setErrorMessage(null); };
 
-  // Variável para controlar se o Sheet está aberto
   const isSheetOpen = !!selectedPublicadorId || modoNovo;
 
   return (
     <DashboardLayout>
-      {/* Container Principal da Lista */}
       <div className="flex h-[calc(100vh-7rem)] bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           
-          {/* LISTA (Ocupa toda a largura aqui, pois o detalhe abre por cima) */}
           <div className="flex-1 flex flex-col bg-gray-50/30">
             {isLoadingList ? (
                 <div className="flex-1 flex items-center justify-center gap-2 text-gray-500">
@@ -97,14 +105,11 @@ export default function GerenciarPage() {
           </div>
       </div>
 
-      {/* --- DRAWER DESLIZANTE (SHEET) --- */}
       <Sheet open={isSheetOpen} onOpenChange={(open) => !open && handleCloseDrawer()}>
         <SheetContent 
             side="right" 
             className="w-full sm:max-w-lg md:max-w-xl lg:max-w-3xl p-0 border-l border-gray-200 bg-white focus:outline-none"
         >
-            {/* --- CORREÇÃO IMPORTANTE: Título e Descrição para Acessibilidade --- */}
-            {/* A classe 'sr-only' esconde o texto visualmente mas o mantém acessível, corrigindo o erro */}
             <SheetHeader className="sr-only">
               <SheetTitle>
                 {modoNovo ? "Cadastrar Novo Publicador" : "Editar Publicador"}
@@ -113,7 +118,6 @@ export default function GerenciarPage() {
                 Formulário para gerenciamento de dados do publicador.
               </SheetDescription>
             </SheetHeader>
-            {/* ----------------------------------------------------------------- */}
 
             <div className="h-full w-full bg-white flex flex-col">
                 {modoNovo && (
@@ -138,5 +142,13 @@ export default function GerenciarPage() {
       </Sheet>
 
     </DashboardLayout>
+  );
+}
+
+export default function GerenciarPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-purple-600"/></div>}>
+      <GerenciarContent />
+    </Suspense>
   );
 }

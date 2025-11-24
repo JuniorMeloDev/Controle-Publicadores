@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation'; 
-import { ArrowLeft, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Loader2, Lock } from 'lucide-react';
 import { IMaskInput } from 'react-imask';
 
 // Listas (sem mudança)
@@ -17,8 +17,7 @@ const LISTA_DESIGNACOES = [
   { id: 'missionario', label: 'Missionário em Campo' },
 ];
 
-// --- NOVO: Componente para o formulário de edição ---
-// (Movemos o formulário para seu próprio componente para organizar)
+// --- Componente para o formulário de edição ---
 function FormularioInformacoes({ 
   formData, setFormData, handleSubmit, handleChange, handleMaskChange, 
   handlePrivilegioChange, handleDesignacaoChange, handleCepBlur, 
@@ -26,7 +25,6 @@ function FormularioInformacoes({
   showPassword, setShowPassword 
 }) {
   
-  // As classes de estilo são usadas aqui dentro
   const labelClass = "block text-sm font-medium text-neutral-300";
   const baseInputClass = "mt-1 block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-neutral-100 placeholder-neutral-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50";
   const checkboxLabelClass = "ml-2 text-sm text-neutral-100 select-none";
@@ -34,7 +32,6 @@ function FormularioInformacoes({
   
   return (
     <form onSubmit={handleSubmit} className="space-y-6 mt-6">
-      {/* Todo o JSX do formulário que já tínhamos vai aqui... */}
       <div className="space-y-4">
         <h3 className="text-xl font-semibold text-white border-b border-neutral-700 pb-2">
           Informações Pessoais
@@ -208,15 +205,13 @@ function FormularioInformacoes({
   );
 }
 
-// --- NOVO: Componente para a aba de Atividades ---
+// --- Componente para a aba de Atividades ---
 function AtividadesTeocraticas({ publicadorId, publicadorNome }) {
-  // State para as sub-abas
   const [activeSubTab, setActiveSubTab] = useState('relatorios');
   const [relatorios, setRelatorios] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Busca os relatórios deste publicador
   useEffect(() => {
     if (!publicadorId) return;
     
@@ -240,7 +235,6 @@ function AtividadesTeocraticas({ publicadorId, publicadorNome }) {
 
   return (
     <div className="mt-6">
-      {/* --- Navegação da Sub-Aba --- */}
       <div className="border-b border-neutral-700">
         <nav className="-mb-px flex space-x-4" aria-label="Abas">
           <button
@@ -254,11 +248,9 @@ function AtividadesTeocraticas({ publicadorId, publicadorNome }) {
           >
             Relatório de Serviço de Campo
           </button>
-          {/* Você pode adicionar mais botões de sub-abas aqui no futuro */}
         </nav>
       </div>
 
-      {/* --- Conteúdo da Sub-Aba --- */}
       <div className="mt-4">
         {activeSubTab === 'relatorios' && (
           <div>
@@ -275,14 +267,12 @@ function AtividadesTeocraticas({ publicadorId, publicadorNome }) {
                   {relatorios.map((relatorio, relatorioIdx) => (
                     <li key={relatorio.id}>
                       <div className="relative pb-8">
-                        {/* Linha vertical (exceto no último item) */}
                         {relatorioIdx !== relatorios.length - 1 ? (
                           <span className="absolute left-4 top-4 -ml-px h-full w-0.5 bg-neutral-700" aria-hidden="true" />
                         ) : null}
                         
                         <div className="relative flex space-x-3">
                           <div>
-                            {/* Ícone */}
                             <span className="h-8 w-8 rounded-full bg-neutral-700 flex items-center justify-center ring-8 ring-neutral-900">
                               <svg className="h-5 w-5 text-neutral-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59l-2.1-2.1a.75.75 0 00-1.06 1.06l3.5 3.5a.75.75 0 001.06 0l3.5-3.5a.75.75 0 10-1.06-1.06l-2.1 2.1V6.75z" clipRule="evenodd" />
@@ -322,7 +312,6 @@ function AtividadesTeocraticas({ publicadorId, publicadorNome }) {
 
 // --- COMPONENTE PRINCIPAL DA PÁGINA (Atualizado com Abas) ---
 export default function EditarPublicadorPage() {
-  // State para a ABA PRINCIPAL
   const [activeTab, setActiveTab] = useState('informacoes');
 
   const [gruposList, setGruposList] = useState([]);
@@ -341,12 +330,30 @@ export default function EditarPublicadorPage() {
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [cepError, setCepError] = useState('');
   
+  // Estado de permissão
+  const [isAnciao, setIsAnciao] = useState(false);
+
   const numeroInputRef = useRef(null);
   const router = useRouter();
   const params = useParams();
   const publicadorId = params.id;
 
-  // useEffect: Busca os dados do publicador e a lista de grupos
+  // Busca permissões do usuário logado (ROTA ATUALIZADA)
+  useEffect(() => {
+    const checkPermission = async () => {
+        try {
+            const res = await fetch('/api/usuario-atual'); // <-- Rota atualizada aqui
+            if (res.ok) {
+                const data = await res.json();
+                setIsAnciao(data.isAnciao);
+            }
+        } catch (error) {
+            console.error("Erro ao verificar permissões", error);
+        }
+    };
+    checkPermission();
+  }, []);
+
   useEffect(() => {
     if (!publicadorId) return; 
 
@@ -391,7 +398,6 @@ export default function EditarPublicadorPage() {
     fetchGruposEPublicador();
   }, [publicadorId]); 
 
-  // Handlers (passados para o sub-componente)
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prevData => ({ ...prevData, [name]: value }));
@@ -464,7 +470,6 @@ export default function EditarPublicadorPage() {
     }
   };
 
-  // --- Tela de Loading Inicial ---
   if (isPageLoading) {
     return (
       <main className="min-h-screen w-full p-4 md:p-8 flex items-center justify-center">
@@ -473,7 +478,6 @@ export default function EditarPublicadorPage() {
     );
   }
 
-  // --- JSX do Formulário ---
   return (
     <main className="min-h-screen w-full p-4 md:p-8">
       <div className="max-w-2xl mx-auto bg-neutral-900 p-6 md:p-8 rounded-xl shadow-2xl border border-neutral-800">
@@ -481,7 +485,6 @@ export default function EditarPublicadorPage() {
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-neutral-700">
           <div>
             <h2 className="text-3xl font-bold text-white">
-              {/* Título dinâmico */}
               {formData.nome_completo || 'Editar Publicador'}
             </h2>
             <p className="text-neutral-400 text-sm mt-1">
@@ -497,7 +500,6 @@ export default function EditarPublicadorPage() {
           </Link>
         </div>
         
-        {/* Mensagem de sucesso/erro (agora fica acima das abas) */}
         {message && (
           <div className={`p-3 rounded-md mb-6 text-sm ${isError 
             ? 'bg-red-900 bg-opacity-30 text-red-300 border border-red-800' 
@@ -507,7 +509,6 @@ export default function EditarPublicadorPage() {
           </div>
         )}
 
-        {/* --- NOVO: Navegação das Abas Principais --- */}
         <div className="border-b border-neutral-700">
           <nav className="-mb-px flex space-x-6" aria-label="Abas">
             <button
@@ -521,23 +522,31 @@ export default function EditarPublicadorPage() {
             >
               Informações Pessoais
             </button>
-            <button
-              onClick={() => setActiveTab('atividades')}
-              className={`
-                ${activeTab === 'atividades' 
-                  ? 'border-blue-500 text-blue-400' 
-                  : 'border-transparent text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}
-                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
-              `}
-            >
-              Atividades Teocráticas
-            </button>
+            
+            {/* --- LÓGICA DE EXIBIÇÃO DA ABA PARA ANCIÃOS (Página Tela Cheia) --- */}
+            {isAnciao ? (
+              <button
+                onClick={() => setActiveTab('atividades')}
+                className={`
+                  ${activeTab === 'atividades' 
+                    ? 'border-blue-500 text-blue-400' 
+                    : 'border-transparent text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}
+                  whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+                `}
+              >
+                Atividades Teocráticas
+              </button>
+            ) : (
+                <div className="flex items-center text-neutral-500 py-4 px-1 border-b-2 border-transparent text-sm cursor-not-allowed" title="Apenas para Anciãos">
+                   <Lock size={12} className="mr-1" /> Atividades
+                </div>
+            )}
+            {/* ----------------------------------------------------------------- */}
+
           </nav>
         </div>
 
-        {/* --- NOVO: Conteúdo das Abas --- */}
         <div>
-          {/* Aba 1: Informações Pessoais (o formulário) */}
           {activeTab === 'informacoes' && (
             <FormularioInformacoes
               formData={formData}
@@ -558,13 +567,14 @@ export default function EditarPublicadorPage() {
             />
           )}
 
-          {/* Aba 2: Atividades Teocráticas */}
-          {activeTab === 'atividades' && (
+          {/* --- BLOQUEIO DE CONTEÚDO TAMBÉM NO RENDER DO COMPONENTE --- */}
+          {activeTab === 'atividades' && isAnciao && (
             <AtividadesTeocraticas 
               publicadorId={publicadorId} 
               publicadorNome={formData.nome_completo}
             />
           )}
+          {/* ---------------------------------------------------------- */}
         </div>
 
       </div>

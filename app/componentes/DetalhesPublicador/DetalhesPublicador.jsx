@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, Printer, X } from 'lucide-react';
+import { Loader2, Printer, X, Lock } from 'lucide-react';
 import FormularioInformacoes from '@/app/componentes/DetalhesPublicador/FormularioInformacoes';
 import AtividadesTeocraticas from '@/app/componentes/DetalhesPublicador/AtividadesTeocraticas';
 import RelatorioImprimivel from './RelatorioImprimivel';
 import HistoricoPublicador from './HistoricoPublicador'; 
 
-// Função auxiliar para formatar data
 function formatDateForForm(date) {
   if (!date) return ''; 
   const dateString = String(date).trim();
@@ -44,15 +43,65 @@ export default function DetalhesPublicador({
   const [isLoading, setIsLoading] = useState(false);
   const [isPageLoading, setIsPageLoading] = useState(true);
   
+  // --- ESTADOS DE PERMISSÃO ---
+  // Inicializa com null para diferenciar "não carregado" de "sem permissão"
+  const [currentUser, setCurrentUser] = useState(null);
+
   const [showPassword, setShowPassword] = useState(false);
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [cepError, setCepError] = useState('');
   
   const numeroInputRef = useRef(null);
-  // const printRef = useRef(null); // REMOVIDO: Não é necessário ref se usarmos CSS global
   
   const message = persistedMessage;
   const isError = persistedError;
+
+  // Busca dados do usuário logado
+  useEffect(() => {
+    const checkPermission = async () => {
+        try {
+            const res = await fetch('/api/usuario-atual');
+            if (res.ok) {
+                const data = await res.json();
+                // Garante que o ID no estado seja string para facilitar comparação
+                setCurrentUser({ ...data, id: String(data.id) });
+            } else {
+                // Se falhar, define um usuário vazio para não travar
+                setCurrentUser({ isAnciao: false, isServo: false, id: '' });
+            }
+        } catch (error) {
+            console.error("Erro ao verificar permissões", error);
+            setCurrentUser({ isAnciao: false, isServo: false, id: '' });
+        }
+    };
+    checkPermission();
+  }, []);
+
+  // --- LÓGICA DE PERMISSÃO ROBUSTA ---
+  
+  // Só calcula se o usuário já foi carregado
+  let canViewActivities = false;
+  let canEditActivities = false;
+
+  if (currentUser) {
+      const currentUserIdStr = String(currentUser.id || '').trim();
+      const publicadorIdStr = String(publicadorId || '').trim();
+
+      // Debug no console para verificar o que está chegando
+      console.log('[PERMISSÃO] Validando acesso:', {
+          EuSou: currentUserIdStr,
+          EstouVendo: publicadorIdStr,
+          SouAnciao: currentUser.isAnciao,
+          SouServo: currentUser.isServo
+      });
+
+      canViewActivities = 
+        currentUser.isAnciao || // Ancião vê tudo
+        (currentUser.isServo && currentUserIdStr === publicadorIdStr); // Servo vê apenas a sua
+
+      canEditActivities = currentUser.isAnciao; // Apenas Ancião edita
+  }
+  // --------------------------------------
 
   const fetchTudo = useCallback(async (isRefresh = false) => {
     if (!publicadorId) { setIsPageLoading(false); return; }
@@ -166,7 +215,6 @@ export default function DetalhesPublicador({
   };
 
   const handlePrint = () => {
-    // Pequeno delay para garantir que o DOM renderizou
     setTimeout(() => {
       window.print();
     }, 100);
@@ -183,7 +231,7 @@ export default function DetalhesPublicador({
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white">
       
-      {/* CABEÇALHO (Light Mode) */}
+      {/* CABEÇALHO */}
       <div className="shrink-0 p-6 border-b border-gray-200 flex items-center justify-between bg-white">
         <div className="flex-1 min-w-0 mr-4">
           <h2 className="text-2xl font-bold text-gray-900 truncate">
@@ -232,12 +280,22 @@ export default function DetalhesPublicador({
             >
               Informações Pessoais
             </button>
-            <button
-              onClick={() => setActiveTab('atividades')}
-              className={`${activeTab === 'atividades' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors`}
-            >
-              Atividades Teocráticas
-            </button>
+            
+            {/* --- BOTÃO DE ATIVIDADES --- */}
+            {canViewActivities ? (
+              <button
+                onClick={() => setActiveTab('atividades')}
+                className={`${activeTab === 'atividades' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors`}
+              >
+                Atividades Teocráticas
+              </button>
+            ) : (
+              // Botão desativado (Com tooltip do motivo)
+              <div className="flex items-center text-gray-300 py-3 px-1 border-b-2 border-transparent text-sm cursor-not-allowed" title="Acesso restrito a Anciãos ou ao próprio titular">
+                  <Lock size={12} className="mr-1" /> Atividades
+              </div>
+            )}
+            
             <button
               onClick={() => setActiveTab('historico')}
               className={`${activeTab === 'historico' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors`}
@@ -269,13 +327,14 @@ export default function DetalhesPublicador({
               />
             )}
 
-            {activeTab === 'atividades' && (
+            {activeTab === 'atividades' && canViewActivities && (
               <AtividadesTeocraticas 
                   publicadorId={publicadorId} 
                   publicadorNome={formData.nome_completo}
                   relatorios={relatorios}
                   publicador={formData}
                   onRefreshData={() => fetchTudo(true)}
+                  readOnly={!canEditActivities} // <-- Define se pode editar ou não
               />
             )}
 
@@ -288,7 +347,6 @@ export default function DetalhesPublicador({
       </div>
 
       {/* ÁREA DE IMPRESSÃO */}
-      {/* ATENÇÃO: Removemos 'hidden'. O CSS global (printable-content) cuida de esconder na tela e mostrar no print */}
       <div className="printable-content">
         <RelatorioImprimivel 
           publicador={formData} 
