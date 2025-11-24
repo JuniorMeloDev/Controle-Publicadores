@@ -4,6 +4,7 @@
 :root {
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;
+  /* ... cores mantidas ... */
   --card: 0 0% 100%;
   --card-foreground: 240 10% 3.9%;
   --popover: 0 0% 100%;
@@ -24,6 +25,7 @@
   --radius: 0.5rem;
 }
 
+/* ... (classe .dark mantida) ... */
 .dark {
   --background: 240 10% 3.9%;
   --foreground: 0 0% 98%;
@@ -47,9 +49,8 @@
 }
 
 
-/* --- CONFIGURAÇÃO DE IMPRESSÃO OTIMIZADA --- */
+/* --- CONFIGURAÇÃO DE IMPRESSÃO EXATA (A4) --- */
 
-/* 1. Oculta a área de impressão na tela normal */
 .printable-content {
   display: none;
 }
@@ -57,25 +58,22 @@
 @media print {
   @page {
     size: A4 portrait;
-    margin: 0; /* Remove margens do navegador */
+    margin: 5mm; /* Pequena margem de segurança para a impressora */
   }
 
-  /* 2. Reseta o layout do site para não interferir */
   html, body {
-    width: 210mm;
-    height: 297mm;
+    width: 100%;
+    height: 100%;
     margin: 0 !important;
     padding: 0 !important;
-    overflow: hidden !important; /* Evita páginas extras */
+    overflow: hidden !important;
     background-color: white !important;
   }
 
-  /* 3. Esconde tudo da tela do app */
   body * {
     visibility: hidden;
   }
 
-  /* 4. Exibe e posiciona o relatório */
   .printable-content, 
   .printable-content * {
     visibility: visible !important;
@@ -83,34 +81,28 @@
 
   .printable-content {
     display: block !important;
-    position: fixed !important; /* Garante topo absoluto */
+    position: absolute !important;
     top: 0 !important;
     left: 0 !important;
-    width: 210mm !important;
-    height: 297mm !important;
-    z-index: 9999;
+    width: 100% !important;
+    
+    /* Força a altura exata de uma página A4 menos as margens */
+    height: 287mm !important; 
+    
     background-color: white !important;
+    z-index: 9999;
   }
 
-  /* 5. Reseta layouts internos do relatório */
+  /* Reseta displays */
   .printable-content .flex { display: flex !important; }
-  .printable-content .grid { display: grid !important; }
   
-  /* 6. Força preto puro para texto e bordas */
-  .printable-content p, 
-  .printable-content span, 
-  .printable-content label, 
-  .printable-content td, 
-  .printable-content th, 
-  .printable-content h1, 
-  .printable-content h2, 
-  .printable-content div {
+  /* CORES PRETAS PARA IMPRESSÃO NÍTIDA */
+  .printable-content p, span, label, td, th, h1, h2, h3, div {
     color: #000000 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* 7. Remove estilos de input */
   .printable-content input {
     background: transparent !important;
     border: none !important;
@@ -118,13 +110,10 @@
     color: black !important;
   }
 
-  /* 8. Bordas pretas nítidas */
-  .printable-content table, 
-  .printable-content th, 
-  .printable-content td,
-  .printable-content .border,
-  .printable-content .border-2,
-  .printable-content .border-b {
+  .printable-content table, th, td, .border, .border-2, .border-b {
     border-color: #000000 !important;
   }
+  
+  .printable-content button { border: none !important; padding: 0 !important; }
+  .printable-content svg { display: none !important; }
 }

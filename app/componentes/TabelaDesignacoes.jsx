@@ -122,7 +122,7 @@ const SelecaoPublicador = ({ partId, publicadores, assignments, handleAssignment
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const wrapperRef = useRef(null);
   const listRef = useRef(null);
-  const buttonRef = useRef(null); // Referência para manter o foco no botão
+  const buttonRef = useRef(null); 
   
   const currentValue = assignments[partId] || ""; 
   const selectedPublicador = publicadores.find(
@@ -160,17 +160,14 @@ const SelecaoPublicador = ({ partId, publicadores, assignments, handleAssignment
   }, [highlightedIndex, isOpen]);
 
   const handleKeyDown = (e) => {
-    // Se fechado, abre com Enter, Espaço ou Seta Baixo
     if (!isOpen) {
       if (e.key === "Enter" || e.key === "ArrowDown" || e.key === " ") {
         e.preventDefault();
         setIsOpen(true);
       }
-      // Se for TAB, deixa o comportamento padrão (ir para o próximo campo)
       return;
     }
 
-    // Se aberto, navega na lista
     switch (e.key) {
       case "ArrowDown": 
         e.preventDefault(); 
@@ -190,10 +187,9 @@ const SelecaoPublicador = ({ partId, publicadores, assignments, handleAssignment
         e.preventDefault();
         setIsOpen(false); 
         setSearchTerm(""); 
-        buttonRef.current?.focus(); // Devolve foco ao botão ao cancelar
+        buttonRef.current?.focus(); 
         break;
       case "Tab":
-        // Fecha o menu e permite que o navegador foque o próximo elemento
         setIsOpen(false);
         setSearchTerm("");
         break;
@@ -204,7 +200,6 @@ const SelecaoPublicador = ({ partId, publicadores, assignments, handleAssignment
     handleAssignmentChange(partId, nomeCompleto);
     setIsOpen(false);
     setSearchTerm("");
-    // Devolve o foco ao botão para que o próximo TAB vá para o próximo campo
     setTimeout(() => {
         buttonRef.current?.focus();
     }, 0);
@@ -239,7 +234,7 @@ const SelecaoPublicador = ({ partId, publicadores, assignments, handleAssignment
                 <li key={publicador.id}>
                   <button 
                     type="button" 
-                    tabIndex={-1} // Remove do fluxo de TAB para não atrapalhar a navegação
+                    tabIndex={-1} 
                     className={`w-full text-left py-2 px-3 text-black truncate text-base ${index === highlightedIndex ? 'bg-blue-100' : 'hover:bg-blue-50'}`} 
                     onClick={() => handleSelect(publicador.nome_completo)} 
                     onMouseEnter={() => setHighlightedIndex(index)}
@@ -253,7 +248,7 @@ const SelecaoPublicador = ({ partId, publicadores, assignments, handleAssignment
           </div>
         )}
       </div>
-      <div className="hidden print:block text-center font-bold text-black text-base">
+      <div className="hidden print:block text-center font-bold text-black text-base print:text-base print:leading-tight">
         {selectedPublicador ? selectedPublicador.nome_curto : ''}
       </div>
     </>
@@ -264,8 +259,11 @@ const SelecaoPublicador = ({ partId, publicadores, assignments, handleAssignment
 export default function TabelaDesignacoes({ schedule, assignments, weekText, publicadores, onAssignmentChange, isPrintView = false }) {
   
   const widthNameCol = "w-1/3"; 
-  const tdTime = "bg-gray-200 border border-gray-600 py-2 px-1 font-bold text-center w-16 align-middle text-base text-black print:bg-gray-200 print:text-black";
-  const tdPart = "bg-white border border-gray-600 py-2 px-3 align-middle text-left text-base text-black";
+  
+  // --- ESTILOS DE CÉLULAS ATUALIZADOS ---
+  // Adicionado print:py-3 para aumentar o espaçamento vertical e preencher a página
+  const tdTime = "bg-gray-200 border border-gray-600 py-2 print:py-3 px-1 font-bold text-center w-16 align-middle text-base text-black print:bg-gray-200 print:text-black";
+  const tdPart = "bg-white border border-gray-600 py-2 print:py-3 px-3 align-middle text-left text-base text-black";
   const tdName = `bg-white border border-gray-600 p-0 ${widthNameCol} align-middle text-center text-base text-black`;
   const sectionHeader = "bg-blue-800 text-white py-2 px-2 text-center font-bold text-base uppercase border border-gray-600 print:bg-blue-800 print:text-white print-color-adjust-exact";
 
@@ -278,15 +276,21 @@ export default function TabelaDesignacoes({ schedule, assignments, weekText, pub
       bg-white text-black w-full max-w-5xl mx-auto mb-8 
       border-[3px] border-black 
       print:border-[3px] print:border-black 
-      print:h-full print:w-full print:mb-0 
-      print:flex print:flex-col print:justify-between 
-      page-break-inside-avoid p-4
+      print:h-[290mm] print:w-full print:mb-0 
+      print:flex print:flex-col
+      page-break-inside-avoid p-4 print:p-0
+
     ">
+      {/* ALTERAÇÕES FEITAS:
+         - print:h-[290mm]: Altura de quase toda a folha A4 (297mm) para forçar o esticamento.
+         - Removido print:mt-12 para voltar ao topo.
+         - print:py-3 nas células (tdTime, tdPart) para aumentar altura das linhas.
+      */}
       
       {/* Cabeçalho */}
       <div className="flex border-b-[3px] border-black mb-0.5 shrink-0">
         <div className="flex-1 flex flex-col justify-center items-center p-4 text-center border-r-[3px] border-black bg-gray-100 print:bg-gray-100">
-          <h2 className="text-xl font-bold text-blue-900 uppercase leading-tight mb-2 print:text-blue-900">
+          <h2 className="text-xl font-bold text-blue-900 uppercase leading-tight mb-2 print:mb-1 print:text-blue-900">
             {weekText}
           </h2>
           <h1 className="text-2xl font-extrabold text-black uppercase leading-none">
@@ -297,11 +301,11 @@ export default function TabelaDesignacoes({ schedule, assignments, weekText, pub
         <div className={`${widthNameCol} flex flex-col bg-white`}>
           <div className="bg-gray-100 border-b-2 border-black p-2 text-center font-bold text-base print:bg-gray-100">Salão Principal</div>
           <div className="flex-1 flex flex-col justify-center">
-            <div className="flex items-center border-b border-gray-400 py-2">
+            <div className="flex items-center border-b border-gray-400 py-2 print:py-3">
               <div className="w-1/3 text-sm font-bold text-right pr-3 text-black">Presidente:</div>
               <div className="w-2/3 pl-1"><SelecaoPublicador partId="presidente" publicadores={publicadores} assignments={assignments} handleAssignmentChange={handleChange} /></div>
             </div>
-            <div className="flex items-center py-2">
+            <div className="flex items-center py-2 print:py-3">
               <div className="w-1/3 text-sm font-bold text-right pr-3 text-black">Ajudante:</div>
               <div className="w-2/3 pl-1"><SelecaoPublicador partId="ajudante" publicadores={publicadores} assignments={assignments} handleAssignmentChange={handleChange} /></div>
             </div>
@@ -365,7 +369,7 @@ export default function TabelaDesignacoes({ schedule, assignments, weekText, pub
           {/* SEÇÃO NOSSA VIDA CRISTÃ */}
           <tr><td colSpan="3" className={sectionHeader}>NOSSA VIDA CRISTÃ</td></tr>
 
-          {/* CÂNTICO DO MEIO (CORRIGIDO) */}
+          {/* CÂNTICO DO MEIO */}
           <tr>
             <td className={tdTime}></td>
             <td className={tdPart}>
