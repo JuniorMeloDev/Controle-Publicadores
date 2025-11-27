@@ -143,7 +143,7 @@ export function DashboardLayout({ children }) {
       
       {/* === MODAL DE ALTERAR SENHA === */}
       {isPasswordModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <h3 className="font-bold text-gray-900 flex items-center gap-2">
@@ -222,7 +222,7 @@ export function DashboardLayout({ children }) {
         <div className="h-full flex flex-col">
           <div className="p-6 border-b border-gray-100 flex items-center justify-between">
              <div className="flex items-center gap-2 font-bold text-xl text-gray-900 overflow-hidden">
-                <div className="w-8 h-8 shrink-0 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center text-white">
+                <div className="w-8 h-8 shrink-0 bg-linear-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center text-white">
                    <Workflow className="w-4 h-4" />
                 </div>
                 <span className="truncate" title={nomeCongregacao}>
@@ -313,7 +313,7 @@ export function DashboardLayout({ children }) {
                             {getCargoExibicao()}
                         </p>
                     </div>
-                    <div className="h-9 w-9 bg-gradient-to-br from-purple-100 to-blue-100 rounded-full flex items-center justify-center text-purple-700 font-bold border border-purple-200 shadow-sm relative">
+                    <div className="h-9 w-9 bg-linear-to-br from-purple-100 to-blue-100 rounded-full flex items-center justify-center text-purple-700 font-bold border border-purple-200 shadow-sm relative">
                         {getInicial(nomeExibicao)}
                         <div className="absolute -bottom-1 -right-1 bg-white rounded-full border border-gray-200 p-0.5 shadow-sm">
                            <ChevronDown className="w-2 h-2 text-gray-500" />

@@ -1,3 +1,5 @@
+// app/api/login/route.js
+
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs'; // Para comparar senhas
@@ -15,21 +17,21 @@ const JWT_SECRET = process.env.JWT_SECRET || 'chave-secreta-de-teste-mude-depois
 
 export async function POST(req) {
   const body = await req.json();
-  const { nome_completo, senha } = body;
+  const { email, senha } = body; // ALTERADO: nome_completo para email
 
   const client = await pool.connect();
 
   try {
-    // 1. Encontrar o usuário pelo nome
+    // 1. Encontrar o usuário pelo email
     const userRes = await client.query(
-      'SELECT id, nome_completo, senha, privilegios FROM publicadores WHERE nome_completo = $1',
-      [nome_completo]
+      'SELECT id, nome_completo, senha, privilegios FROM publicadores WHERE email = $1', // ALTERADO: WHERE nome_completo = $1 para WHERE email = $1
+      [email] // ALTERADO: nome_completo para email
     );
     const user = userRes.rows[0];
 
     // 2. Se o usuário não existe, ou não tem senha cadastrada
     if (!user || !user.senha) {
-      return NextResponse.json({ message: 'Nome de usuário ou senha inválidos.' }, { status: 401 });
+      return NextResponse.json({ message: 'Email ou senha inválidos.' }, { status: 401 }); // ALTERADO: Mensagem
     }
 
     // 3. Verificar se a pessoa tem permissão (ex: é ancião ou SM)
@@ -44,7 +46,7 @@ export async function POST(req) {
     const senhaCorreta = await bcrypt.compare(senha, user.senha);
 
     if (!senhaCorreta) {
-      return NextResponse.json({ message: 'Nome de usuário ou senha inválidos.' }, { status: 401 });
+      return NextResponse.json({ message: 'Email ou senha inválidos.' }, { status: 401 }); // ALTERADO: Mensagem
     }
 
     // 5. LOGIN BEM-SUCEDIDO! Criar a sessão.

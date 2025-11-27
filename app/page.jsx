@@ -1,3 +1,5 @@
+// app/page.jsx
+
 'use client'; 
 
 import { useState } from 'react';
@@ -5,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react'; 
 
 export default function LoginPage() {
-  const [nome, setNome] = useState('');
+  const [email, setEmail] = useState(''); // ALTERADO: nome para email
   const [senha, setSenha] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -25,7 +27,7 @@ export default function LoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          nome_completo: nome, 
+          email: email, // ALTERADO: nome_completo para email
           senha: senha 
         }),
       });
@@ -35,7 +37,7 @@ export default function LoginPage() {
         router.push('/admin/dashboard'); 
       } else {
         const data = await response.json();
-        setError(data.message || 'Nome de usuário ou senha inválidos.');
+        setError(data.message || 'Email ou senha inválidos.');
       }
     } catch (err) {
       setError('Não foi possível conectar ao servidor.');
@@ -64,14 +66,14 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           
           <div>
-            <label htmlFor="nome_completo" className={labelClass}>
-              Nome de Usuário (Nome Completo)
+            <label htmlFor="email" className={labelClass}>
+              Email
             </label>
             <input 
-              type="text" 
-              id="nome_completo" 
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
+              type="email" 
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)} 
               className={inputClass} 
               required 
             />

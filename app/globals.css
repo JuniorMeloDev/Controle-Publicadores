@@ -1,8 +1,10 @@
 @import "tailwindcss";
 
+
 :root {
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;
+  /* ... cores mantidas ... */
   --card: 0 0% 100%;
   --card-foreground: 240 10% 3.9%;
   --popover: 0 0% 100%;
@@ -23,6 +25,7 @@
   --radius: 0.5rem;
 }
 
+/* ... (classe .dark mantida) ... */
 .dark {
   --background: 240 10% 3.9%;
   --foreground: 0 0% 98%;
@@ -45,35 +48,32 @@
   --ring: 240 4.9% 83.9%;
 }
 
-/* --- CONFIGURAÇÃO DE IMPRESSÃO --- */
 
-/* Esconde o conteúdo imprimível na tela normal */
+/* --- CONFIGURAÇÃO DE IMPRESSÃO EXATA (A4) --- */
+
 .printable-content {
   display: none;
 }
 
 @media print {
   @page {
-    /* Define tamanho A4 e margens seguras para impressoras padrão */
     size: A4 portrait;
-    margin: 10mm; 
+    margin: 5mm; /* Pequena margem de segurança para a impressora */
   }
 
   html, body {
     width: 100%;
+    height: 100%;
     margin: 0 !important;
     padding: 0 !important;
+    overflow: hidden !important;
     background-color: white !important;
-    /* Permite scroll na impressão se necessário, mas evita cortes */
-    overflow: visible !important; 
   }
 
-  /* Esconde tudo que não for printable-content */
   body * {
     visibility: hidden;
   }
 
-  /* Mostra apenas o conteúdo imprimível e seus filhos */
   .printable-content, 
   .printable-content * {
     visibility: visible !important;
@@ -85,49 +85,34 @@
     top: 0 !important;
     left: 0 !important;
     width: 100% !important;
-    /* Remove altura fixa para permitir que o conteúdo flua naturalmente */
-    height: auto !important; 
+    
+    /* Força a altura exata de uma página A4 menos as margens */
+    /* height: 287mm !important; */
     background-color: white !important;
     z-index: 9999;
   }
 
-  /* Força cores pretas para economizar tinta e melhorar contraste */
-  .printable-content p, 
-  .printable-content span, 
-  .printable-content label, 
-  .printable-content td, 
-  .printable-content th, 
-  .printable-content h1, 
-  .printable-content h2, 
-  .printable-content h3, 
-  .printable-content div,
-  .printable-content input {
+  /* Reseta displays */
+  .printable-content .flex { display: flex !important; }
+  
+  /* CORES PRETAS PARA IMPRESSÃO NÍTIDA */
+  .printable-content p, span, label, td, th, h1, h2, h3, div {
     color: #000000 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  .printable-content table, 
-  .printable-content th, 
-  .printable-content td, 
-  .printable-content .border, 
-  .printable-content .border-2, 
-  .printable-content .border-b {
+  .printable-content input {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: black !important;
+  }
+
+  .printable-content table, th, td, .border, .border-2, .border-b {
     border-color: #000000 !important;
   }
   
-  .printable-content input[type="checkbox"] {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    border: 1px solid black !important;
-  }
-
-  /* Oculta elementos desnecessários */
-  .printable-content button { display: none !important; }
+  .printable-content button { border: none !important; padding: 0 !important; }
   .printable-content svg { display: none !important; }
-  
-  /* Quebra de página específica se houver múltiplos relatórios */
-  .print-page-break {
-    page-break-after: always;
-  }
 }
