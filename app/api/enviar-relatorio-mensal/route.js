@@ -1,3 +1,5 @@
+// app/api/enviar-relatorio-mensal/route.js
+
 import { Pool } from '@neondatabase/serverless'; 
 import { NextResponse } from 'next/server';
 
@@ -21,16 +23,14 @@ export async function POST(req) {
   
   const {
     nome_completo,
-    data_nascimento, // <-- Vem como 'dd/mm/aaaa'
-    nome_grupo,
+    data_nascimento, 
     mes,
     ano_servico,
     ...dadosDoRelatorio 
   } = body;
 
-  // --- CORREÇÃO: Vamos preparar AMBOS os formatos de data ---
-  const isoDataNascimento = dmyToISO(data_nascimento); // Formato 'YYYY-MM-DD'
-  const dmyDataNascimento = data_nascimento;           // Formato 'DD/MM/YYYY'
+  const isoDataNascimento = dmyToISO(data_nascimento); 
+  const dmyDataNascimento = data_nascimento;           
 
   if (!isoDataNascimento) {
     console.error("[ERRO] Data de Nascimento inválida:", data_nascimento);
@@ -43,67 +43,76 @@ export async function POST(req) {
   const client = await pool.connect();
 
   try {
-    const grupoRes = await client.query(
-      'SELECT id FROM grupos WHERE nome_grupo = $1',
-      [nome_grupo]
-    );
-    const grupo = grupoRes.rows[0];
-
-    if (!grupo) {
-      console.error("[ERRO] Grupo não encontrado:", nome_grupo);
-      return NextResponse.json(
-        { message: 'Grupo de Campo não encontrado. Verifique o nome digitado.' },
-        { status: 404 }
-      );
-    }
     
-    // --- MUDANÇA NA QUERY SQL ---
-    // Agora verifica os dois formatos de data
+    // 1. Identificação do Publicador: Usa COALESCE para tratar nome_chamado nulo
+    const searchTerm = `%${nome_completo}%`; 
+
     const publicadorRes = await client.query(
       `SELECT id FROM publicadores 
-       WHERE nome_completo ILIKE $1 
-       AND (data_nascimento = $2 OR data_nascimento = $3)
-       AND grupo_id = $4`,
+       WHERE (nome_completo ILIKE $1 OR COALESCE(nome_chamado, '') ILIKE $1)
+       AND (data_nascimento = $2 OR data_nascimento = $3)`,
       [
-        `%${nome_completo}%`, // $1
-        isoDataNascimento,      // $2 ('YYYY-MM-DD')
-        dmyDataNascimento,      // $3 ('DD/MM/YYYY')
-        grupo.id                // $4
+        searchTerm,             
+        isoDataNascimento,      
+        dmyDataNascimento,      
       ]
     );
-    // --- FIM DA MUDANÇA ---
     
-   
-
-    if (publicadorRes.rows.length === 0) {
-      return NextResponse.json(
-        { message: 'Identificação falhou. Verifique se Nome, Data de Nascimento ou Grupo estão corretos.' },
-        { status: 404 }
-      );
-    }
-    
-    if (publicadorRes.rows.length > 1) {
-      console.warn("[AVISO] Busca ambígua. Múltiplos publicadores encontrados.");
-      return NextResponse.json(
-        { message: 'Identificação falhou. Mais de um publicador foi encontrado com esses dados. Por favor, digite seu nome mais completo.' },
-        { status: 400 }
-      );
+    if (publicadorRes.rows.length === 0 || publicadorRes.rows.length > 1) {
+      // (Tratamento de ambiguidade e não encontrado - mantido)
+      const message = publicadorRes.rows.length === 0
+          ? 'Identificação falhou. Verifique se Nome e Data de Nascimento estão corretos.'
+          : 'Identificação falhou. Mais de um publicador foi encontrado com esses dados. Por favor, digite seu nome mais completo.';
+      return NextResponse.json({ message }, { status: publicadorRes.rows.length === 0 ? 404 : 400 });
     }
     
     const publicador = publicadorRes.rows[0];
 
+    // 2. Lógica de Anulação/Exclusão (Ajustado para tratar strings vazias/nulls)
+    const estudos = parseInt(dadosDoRelatorio.estudos_biblicos) || 0;
+    const horas = parseInt(dadosDoRelatorio.horas) || 0;
+
+    const relatorioVazio = !dadosDoRelatorio.participou_ministerio &&
+                         !dadosDoRelatorio.pioneiro_auxiliar &&
+                         estudos === 0 &&
+                         horas === 0;
+
+    if (relatorioVazio) {
+        // Se o relatório está vazio, deletamos o registro existente para anular.
+        const deleteRes = await client.query(
+            `DELETE FROM relatorios_mensais 
+             WHERE publicador_id = $1 AND mes = $2 AND ano_servico = $3`,
+            [publicador.id, mes, ano_servico]
+        );
+        
+        if (deleteRes.rowCount > 0) {
+            return NextResponse.json({ message: 'Relatório anulado com sucesso.' }, { status: 200 });
+        } else {
+            return NextResponse.json({ message: 'Nenhum relatório a ser anulado.' }, { status: 200 });
+        }
+    }
+
+
+    // 3. Lógica de Inserção/Atualização (UPSERT)
     await client.query(
       `INSERT INTO relatorios_mensais 
        (publicador_id, mes, ano_servico, participou_ministerio, pioneiro_auxiliar, estudos_biblicos, horas, observacoes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (publicador_id, mes, ano_servico) 
+       DO UPDATE SET
+           participou_ministerio = EXCLUDED.participou_ministerio,
+           pioneiro_auxiliar = EXCLUDED.pioneiro_auxiliar,
+           estudos_biblicos = EXCLUDED.estudos_biblicos,
+           horas = EXCLUDED.horas,
+           observacoes = EXCLUDED.observacoes`,
       [
         publicador.id,
         mes,
         ano_servico,
         dadosDoRelatorio.participou_ministerio,
         dadosDoRelatorio.pioneiro_auxiliar,
-        dadosDoRelatorio.estudos_biblicos || null,
-        dadosDoRelatorio.horas || null,
+        dadosDoRelatorio.estudos_biblicos || null, // Se string vazia, vira NULL
+        dadosDoRelatorio.horas || null, // Se string vazia, vira NULL
         dadosDoRelatorio.observacoes || null
       ]
     );
@@ -114,18 +123,9 @@ export async function POST(req) {
     );
 
   } catch (err) {
-    if (err.code === '23505') {
-      console.warn("[AVISO] Conflito (23505): Relatório duplicado.");
-      return NextResponse.json(
-        { message: `O relatório de ${mes} já foi enviado.` },
-        { status: 409 }
-      );
-    }
-    console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-    console.error('!!! ERRO FATAL NA API DE RELATÓRIO:', err);
-    console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+    console.error('Erro no banco de dados:', err);
     return NextResponse.json(
-      { message: 'Erro interno ao salvar o relatório.' },
+      { message: 'Erro interno ao salvar/atualizar o relatório.' },
       { status: 500 }
     );
   } finally {

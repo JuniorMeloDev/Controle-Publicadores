@@ -1,10 +1,9 @@
+// app/relatorio-mensal/page.jsx
+
 'use client';
 
-// 1. Importar o Suspense
 import { useState, useEffect, Suspense } from 'react';
-// 2. Importar o useSearchParams
 import { useSearchParams } from 'next/navigation';
-// --- 3. NOVA IMPORTAÇÃO ---
 import { IMaskInput } from 'react-imask';
 
 const meses = [
@@ -12,48 +11,40 @@ const meses = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
 
-// --- 4. LÓGICA DO MÊS ATUALIZADA ---
 const getPreviousMonth = () => {
   const data = new Date();
-  data.setMonth(data.getMonth() - 1); // Pega o mês anterior
+  data.setMonth(data.getMonth() - 1); 
   return meses[data.getMonth()];
 };
 const mesAnterior = getPreviousMonth();
 
-// --- 5. LÓGICA DO ANO DE SERVIÇO ATUALIZADA (baseada no mês) ---
 const getServiceYearForMonth = (nomeMes) => {
   const dataAtual = new Date();
   const anoAtual = dataAtual.getFullYear();
   const mesIndex = meses.indexOf(nomeMes);
   
-  // Se o mês for de Setembro (8) a Dezembro (11)
   if (mesIndex >= 8) {
-    // Se o mês atual também for Set-Dez, o ano de serviço é o próximo
-    // Ex: Em Nov/2025, o relatório de Out/2025 é do ano de serviço 2026
     if (dataAtual.getMonth() >= 8) {
       return anoAtual + 1;
     }
-    // Ex: Em Jan/2026, o relatório de Dez/2025 é do ano de serviço 2026
     return anoAtual;
   }
   
-  // Se o mês for de Janeiro (0) a Agosto (7)
-  // Ex: Em Fev/2026, o relatório de Jan/2026 é do ano de serviço 2026
   return anoAtual;
 };
 
-// 6. Componente do formulário
 function RelatorioForm() {
   
-  const [gruposList, setGruposList] = useState([]); 
+  // REMOVIDO: [gruposList, setGruposList]
   const [formData, setFormData] = useState({
     nome_completo: '',
     data_nascimento: '',
-    nome_grupo: '', // <-- ATUALIZADO: Padrão é 'Selecione'
-    mes: mesAnterior, // <-- ATUALIZADO: Padrão é mês anterior
-    ano_servico: getServiceYearForMonth(mesAnterior), // <-- ATUALIZADO: Ano baseado no mês anterior
-    participou_ministerio: false,
+    // REMOVIDO: nome_grupo
+    mes: mesAnterior, 
+    ano_servico: getServiceYearForMonth(mesAnterior), 
+    participou_ministerio: null, 
     pioneiro_auxiliar: false,
+    pioneiro_regular_local: false, 
     estudos_biblicos: '',
     horas: '',
     observacoes: ''
@@ -68,28 +59,11 @@ function RelatorioForm() {
   
   const [isManualEntry, setIsManualEntry] = useState(!!publicadorId);
 
-  // Efeito para carregar os grupos
-  useEffect(() => {
-    if (!publicadorId) {
-      const fetchGrupos = async () => {
-        try {
-          const response = await fetch('/api/get-grupos');
-          if (!response.ok) throw new Error('Falha ao carregar grupos');
-          const data = await response.json();
-          setGruposList(data); 
-          
-          // --- REMOVIDO: Não define mais um grupo padrão ---
-          
-        } catch (err) {
-          console.error(err);
-        }
-      };
-      fetchGrupos();
-    }
-  }, [publicadorId]);
+  // REMOVIDO: Efeito para carregar grupos
 
-  // Efeito para carregar dados do publicador se publicadorId existir
+  // Efeito para carregar dados do publicador (Modo Manual)
   useEffect(() => {
+    
     if (publicadorId) {
       setIsLoading(true);
       setMessage('Carregando dados do publicador...');
@@ -103,16 +77,18 @@ function RelatorioForm() {
           }
           const data = await res.json();
           
-          // Formata a data de nascimento vinda do banco (YYYY-MM-DD) para (DD/MM/YYYY)
           const dataNascFormatada = data.data_nascimento ? 
             new Date(data.data_nascimento).toLocaleDateString('pt-BR', { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' }) 
             : '';
+            
+          const isPioneiroRegular = data.designacoes?.includes('pioneiro_regular');
 
           setFormData(prev => ({
             ...prev,
             nome_completo: data.nome_completo,
-            data_nascimento: dataNascFormatada, // Usa data formatada
-            nome_grupo: data.nome_grupo,
+            data_nascimento: dataNascFormatada, 
+            // ATUALIZADO: nome_grupo não é mais carregado, se for necessário, use um estado local
+            pioneiro_regular_local: isPioneiroRegular || false,
           }));
           
           setMessage(''); 
@@ -128,16 +104,19 @@ function RelatorioForm() {
       };
       
       fetchPublicadorData();
-    }
+    } 
   }, [publicadorId]); 
 
   // Handler de Submit
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.nome_grupo) {
-      setMessage('Por favor, selecione seu Grupo de Campo.');
-      setIsError(true);
-      return;
+    
+    // REMOVIDO: Validação de nome_grupo
+    
+    if (formData.participou_ministerio === null) {
+        setMessage('Por favor, indique se participou ou não no ministério.');
+        setIsError(true);
+        return;
     }
     
     setIsLoading(true);
@@ -148,28 +127,33 @@ function RelatorioForm() {
       let finalApiUrl;
       let finalBody;
       
-      // --- ATUALIZADO: Recalcula o ano de serviço no momento do envio ---
       const anoServicoFinal = getServiceYearForMonth(formData.mes);
+      const participouMinisterioBooleano = formData.participou_ministerio === 'sim';
+      
+      const relatorioData = {
+          mes: formData.mes,
+          ano_servico: anoServicoFinal,
+          participou_ministerio: participouMinisterioBooleano, 
+          pioneiro_auxiliar: formData.pioneiro_auxiliar,
+          estudos_biblicos: formData.estudos_biblicos || null,
+          horas: formData.horas || null,
+          observacoes: formData.observacoes || null
+      };
 
       if (isManualEntry) {
         finalApiUrl = '/api/enviar-relatorio-mensal/manual';
         finalBody = JSON.stringify({
           publicadorId: publicadorId,
-          mes: formData.mes,
-          ano_servico: anoServicoFinal, // --- Usa ano recalculado
-          participou_ministerio: formData.participou_ministerio,
-          pioneiro_auxiliar: formData.pioneiro_auxiliar,
-          estudos_biblicos: formData.estudos_biblicos || null,
-          horas: formData.horas || null,
-          observacoes: formData.observacoes || null
+          ...relatorioData
+          // REMOVIDO: nome_grupo do body
         });
       } else {
         finalApiUrl = '/api/enviar-relatorio-mensal';
         finalBody = JSON.stringify({
-          ...formData,
-          ano_servico: anoServicoFinal, // --- Usa ano recalculado
-          estudos_biblicos: formData.estudos_biblicos || null,
-          horas: formData.horas || null,
+          nome_completo: formData.nome_completo,
+          data_nascimento: formData.data_nascimento,
+          // REMOVIDO: nome_grupo do body
+          ...relatorioData
         });
       }
 
@@ -186,10 +170,11 @@ function RelatorioForm() {
         setIsError(false);
         setFormData(prev => ({
           ...prev,
-          nome_completo: '', // Limpa o nome
-          data_nascimento: '', // Limpa a data
-          participou_ministerio: false,
+          nome_completo: isManualEntry ? prev.nome_completo : '',
+          data_nascimento: isManualEntry ? prev.data_nascimento : '',
+          participou_ministerio: null, 
           pioneiro_auxiliar: false,
+          pioneiro_regular_local: prev.pioneiro_regular_local, 
           estudos_biblicos: '',
           horas: '',
           observacoes: ''
@@ -206,7 +191,6 @@ function RelatorioForm() {
     }
   };
 
-  // Handler de Change
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prevData) => ({
@@ -215,28 +199,29 @@ function RelatorioForm() {
     }));
   };
   
-  // --- NOVO HANDLER: Para IMaskInput ---
   const handleMaskChange = (value, name) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
 
-  // ----- CLASSES DO TAILWIND -----
-  const labelClass = "block text-sm font-medium text-neutral-300";
-  const baseInputClass = "mt-1 block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-neutral-100 placeholder-neutral-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50";
-  const checkboxLabelClass = "ml-2 text-sm text-neutral-100 select-none";
-  const checkboxClass = "h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-neutral-900";
+  // ----- CLASSES DO TAILWIND (Layout Claro - Dashboard Style) -----
+  const labelClass = "block text-sm font-medium text-gray-700";
+  const baseInputClass = "mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 disabled:opacity-50"; 
+  const checkboxLabelClass = "ml-2 text-sm text-gray-700 select-none"; 
+  const checkboxClass = "h-4 w-4 rounded border-gray-300 bg-white text-purple-600 focus:ring-purple-500 focus:ring-offset-white"; 
+
   
   return (
-    <div className="max-w-2xl mx-auto bg-neutral-900 p-6 md:p-8 rounded-xl shadow-2xl border border-neutral-800">
-      <h2 className="text-3xl font-bold text-center mb-6 text-white">
+    // Estilo principal: Container branco.
+    <div className="max-w-2xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-lg border border-gray-200 text-gray-900">
+      <h2 className="text-3xl font-bold text-center mb-6 text-gray-900">
         {isManualEntry ? 'Enviar Relatório (Manual)' : 'Enviar Relatório Mensal'}
       </h2>
       
       {message && (
         <div className={`p-3 rounded-md mb-6 text-sm ${isError 
-          ? 'bg-red-900 bg-opacity-30 text-red-300 border border-red-800' 
-          : 'bg-green-900 bg-opacity-30 text-green-300 border border-green-800'}`
+          ? 'bg-red-50 text-red-700 border border-red-200' 
+          : 'bg-green-50 text-green-700 border border-green-200'}`
         }>
           {message}
         </div>
@@ -245,7 +230,7 @@ function RelatorioForm() {
       <form onSubmit={handleSubmit} className="space-y-6">
         
         <div className="space-y-4">
-          <h3 className="text-xl font-semibold text-white border-b border-neutral-700 pb-2">
+          <h3 className="text-xl font-semibold text-gray-900 border-b border-gray-200 pb-2">
             Identificação
           </h3>
           <div>
@@ -259,28 +244,10 @@ function RelatorioForm() {
             />
           </div>
 
-          <div>
-            <label htmlFor="nome_grupo" className={labelClass}>Grupo de Campo</label>
-            <select 
-              id="nome_grupo" name="nome_grupo" 
-              value={formData.nome_grupo} onChange={handleChange} 
-              className={baseInputClass} required
-              disabled={isManualEntry}
-            >
-              <option value="" disabled>Selecione seu grupo...</option>
-              {isManualEntry && formData.nome_grupo ? (
-                <option value={formData.nome_grupo}>{formData.nome_grupo}</option>
-              ) : (
-                gruposList.map(grupo => (
-                  <option key={grupo} value={grupo}>{grupo}</option>
-                ))
-              )}
-            </select>
-          </div>
+          {/* REMOVIDO: Bloco Grupo de Campo */}
           
           <div>
             <label htmlFor="data_nascimento" className={labelClass}>Data de Nascimento</label>
-            {/* --- ATUALIZADO: Usando IMaskInput --- */}
             <IMaskInput
               mask="00/00/0000"
               id="data_nascimento" 
@@ -297,11 +264,10 @@ function RelatorioForm() {
         </div>
         
         <div className="space-y-4">
-          <h3 className="text-xl font-semibold text-white border-b border-neutral-700 pb-2">
+          <h3 className="text-xl font-semibold text-gray-900 border-b border-gray-200 pb-2">
             Relatório
           </h3>
           
-          {/* --- ATUALIZADO: Grid com apenas 1 coluna --- */}
           <div className="grid grid-cols-1 gap-4">
             <div>
               <label htmlFor="mes" className={labelClass}>Mês</label>
@@ -311,20 +277,61 @@ function RelatorioForm() {
                 ))}
               </select>
             </div>
-            {/* --- REMOVIDO: Campo 'Ano de Serviço' --- */}
           </div>
           
           <div className="space-y-3 pt-2">
-          <p className='font-bold'>Marque para SIM ou deixe em branco para NÃO</p>
-            <div className="flex items-center">
-              <input id="participou_ministerio" name="participou_ministerio" type="checkbox" checked={formData.participou_ministerio} onChange={handleChange} className={checkboxClass} />
-              <label htmlFor="participou_ministerio" className={checkboxLabelClass}>Participei no ministério</label>
+            
+            {/* --- RADIO BUTTONS DE PARTICIPAÇÃO --- */}
+            <p className='font-medium text-gray-900'>
+              Você participou em alguma modalidade de pregação, do testemunho por cartas ou deu testemunho informal?
+            </p>
+            <div className="flex gap-6">
+              <div className="flex items-center">
+                <input 
+                  id="participou_sim" name="participou_ministerio" type="radio" 
+                  value="sim" 
+                  checked={formData.participou_ministerio === 'sim'} 
+                  onChange={handleChange} 
+                  className={checkboxClass} 
+                />
+                <label htmlFor="participou_sim" className={checkboxLabelClass}>Sim</label>
+              </div>
+              <div className="flex items-center">
+                <input 
+                  id="participou_nao" name="participou_ministerio" type="radio" 
+                  value="nao" 
+                  checked={formData.participou_ministerio === 'nao'} 
+                  onChange={handleChange} 
+                  className={checkboxClass} 
+                />
+                <label htmlFor="participou_nao" className={checkboxLabelClass}>Não</label>
+              </div>
             </div>
-            <div className="flex items-center">
-              <input id="pioneiro_auxiliar" name="pioneiro_auxiliar" type="checkbox" checked={formData.pioneiro_auxiliar} onChange={handleChange} className={checkboxClass} />
-              <label htmlFor="pioneiro_auxiliar" className={checkboxLabelClass}>Pioneiro Auxiliar</label>
+            
+            <div className="pt-2 space-y-2">
+            
+                {/* --- CHECKBOX PIONEIRO REGULAR (LOCAL E CLICÁVEL) --- */}
+                <div className="flex items-center">
+                    <input 
+                        id="pioneiro_regular_local" name="pioneiro_regular_local" type="checkbox" 
+                        checked={formData.pioneiro_regular_local} 
+                        onChange={handleChange} // Clicável
+                        className={checkboxClass} 
+                    />
+                    <label htmlFor="pioneiro_regular_local" className={`${checkboxLabelClass} text-gray-700`}>
+                        Pioneiro Regular
+                    </label>
+                </div>
+                
+                {/* CHECKBOX PIONEIRO AUXILIAR */}
+                <div className="flex items-center">
+                  <input id="pioneiro_auxiliar" name="pioneiro_auxiliar" type="checkbox" checked={formData.pioneiro_auxiliar} onChange={handleChange} className={checkboxClass} />
+                  <label htmlFor="pioneiro_auxiliar" className={checkboxLabelClass}>Pioneiro Auxiliar</label>
+                </div>
             </div>
+            
           </div>
+          
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
               <label htmlFor="estudos_biblicos" className={labelClass}>Estudos Bíblicos</label>
@@ -337,14 +344,14 @@ function RelatorioForm() {
           </div>
           <div>
             <label htmlFor="observacoes" className={labelClass}>Observações</label>
-            <textarea id="observacoes" name="observacoes" rows="3" value={formData.observacoes} onChange={handleChange} className={baseInputClass}></textarea>
+            <textarea id="observacoes" name="observacoes" rows="3" value={formData.observacoes} onChange={handleChange} className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 disabled:opacity-50"></textarea>
           </div>
         </div>
 
         <button 
           type="submit" 
           disabled={isLoading} 
-          className="w-full flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-neutral-900 disabled:opacity-50 transition-colors"
+          className="w-full flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-white disabled:opacity-50 transition-colors"
         >
           {isLoading ? (isManualEntry ? 'Carregando...' : 'Enviando...') : 'Enviar Relatório'}
         </button>
@@ -353,18 +360,16 @@ function RelatorioForm() {
   );
 }
 
-// 7. Componente de fallback
 function LoadingFallback() {
   return (
-    <div className="max-w-2xl mx-auto bg-neutral-900 p-6 md:p-8 rounded-xl shadow-2xl border border-neutral-800">
+    <div className="max-w-2xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-lg border border-gray-200">
       <div className="flex justify-center items-center h-96">
-        <p className="text-neutral-400">A carregar...</p>
+        <p className="text-gray-400">A carregar...</p>
       </div>
     </div>
   );
 }
 
-// 8. Página principal
 export default function RelatorioMensal() {
   return (
     <main className="min-h-screen w-full p-4 md:p-8">

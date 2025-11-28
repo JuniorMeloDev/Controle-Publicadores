@@ -1,9 +1,20 @@
+// app/componentes/FiltroELista.jsx
+
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, ShieldCheck, Star, X, Plus, ChevronDown, ChevronUp, User } from 'lucide-react';
+// Removido o Truck, mantido o Shuffle que é mais neutro para a ação
+import { Search, ShieldCheck, Star, X, Plus, ChevronDown, ChevronUp, Shuffle } from 'lucide-react'; 
 
-export default function FiltroELista({ publicadores = [], selectedId, onPublicadorSelect, onNovoPublicador }) {
+export default function FiltroELista({ 
+    publicadores = [], 
+    selectedId, 
+    onPublicadorSelect, 
+    onNovoPublicador,
+    // --- NOVAS PROPS SIMPLIFICADAS (apenas mantendo a chamada onStartTransfer) ---
+    onStartTransfer
+    // -----------------------------------------------------------------------------
+}) {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [grupoSelecionado, setGrupoSelecionado] = useState('');
@@ -12,6 +23,9 @@ export default function FiltroELista({ publicadores = [], selectedId, onPublicad
   const [naoBatizado, setNaoBatizado] = useState(false);
   const [accordionOpen, setAccordionOpen] = useState(true);
   const listRef = useRef(null);
+  
+  // Voltando a usar o array publicadores original, pois a seleção é no modal
+  const publicadoresParaFiltrar = publicadores; 
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 220);
@@ -28,7 +42,7 @@ export default function FiltroELista({ publicadores = [], selectedId, onPublicad
   }, [publicadores]);
 
   const filtrados = useMemo(() => {
-    let lista = publicadores;
+    let lista = publicadoresParaFiltrar; 
     if (debouncedSearch !== '') {
       lista = lista.filter((p) => (p.nome_completo || '').toLowerCase().includes(debouncedSearch) || (p.nome_grupo || '').toLowerCase().includes(debouncedSearch));
     }
@@ -44,7 +58,7 @@ export default function FiltroELista({ publicadores = [], selectedId, onPublicad
       });
     }
     return lista;
-  }, [publicadores, debouncedSearch, grupoSelecionado, privilegiosSelecionados, designacoesSelecionadas, naoBatizado]);
+  }, [debouncedSearch, grupoSelecionado, privilegiosSelecionados, designacoesSelecionadas, naoBatizado, publicadoresParaFiltrar]);
 
   const handleLimpar = () => {
     setSearch(''); setGrupoSelecionado(''); setPrivilegiosSelecionados([]); setDesignacoesSelecionadas([]); setNaoBatizado(false);
@@ -59,6 +73,8 @@ export default function FiltroELista({ publicadores = [], selectedId, onPublicad
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
+  
+  // Removida a lógica complexa de handleTransferClick
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-white md:bg-gray-50/50">
@@ -68,12 +84,30 @@ export default function FiltroELista({ publicadores = [], selectedId, onPublicad
             <h2 className="text-base font-bold text-gray-900">Congregação</h2>
             <p className="text-xs text-gray-500">{publicadores.length} registros</p>
           </div>
-           <button onClick={onNovoPublicador} className="p-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm transition-colors" title="Novo Publicador">
-            <Plus size={18} />
-          </button>
+          
+          {/* GRUPO DE BOTÕES DE AÇÃO - ATUALIZADO */}
+          <div className="flex items-center gap-2">
+            
+            {/* BOTÃO DE TRANSFERÊNCIA - AGORA APENAS ABRE O MODAL */}
+            <button 
+                onClick={onStartTransfer} 
+                title="Trocar Publicadores de Grupo" 
+                className={`p-2 rounded-md shadow-sm transition-colors relative
+                    bg-gray-100 hover:bg-gray-200 text-gray-600
+                `}
+            >
+                <Shuffle size={18} />
+            </button>
+            
+            {/* BOTÃO NOVO PUBLICADOR */}
+            <button onClick={onNovoPublicador} className="p-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm transition-colors" title="Novo Publicador">
+                <Plus size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Campo de Busca */}
           <div className="relative flex-1">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="w-full bg-gray-100 border-transparent focus:bg-white focus:border-purple-500 focus:ring-0 rounded-md pl-8 pr-8 py-2 text-sm text-gray-900 outline-none transition-all" />
@@ -101,23 +135,39 @@ export default function FiltroELista({ publicadores = [], selectedId, onPublicad
       </div>
 
       <div ref={listRef} className="flex-1 overflow-y-auto scroll-smooth">
-        {filtrados.map((p) => (
-          <div key={p.id} onClick={() => onPublicadorSelect(p.id)} className={`group cursor-pointer px-4 py-3 border-b border-gray-100 hover:bg-white hover:shadow-sm transition-all ${selectedId === p.id ? 'bg-white border-l-4 border-l-purple-600 shadow-sm' : 'border-l-4 border-l-transparent'}`}>
-            <div className="flex items-center gap-3">
-              <div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${selectedId === p.id ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600 group-hover:bg-gray-300'}`}>{initials(p.nome_completo)}</div>
-              <div className="min-w-0 flex-1">
-                <h3 className={`text-sm font-medium truncate ${selectedId === p.id ? 'text-purple-900' : 'text-gray-900'}`}>{p.nome_completo}</h3>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-gray-500 truncate max-w-[120px]">{p.nome_grupo || 'Sem grupo'}</span>
-                  <div className="flex gap-1">
-                    {p.privilegios?.includes('anciao') && <ShieldCheck size={12} className="text-blue-500" />}
-                    {p.designacoes?.includes('pioneiro_regular') && <Star size={12} className="text-green-500" />}
+        {filtrados.map((p) => {
+          const isSelected = String(p.id) === selectedId;
+          
+          const itemClasses = `group cursor-pointer px-4 py-3 border-b border-gray-100 hover:bg-white hover:shadow-sm transition-all`;
+          const activeBorder = isSelected ? 'border-l-4 border-l-purple-600' : 'border-l-4 border-l-transparent';
+          const activeBg = isSelected ? 'bg-white shadow-sm' : '';
+          const activeText = isSelected ? 'text-purple-900' : 'text-gray-900';
+          const activeInitialBg = isSelected ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600 group-hover:bg-gray-300';
+
+          return (
+            <div 
+              key={p.id} 
+              onClick={() => onPublicadorSelect(String(p.id))} 
+              className={`${itemClasses} ${activeBorder} ${activeBg}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${activeInitialBg}`}>
+                  {initials(p.nome_completo)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className={`text-sm font-medium truncate ${activeText}`}>{p.nome_completo}</h3>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-gray-500 truncate max-w-[120px]">{p.nome_grupo || 'Sem grupo'}</span>
+                    <div className="flex gap-1">
+                      {p.privilegios?.includes('anciao') && <ShieldCheck size={12} className="text-blue-500" />}
+                      {p.designacoes?.includes('pioneiro_regular') && <Star size={12} className="text-green-500" />}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

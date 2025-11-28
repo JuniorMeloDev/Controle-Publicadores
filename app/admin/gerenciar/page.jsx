@@ -1,3 +1,5 @@
+// app/admin/gerenciar/page.jsx
+
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
@@ -6,24 +8,32 @@ import { DashboardLayout } from '@/app/components/DashboardLayout';
 import FiltroELista from '@/app/componentes/FiltroELista';
 import DetalhesPublicador from '@/app/componentes/DetalhesPublicador/DetalhesPublicador';
 import FormularioCadastro from '@/app/componentes/DetalhesPublicador/FormularioCadastro';
-import { Loader2, UserPlus, Users } from 'lucide-react';
+import { Loader2, Users, ArrowLeft, X } from 'lucide-react'; 
 import { Button } from '@/app/components/ui/button';
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetDescription
+  SheetDescription,
+  SheetClose 
 } from "@/app/components/ui/sheet";
+import TrocaGrupoSheet from '@/app/componentes/TrocaGrupoSheet'; 
 
 function GerenciarContent() {
   const [publicadores, setPublicadores] = useState([]);
+  const [gruposList, setGruposList] = useState([]); 
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [selectedPublicadorId, setSelectedPublicadorId] = useState(null);
   const [modoNovo, setModoNovo] = useState(false);
   
   const [successMessage, setSuccessMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+
+  // --- MUDANÇAS NOVAS PARA TROCA DE GRUPO ---
+  const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false);
+  // Removido: selectedPublicadoresForTransfer (Seleção será feita dentro do modal)
+  // ------------------------------------------
 
   const searchParams = useSearchParams();
 
@@ -33,19 +43,47 @@ function GerenciarContent() {
         const res = await fetch('/api/admin/get-publicadores', { cache: 'no-store' });
         if (!res.ok) throw new Error('Falha ao buscar publicadores');
         const data = await res.json();
-        setPublicadores(data);
+        
+        // Mapeia publicadores para ter nome_curto (útil para TrocaGrupoSheet)
+        const publicadoresFormatados = data.map(p => ({
+            ...p,
+            nome_curto: p.nome_chamado ? p.nome_chamado : getShortName(p.nome_completo)
+        }));
+
+        setPublicadores(publicadoresFormatados);
       } catch (err) {
         console.error(err);
       } finally {
         setIsLoadingList(false);
       }
   };
+  
+  // Função auxiliar copiada de app/admin/designacoes/page.jsx
+  function getShortName(fullName) {
+      if (!fullName || typeof fullName !== 'string') return '';
+      const parts = fullName.split(' ').filter(Boolean);
+      if (parts.length === 1) return fullName;
+      return `${parts[0]} ${parts[parts.length - 1]}`;
+  }
+
+
+  const fetchGrupos = async () => {
+     try {
+        const res = await fetch('/api/get-grupos');
+        if (res.ok) {
+            const data = await res.json();
+            setGruposList(data);
+        }
+     } catch (err) {
+        console.error("Erro ao carregar grupos", err);
+     }
+  };
 
   useEffect(() => { 
     fetchPublicadores(); 
+    fetchGrupos(); 
   }, []);
 
-  // --- VERIFICA SE TEM ID NA URL ---
   useEffect(() => {
     const idNaUrl = searchParams.get('id');
     if (idNaUrl) {
@@ -53,11 +91,14 @@ function GerenciarContent() {
     }
   }, [searchParams]);
 
+  // --- FUNÇÕES HANDLER ATUALIZADAS ---
   const handleSelect = (id) => { 
+    // Modo de visualização/edição normal
     setSelectedPublicadorId(id); 
     setModoNovo(false); 
     setSuccessMessage(null); 
     setErrorMessage(null); 
+    setIsTransferSheetOpen(false); // Fecha o modal de transferência se estiver aberto
   };
 
   const handleNovoPublicador = () => { 
@@ -65,6 +106,14 @@ function GerenciarContent() {
     setModoNovo(true); 
     setSuccessMessage(null); 
     setErrorMessage(null); 
+    setIsTransferSheetOpen(false);
+  };
+
+  // ATUALIZADO: Abertura imediata do modal de transferência
+  const handleStartTransfer = () => {
+    setSelectedPublicadorId(null); 
+    setModoNovo(false); 
+    setIsTransferSheetOpen(true);
   };
 
   const handleCloseDrawer = () => { 
@@ -72,6 +121,7 @@ function GerenciarContent() {
     setErrorMessage(null); 
     setSelectedPublicadorId(null); 
     setModoNovo(false); 
+    setIsTransferSheetOpen(false);
   };
 
   const handleSaveSuccess = ({ message, isError, keepOpen = false }) => { 
@@ -80,10 +130,19 @@ function GerenciarContent() {
     else { setSuccessMessage(message); setErrorMessage(null); } 
     if (!keepOpen) handleCloseDrawer(); 
   };
+  
+  const handleTransferSuccess = (count) => {
+    handleSaveSuccess({ 
+        message: `${count} publicador(es) transferido(s) com sucesso.`, 
+        isError: false, 
+        keepOpen: false 
+    });
+  };
 
   const handleMessageDismiss = () => { setSuccessMessage(null); setErrorMessage(null); };
+  // -----------------------------------------------------
 
-  const isSheetOpen = !!selectedPublicadorId || modoNovo;
+  const isSheetOpen = !!selectedPublicadorId || modoNovo || isTransferSheetOpen;
 
   return (
     <DashboardLayout>
@@ -96,49 +155,91 @@ function GerenciarContent() {
                 </div>
             ) : (
                 <FiltroELista
-                publicadores={publicadores}
-                selectedId={selectedPublicadorId}
-                onPublicadorSelect={handleSelect}
-                onNovoPublicador={handleNovoPublicador}
+                    publicadores={publicadores}
+                    selectedId={selectedPublicadorId}
+                    onPublicadorSelect={handleSelect}
+                    onNovoPublicador={handleNovoPublicador}
+                    // PROPRIEDADES NOVAS SIMPLIFICADAS
+                    isTransferMode={false} // Sempre falso aqui
+                    onStartTransfer={handleStartTransfer} // Abre o modal
+                    selectedForTransferCount={0} // Sempre zero
                 />
             )}
           </div>
       </div>
 
       <Sheet open={isSheetOpen} onOpenChange={(open) => !open && handleCloseDrawer()}>
-        <SheetContent 
-            side="right" 
-            className="w-full sm:max-w-lg md:max-w-xl lg:max-w-3xl p-0 border-l border-gray-200 bg-white focus:outline-none"
-        >
-            <SheetHeader className="sr-only">
-              <SheetTitle>
-                {modoNovo ? "Cadastrar Novo Publicador" : "Editar Publicador"}
-              </SheetTitle>
-              <SheetDescription>
-                Formulário para gerenciamento de dados do publicador.
-              </SheetDescription>
-            </SheetHeader>
+        
+        {/* Conteúdo Normal (Detalhes/Cadastro) */}
+        {(!isTransferSheetOpen && isSheetOpen) && (
+            <SheetContent 
+                side="right" 
+                className="w-full sm:max-w-lg md:max-w-xl lg:max-w-3xl p-0 border-l border-gray-200 bg-white focus:outline-none"
+            >
+                <SheetHeader className="sr-only">
+                    <SheetTitle>
+                        {modoNovo ? "Cadastrar Novo Publicador" : "Editar Publicador"}
+                    </SheetTitle>
+                    <SheetDescription>
+                        Formulário para gerenciamento de dados do publicador.
+                    </SheetDescription>
+                </SheetHeader>
 
-            <div className="h-full w-full bg-white flex flex-col">
-                {modoNovo && (
-                    <FormularioCadastro 
-                    onSaveSuccess={(data) => handleSaveSuccess({ ...data, keepOpen: false })} 
-                    onClose={handleCloseDrawer} 
-                    />
-                )}
+                <div className="h-full w-full bg-white flex flex-col">
+                    {modoNovo && (
+                        <FormularioCadastro 
+                            onSaveSuccess={(data) => handleSaveSuccess({ ...data, keepOpen: false })} 
+                            onClose={handleCloseDrawer} 
+                        />
+                    )}
 
-                {selectedPublicadorId && !modoNovo && (
-                    <DetalhesPublicador
-                    publicadorId={selectedPublicadorId}
-                    onSaveSuccess={handleSaveSuccess}
-                    onClose={handleCloseDrawer}
-                    persistedMessage={successMessage || errorMessage}
-                    persistedError={!!errorMessage}
-                    onMessageDismiss={handleMessageDismiss}
-                    />
-                )}
-            </div>
-        </SheetContent>
+                    {selectedPublicadorId && !modoNovo && (
+                        <DetalhesPublicador
+                            publicadorId={selectedPublicadorId}
+                            onSaveSuccess={handleSaveSuccess}
+                            onClose={handleCloseDrawer}
+                            persistedMessage={successMessage || errorMessage}
+                            persistedError={!!errorMessage}
+                            onMessageDismiss={handleMessageDismiss}
+                        />
+                    )}
+                </div>
+            </SheetContent>
+        )}
+        
+        {/* Conteúdo do Modal de Troca de Grupo - ATUALIZADO */}
+        {isTransferSheetOpen && (
+             <SheetContent 
+                side="right" 
+                className="w-full sm:max-w-lg p-0 border-l border-gray-200 bg-white focus:outline-none"
+            >
+                <SheetHeader className="p-4 border-b border-gray-200">
+                    <SheetTitle className="text-xl font-bold text-gray-900">
+                        Trocar Publicadores de Grupo
+                    </SheetTitle>
+                    {/* Descrição será atualizada pelo próprio modal */}
+                    <SheetDescription className="text-sm text-gray-500">
+                       Selecione os publicadores para transferência.
+                    </SheetDescription>
+                </SheetHeader>
+                <SheetClose asChild>
+                    <button 
+                        onClick={handleCloseDrawer} 
+                        className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-neutral-950 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary"
+                    >
+                         <X className="h-4 w-4" />
+                         <span className="sr-only">Fechar</span>
+                    </button>
+                </SheetClose>
+                
+                <TrocaGrupoSheet
+                    // Passamos a lista completa para o modal
+                    publicadores={publicadores}
+                    gruposList={gruposList}
+                    onTransferSuccess={handleTransferSuccess}
+                />
+            </SheetContent>
+        )}
       </Sheet>
 
     </DashboardLayout>

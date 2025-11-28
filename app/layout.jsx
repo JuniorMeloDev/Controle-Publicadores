@@ -12,8 +12,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "Controle de Publicadores",
-  description: "Sistema de envio de relatórios",
+  title: "Gestão Congregacional",
+  description: "Sistema de gerenciamento congregacional",
 };
 
 export default function RootLayout({ children }) {

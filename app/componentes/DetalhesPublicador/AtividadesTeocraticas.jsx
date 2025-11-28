@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
-import { Loader2, Printer, Edit, Save, AlertCircle, Eye } from 'lucide-react';
+import { Loader2, Printer, Edit, Save, AlertCircle } from 'lucide-react';
 import RelatorioImprimivel from './RelatorioImprimivel';
 import { Button } from '@/app/components/ui/button';
 
@@ -19,8 +19,7 @@ export default function AtividadesTeocraticas({
   publicadorNome, 
   relatorios: relatoriosInicial, 
   publicador, 
-  onRefreshData,
-  readOnly = false
+  onRefreshData
 }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -112,6 +111,7 @@ export default function AtividadesTeocraticas({
     }
   };
 
+  // CORREÇÃO DO PRINT: Chama o print do navegador. O CSS global ou a div oculta abaixo cuidará do resto.
   const handlePrint = () => {
     setTimeout(() => {
       window.print();
@@ -121,6 +121,7 @@ export default function AtividadesTeocraticas({
   return (
     <div className="mt-6">
       
+      {/* Mensagens */}
       {message.text && (
         <div className={`flex items-center gap-2 p-3 rounded-md mb-4 text-sm ${
           message.type === 'error'
@@ -132,6 +133,7 @@ export default function AtividadesTeocraticas({
         </div>
       )}
 
+      {/* SELETOR DE ANO */}
       <div className="mb-6 flex items-center gap-3">
         <label htmlFor="service-year-select" className="text-sm font-medium text-gray-700">
           Ano de Serviço:
@@ -150,11 +152,16 @@ export default function AtividadesTeocraticas({
         </select>
       </div>
 
+      {/* CONTEÚDO DO ANO SELECIONADO */}
       {selectedYear && (
         <div className="space-y-6 animate-in fade-in duration-300">
           
+          {/* VISUALIZAÇÃO DA TABELA (CARD) */}
           <div className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${isEditing ? 'ring-2 ring-purple-500 ring-offset-2' : ''}`}>
             <div className="p-1 overflow-x-auto">
+               {/* Reutilizamos o componente de impressão para visualização na tela também.
+                   Ele renderiza a tabela formatada.
+               */}
                <div className="min-w-[700px] p-4">
                   <RelatorioImprimivel 
                     publicador={publicador || { nome_completo: publicadorNome }}
@@ -167,31 +174,23 @@ export default function AtividadesTeocraticas({
             </div>
           </div>
 
+          {/* BOTÕES DE AÇÃO */}
           <div className="flex flex-wrap gap-3">
-            {/* LÓGICA PARA BOTÃO DE EDIÇÃO */}
-            {!readOnly ? (
-              <Button
-                onClick={isEditing ? handleSave : () => { setIsEditing(true); setMessage({text:'', type:''}); }}
-                disabled={isLoadingSave}
-                className={`
-                   ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}
-                   text-white shadow-md transition-all
-                `}
-              >
-                {isEditing ? (
-                  isLoadingSave ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />
-                ) : (
-                  <Edit className="w-4 h-4 mr-2" />
-                )}
-                {isLoadingSave ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Editar Relatório')}
-              </Button>
-            ) : (
-              // Aviso visual se for somente leitura
-              <div className="flex items-center px-4 py-2 bg-gray-100 text-gray-500 rounded-md text-sm font-medium cursor-not-allowed border border-gray-200 select-none">
-                <Eye className="w-4 h-4 mr-2" />
-                Modo Leitura
-              </div>
-            )}
+            <Button
+              onClick={isEditing ? handleSave : () => { setIsEditing(true); setMessage({text:'', type:''}); }}
+              disabled={isLoadingSave}
+              className={`
+                 ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}
+                 text-white shadow-md transition-all
+              `}
+            >
+              {isEditing ? (
+                isLoadingSave ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />
+              ) : (
+                <Edit className="w-4 h-4 mr-2" />
+              )}
+              {isLoadingSave ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Editar Relatório')}
+            </Button>
 
             <Button
               variant="outline"
@@ -204,6 +203,11 @@ export default function AtividadesTeocraticas({
             </Button>
           </div>
 
+          {/* --- ÁREA ESPECÍFICA DE IMPRESSÃO DESTE COMPONENTE --- */}
+          {/* O CSS global oculta tudo com .no-print e mostra .print-block.
+             Aqui criamos um container que SÓ aparece na impressão para garantir que
+             o que o usuário vê (o ano selecionado) é o que sai no papel.
+          */}
           <div className="hidden print:block print:absolute print:top-0 print:left-0 print:w-full print:bg-white print:z-50">
              <RelatorioImprimivel 
                 publicador={publicador || { nome_completo: publicadorNome }}
