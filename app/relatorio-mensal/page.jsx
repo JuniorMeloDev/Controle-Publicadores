@@ -2,25 +2,35 @@
 
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
+// Adiciona AlertTriangle para ícone de erro
+import { CheckCircle, X, AlertTriangle } from 'lucide-react'; 
 import { IMaskInput } from 'react-imask';
-import { CheckCircle, X } from 'lucide-react'; 
 
-// --- NOVO COMPONENTE: SuccessToast ---
-function SuccessToast({ message, onClose }) {
+// --- NOVO COMPONENTE: StatusToast (unifica sucesso e erro) ---
+function StatusToast({ message, type, onClose }) {
+  if (!message) return null;
+    
+  const isError = type === 'error';
+  
+  // Define cores e ícones com base no tipo
+  const bgColor = isError ? 'bg-red-600' : 'bg-green-600';
+  const hoverColor = isError ? 'hover:bg-red-700' : 'hover:bg-green-700';
+  const Icon = isError ? AlertTriangle : CheckCircle; 
+
   // O Toast flutuante usa animação slide-in do Tailwind CSS
   return (
     <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-right duration-500">
       <div 
-        className="bg-green-600 text-white p-4 rounded-lg shadow-xl flex items-center justify-between min-w-[300px]"
+        className={`${bgColor} text-white p-4 rounded-lg shadow-xl flex items-center justify-between min-w-[300px]`}
         role="alert"
       >
         <div className="flex items-center gap-3">
-          <CheckCircle className="h-5 w-5" />
+          <Icon className="h-5 w-5" />
           <span className="font-semibold">{message}</span>
         </div>
-        <button onClick={onClose} className="p-1 hover:bg-green-700 rounded-full ml-4">
+        <button onClick={onClose} className={`p-1 ${hoverColor} rounded-full ml-4`}>
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -28,6 +38,7 @@ function SuccessToast({ message, onClose }) {
   );
 }
 // --------------------------------------
+
 
 const meses = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -54,11 +65,11 @@ const getServiceYearForMonth = (nomeMes) => {
   const anoAtual = dataAtual.getFullYear();
   const mesIndex = meses.indexOf(nomeMes);
   
-  if (mesIndex >= 8) {
-    if (dataAtual.getMonth() >= 8) {
-      return anoAtual + 1;
-    }
-    return anoAtual;
+  // O ano de serviço é o ano de término do ciclo.
+  // Se o mês for Jan (0) a Ago (7), o ano de serviço é o ano atual.
+  // Se o mês for Set (8) a Dez (11), o ano de serviço é o ano seguinte.
+  if (mesIndex >= 8) { // Setembro a Dezembro
+    return anoAtual + 1;
   }
   
   return anoAtual;
@@ -66,11 +77,9 @@ const getServiceYearForMonth = (nomeMes) => {
 
 function RelatorioForm() {
   
-  // REMOVIDO: [gruposList, setGruposList]
   const [formData, setFormData] = useState({
     nome_completo: '',
     data_nascimento: '',
-    // REMOVIDO: nome_grupo
     mes: mesAnterior, 
     ano_servico: getServiceYearForMonth(mesAnterior), 
     participou_ministerio: null, 
@@ -82,26 +91,27 @@ function RelatorioForm() {
   });
 
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState(''); 
-  const [isError, setIsError] = useState(false); 
   
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
-
+  // NOVO ESTADO UNIFICADO PARA NOTIFICAÇÃO
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState(''); // 'success' or 'error'
 
   const searchParams = useSearchParams();
   const publicadorId = searchParams.get('publicadorId');
   
   const [isManualEntry, setIsManualEntry] = useState(!!publicadorId);
 
-  // REMOVIDO: Efeito para carregar grupos
 
   // Efeito para carregar dados do publicador (Modo Manual)
   useEffect(() => {
     
     if (publicadorId) {
       setIsLoading(true);
-      setErrorMessage('Carregando dados do publicador...');
+      // Exibe mensagem de loading como toast
+      setToastMessage('Carregando dados do publicador...');
+      setToastType('success'); 
+      setShowToast(true);
       
       const fetchPublicadorData = async () => {
         try {
@@ -125,13 +135,17 @@ function RelatorioForm() {
             pioneiro_regular_local: isPioneiroRegular || false,
           }));
           
-          setErrorMessage(''); 
-          setIsError(false);
+          // Limpa mensagem de loading (toast será fechado pelo timeout)
+          setToastMessage(''); 
+          setToastType('');
+          setShowToast(false);
           
         } catch (err) {
           console.error(err);
-          setErrorMessage(err.message);
-          setIsError(true);
+          // Exibe erro como toast
+          setToastMessage(err.message);
+          setToastType('error');
+          setShowToast(true);
         } finally {
           setIsLoading(false);
         }
@@ -141,33 +155,30 @@ function RelatorioForm() {
     } 
   }, [publicadorId]); 
   
-  // NOVO EFEITO: Gerenciar a duração do Toast de sucesso
+  // NOVO EFEITO: Gerenciar a duração do Toast
   useEffect(() => {
-    if (showSuccessToast) {
+    if (showToast) {
       const timer = setTimeout(() => {
-        setShowSuccessToast(false);
-        // Se a intenção for recarregar a página após a notificação:
-        // window.location.reload(); 
+        setShowToast(false);
       }, 10000); // 10 segundos
       return () => clearTimeout(timer);
     }
-  }, [showSuccessToast]);
+  }, [showToast]);
 
   // Handler de Submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (formData.participou_ministerio === null) {
-        setErrorMessage('Por favor, indique se participou ou não no ministério.');
-        setIsError(true);
+        setToastMessage('Por favor, indique se participou ou não no ministério.');
+        setToastType('error');
+        setShowToast(true);
         return;
     }
     
     setIsLoading(true);
-    setErrorMessage('');
-    setIsError(false);
-    setShowSuccessToast(false);
-    
+    setShowToast(false); // Esconde toasts anteriores
+
     try {
       let finalApiUrl;
       let finalBody;
@@ -180,7 +191,6 @@ function RelatorioForm() {
           ano_servico: anoServicoFinal,
           participou_ministerio: participouMinisterioBooleano, 
           pioneiro_auxiliar: formData.pioneiro_auxiliar,
-          // O CAMPO PIONEIRO_REGULAR_LOCAL NÃO É INCLUÍDO NO relatorioData
           estudos_biblicos: formData.estudos_biblicos || null,
           horas: formData.horas || null,
           observacoes: formData.observacoes || null
@@ -194,8 +204,9 @@ function RelatorioForm() {
         });
       } else {
         finalApiUrl = '/api/enviar-relatorio-mensal';
-        finalBody = JSON.stringify({
-          nome_completo: formData.nome_completo.trim(),
+        // Aqui o trim() deve ser aplicado na página/componente principal (como fizemos)
+        finalBody = JSON.stringify({ 
+          nome_completo: formData.nome_completo.trim(), // Garantindo trim() aqui também
           data_nascimento: formData.data_nascimento,
           ...relatorioData
         });
@@ -210,8 +221,9 @@ function RelatorioForm() {
       const data = await response.json();
       
       if (response.ok) {
-        setSuccessMessage(data.message || 'Relatório enviado com sucesso!');
-        setShowSuccessToast(true);
+        setToastMessage(data.message || 'Relatório enviado com sucesso!');
+        setToastType('success');
+        setShowToast(true);
         
         // Limpar o formulário
         setFormData(prev => ({
@@ -220,18 +232,20 @@ function RelatorioForm() {
           data_nascimento: isManualEntry ? prev.data_nascimento : '',
           participou_ministerio: null, 
           pioneiro_auxiliar: false,
-          pioneiro_regular_local: prev.pioneiro_regular_local, // Mantém o estado local PR
+          pioneiro_regular_local: prev.pioneiro_regular_local, 
           estudos_biblicos: '',
           horas: '',
           observacoes: ''
         }));
       } else {
-        setErrorMessage(data.message || 'Ocorreu um erro.');
-        setIsError(true);
+        setToastMessage(data.message || 'Ocorreu um erro.');
+        setToastType('error');
+        setShowToast(true);
       }
     } catch (err) {
-      setErrorMessage('Não foi possível conectar ao servidor.');
-      setIsError(true);
+      setToastMessage('Não foi possível conectar ao servidor.');
+      setToastType('error');
+      setShowToast(true);
     } finally {
       setIsLoading(false);
     }
@@ -250,7 +264,7 @@ function RelatorioForm() {
   };
 
 
-  // ----- CLASSES DO TAILWIND (Layout Claro - Dashboard Style) -----
+  // ----- CLASSES DO TAILWIND -----
   const labelClass = "block text-sm font-medium text-gray-700";
   const baseInputClass = "mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 disabled:opacity-50"; 
   const checkboxLabelClass = "ml-2 text-sm text-gray-700 select-none"; 
@@ -261,11 +275,12 @@ function RelatorioForm() {
     // Estilo principal: Container branco.
     <div className="max-w-2xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-lg border border-gray-200 text-gray-900">
       
-      {/* RENDERIZAÇÃO CONDICIONAL DO TOAST DE SUCESSO */}
-      {showSuccessToast && (
-          <SuccessToast 
-            message={successMessage} 
-            onClose={() => setShowSuccessToast(false)} 
+      {/* RENDERIZAÇÃO CONDICIONAL DO TOAST DE STATUS */}
+      {showToast && (
+          <StatusToast 
+            message={toastMessage} 
+            type={toastType} 
+            onClose={() => setShowToast(false)} 
           />
       )}
 
@@ -273,12 +288,9 @@ function RelatorioForm() {
         {isManualEntry ? 'Enviar Relatório (Manual)' : 'Enviar Relatório Mensal'}
       </h2>
       
-      {/* MENSAGENS DE ERRO */}
-      {errorMessage && isError && (
-        <div className={`p-3 rounded-md mb-6 text-sm bg-red-50 text-red-700 border border-red-200`}>
-          {errorMessage}
-        </div>
-      )}
+      {/* REMOVIDO: Antigo bloco de mensagem de erro estática */}
+      {/* NOTA: A mensagem de erro vermelha DENTRO do form (como na imagem original) 
+      será substituída pelo toast flutuante */}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         
@@ -369,7 +381,7 @@ function RelatorioForm() {
                         onChange={handleChange} // Clicável
                         className={checkboxClass} 
                     />
-                    <label htmlFor="pioneiro_regular_local" className={`${checkboxLabelClass} text-gray-700`}>
+                    <label htmlFor="pioneiro_regular_local" className={`${checkboxLabelClass} font-medium text-gray-700`}>
                         Pioneiro Regular
                     </label>
                 </div>

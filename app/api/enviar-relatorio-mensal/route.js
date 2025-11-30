@@ -18,7 +18,7 @@ function dmyToISO(dmy) {
 }
 // --- FIM DA FUNÇÃO DE DATA ---
 
-// --- NOVO: FUNÇÃO AUXILIAR DE NORMALIZAÇÃO (Remove acentos) ---
+// --- FUNÇÃO AUXILIAR DE NORMALIZAÇÃO (Remove acentos) ---
 function normalizeString(str) {
   if (!str) return '';
   // 1. Normaliza para forma NFD (decomposição de caracteres)
@@ -32,7 +32,7 @@ export async function POST(req) {
   const body = await req.json();
   
   const {
-    nome_completo: nomeSujeito, // Renomeia a variável localmente
+    nome_completo: nomeSujeito,
     data_nascimento, 
     mes,
     ano_servico,
@@ -40,8 +40,8 @@ export async function POST(req) {
   } = body;
 
   // 1. LIMPEZA E NORMALIZAÇÃO DO NOME DO USUÁRIO
-  const nomeCompletoLimpo = nomeSujeito.trim(); // ✅ Remove espaços em branco
-  const nomeCompletoNormalizado = normalizeString(nomeCompletoLimpo).toLowerCase(); // ✅ Remove acentos e padroniza para minúsculas
+  const nomeCompletoLimpo = nomeSujeito.trim();
+  const nomeCompletoNormalizado = normalizeString(nomeCompletoLimpo).toLowerCase(); 
   
   const isoDataNascimento = dmyToISO(data_nascimento); 
   const dmyDataNascimento = data_nascimento;           
@@ -58,21 +58,36 @@ export async function POST(req) {
 
   try {
     
-    // 1. Identificação do Publicador: Usa o termo normalizado na pesquisa
-    // A função UNACCENT() é usada no SQL para permitir a busca insensível a acentos.
-    const searchTermNormalizado = `%${nomeCompletoNormalizado}%`; 
+    // --- 1. LÓGICA ROBUSTA DE PESQUISA POR PALAVRAS ---
+    const searchTerms = nomeCompletoNormalizado.split(/\s+/).filter(word => word.length >= 2); 
+    
+    if (searchTerms.length === 0) {
+        return NextResponse.json(
+            { message: 'Digite pelo menos a primeira parte do seu nome para a pesquisa.' },
+            { status: 400 }
+        );
+    }
+    
+    const nameSearchConditions = searchTerms.map((_, index) => {
+        const placeholderIndex = index + 3; 
+        // Pesquisa ILIKE (case-insensitive) em Nome Completo ou Nome Chamado
+        return `(p.nome_completo ILIKE $${placeholderIndex} OR COALESCE(p.nome_chamado, '') ILIKE $${placeholderIndex})`;
+    }).join(' AND ');
+    
+    const searchValues = searchTerms.map(term => `%${term}%`);
 
     const publicadorRes = await client.query(
-      `SELECT id FROM publicadores 
-       WHERE (UNACCENT(nome_completo) ILIKE $1 OR UNACCENT(COALESCE(nome_chamado, '')) ILIKE $1)
-       AND (data_nascimento = $2 OR data_nascimento = $3)`,
+      `SELECT p.id 
+       FROM publicadores p
+       WHERE (p.data_nascimento = $1 OR p.data_nascimento = $2)
+       AND ${nameSearchConditions}`,
       [
-        searchTermNormalizado,    // $1: Nome limpo, sem acentos e em minúsculas
-        isoDataNascimento,        // $2: Data no formato ISO
-        dmyDataNascimento,        // $3: Data no formato DD/MM/AAAA 
+        isoDataNascimento,        // $1
+        dmyDataNascimento,        // $2
+        ...searchValues           // $3, $4, $5...
       ]
     );
-    
+
     if (publicadorRes.rows.length === 0 || publicadorRes.rows.length > 1) {
       const message = publicadorRes.rows.length === 0
           ? 'Identificação falhou. Verifique se Nome e Data de Nascimento estão corretos.'
@@ -82,7 +97,9 @@ export async function POST(req) {
     
     const publicador = publicadorRes.rows[0];
 
-    // 2. Lógica de Anulação/Exclusão (Ajustado para tratar strings vazias/nulls)
+    // --- 2. VERIFICAÇÃO DE STATUS DE RELATÓRIO ---
+    
+    // a) Checa se o relatório de entrada é VAZIO (anulação)
     const estudos = parseInt(dadosDoRelatorio.estudos_biblicos) || 0;
     const horas = parseInt(dadosDoRelatorio.horas) || 0;
 
@@ -90,54 +107,64 @@ export async function POST(req) {
                          !dadosDoRelatorio.pioneiro_auxiliar &&
                          estudos === 0 &&
                          horas === 0;
+    
+    // b) Checa se JÁ EXISTE um relatório para o período
+    const existingReportRes = await client.query(
+      `SELECT publicador_id
+       FROM relatorios_mensais 
+       WHERE publicador_id = $1 AND mes = $2 AND ano_servico = $3`,
+      [publicador.id, mes, ano_servico]
+    );
+    const reportExists = existingReportRes.rows.length > 0;
+    
+    // --- 3. LÓGICA DE BLOQUEIO / INSERÇÃO / ANULAÇÃO ---
 
     if (relatorioVazio) {
-        // Se o relatório está vazio, deletamos o registro existente para anular.
+        // CASO A: ANULAÇÃO (Relatório de entrada é vazio)
         const deleteRes = await client.query(
             `DELETE FROM relatorios_mensais 
              WHERE publicador_id = $1 AND mes = $2 AND ano_servico = $3`,
             [publicador.id, mes, ano_servico]
         );
         
-        if (deleteRes.rowCount > 0) {
-            return NextResponse.json({ message: 'Relatório anulado com sucesso.' }, { status: 200 });
-        } else {
-            return NextResponse.json({ message: 'Nenhum relatório a ser anulado.' }, { status: 200 });
-        }
+        const message = deleteRes.rowCount > 0 ? 'Relatório anulado com sucesso.' : 'Nenhum relatório a ser anulado.';
+        return NextResponse.json({ message }, { status: 200 });
+        
+    } else if (reportExists) {
+        // CASO B: BLOQUEIO (Relatório de entrada NÃO é vazio E JÁ EXISTE)
+        return NextResponse.json(
+            { message: `Erro! Relatorio de ${mes} já enviado` },
+            { status: 400 }
+        );
+        
+    } else {
+        // CASO C: INSERÇÃO (Relatório de entrada NÃO é vazio E NÃO EXISTE)
+        await client.query(
+          `INSERT INTO relatorios_mensais 
+           (publicador_id, mes, ano_servico, participou_ministerio, pioneiro_auxiliar, estudos_biblicos, horas, observacoes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            publicador.id,
+            mes,
+            ano_servico,
+            dadosDoRelatorio.participou_ministerio,
+            dadosDoRelatorio.pioneiro_auxiliar,
+            dadosDoRelatorio.estudos_biblicos || null, 
+            dadosDoRelatorio.horas || null, 
+            dadosDoRelatorio.observacoes || null
+          ]
+        );
+
+        return NextResponse.json(
+          { message: 'Relatório enviado com sucesso!' },
+          { status: 200 }
+        );
     }
 
-
-    // 3. Lógica de Inserção/Atualização (UPSERT)
-    await client.query(
-      `INSERT INTO relatorios_mensais 
-       (publicador_id, mes, ano_servico, participou_ministerio, pioneiro_auxiliar, estudos_biblicos, horas, observacoes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (publicador_id, mes, ano_servico) 
-       DO UPDATE SET
-           participou_ministerio = EXCLUDED.participou_ministerio,
-           pioneiro_auxiliar = EXCLUDED.pioneiro_auxiliar,
-           estudos_biblicos = EXCLUDED.estudos_biblicos,
-           horas = EXCLUDED.horas,
-           observacoes = EXCLUDED.observacoes`,
-      [
-        publicador.id,
-        mes,
-        ano_servico,
-        dadosDoRelatorio.participou_ministerio,
-        dadosDoRelatorio.pioneiro_auxiliar,
-        dadosDoRelatorio.estudos_biblicos || null, 
-        dadosDoRelatorio.horas || null, 
-        dadosDoRelatorio.observacoes || null
-      ]
-    );
-
-    return NextResponse.json(
-      { message: 'Relatório enviado com sucesso!' },
-      { status: 200 }
-    );
-
   } catch (err) {
-    console.error('Erro no banco de dados:', err);
+    console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+    console.error('!!! ERRO DURANTE A TRANSAÇÃO: ROLLBACK !!!', err);
+    console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
     return NextResponse.json(
       { message: 'Erro interno ao salvar/atualizar o relatório.' },
       { status: 500 }
