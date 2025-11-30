@@ -18,19 +18,30 @@ function dmyToISO(dmy) {
 }
 // --- FIM DA FUNÇÃO DE DATA ---
 
+// --- NOVO: FUNÇÃO AUXILIAR DE NORMALIZAÇÃO (Remove acentos) ---
+function normalizeString(str) {
+  if (!str) return '';
+  // 1. Normaliza para forma NFD (decomposição de caracteres)
+  // 2. Remove todos os diacríticos (acentos) usando regex Unicode
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+// --- FIM DA FUNÇÃO DE NORMALIZAÇÃO ---
+
+
 export async function POST(req) {
   const body = await req.json();
   
   const {
-    nome_completo: nomeSujeito,
+    nome_completo: nomeSujeito, // Renomeia a variável localmente
     data_nascimento, 
     mes,
     ano_servico,
     ...dadosDoRelatorio 
   } = body;
 
-  // Limpa o nome logo no início no backend
-  const nomeCompletoLimpo = nomeSujeito.trim();
+  // 1. LIMPEZA E NORMALIZAÇÃO DO NOME DO USUÁRIO
+  const nomeCompletoLimpo = nomeSujeito.trim(); // ✅ Remove espaços em branco
+  const nomeCompletoNormalizado = normalizeString(nomeCompletoLimpo).toLowerCase(); // ✅ Remove acentos e padroniza para minúsculas
   
   const isoDataNascimento = dmyToISO(data_nascimento); 
   const dmyDataNascimento = data_nascimento;           
@@ -47,22 +58,22 @@ export async function POST(req) {
 
   try {
     
-    // 1. Identificação do Publicador: Usa COALESCE para tratar nome_chamado nulo
-    const searchTerm = `%${nomeCompletoLimpo}%`; // <--- USANDO O NOME LIMPO
+    // 1. Identificação do Publicador: Usa o termo normalizado na pesquisa
+    // A função UNACCENT() é usada no SQL para permitir a busca insensível a acentos.
+    const searchTermNormalizado = `%${nomeCompletoNormalizado}%`; 
 
     const publicadorRes = await client.query(
       `SELECT id FROM publicadores 
-       WHERE (nome_completo ILIKE $1 OR COALESCE(nome_chamado, '') ILIKE $1)
+       WHERE (UNACCENT(nome_completo) ILIKE $1 OR UNACCENT(COALESCE(nome_chamado, '')) ILIKE $1)
        AND (data_nascimento = $2 OR data_nascimento = $3)`,
       [
-        searchTerm,             
-        isoDataNascimento,      
-        dmyDataNascimento,      
+        searchTermNormalizado,    // $1: Nome limpo, sem acentos e em minúsculas
+        isoDataNascimento,        // $2: Data no formato ISO
+        dmyDataNascimento,        // $3: Data no formato DD/MM/AAAA 
       ]
     );
     
     if (publicadorRes.rows.length === 0 || publicadorRes.rows.length > 1) {
-      // (Tratamento de ambiguidade e não encontrado - mantido)
       const message = publicadorRes.rows.length === 0
           ? 'Identificação falhou. Verifique se Nome e Data de Nascimento estão corretos.'
           : 'Identificação falhou. Mais de um publicador foi encontrado com esses dados. Por favor, digite seu nome mais completo.';
@@ -114,8 +125,8 @@ export async function POST(req) {
         ano_servico,
         dadosDoRelatorio.participou_ministerio,
         dadosDoRelatorio.pioneiro_auxiliar,
-        dadosDoRelatorio.estudos_biblicos || null, // Se string vazia, vira NULL
-        dadosDoRelatorio.horas || null, // Se string vazia, vira NULL
+        dadosDoRelatorio.estudos_biblicos || null, 
+        dadosDoRelatorio.horas || null, 
         dadosDoRelatorio.observacoes || null
       ]
     );
