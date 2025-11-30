@@ -1,3 +1,5 @@
+// app/componentes/DetalhesPublicador/FormularioCadastro.jsx
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -107,12 +109,18 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
     setMessage('');
     setIsError(false);
 
-    if (formData.privilegios.length > 0 && formData.senha.trim() === '') {
-      setMessage('É obrigatório definir uma senha para usuários com privilégios.');
+    // --- NOVA LÓGICA DE VALIDAÇÃO DE SENHA ---
+    const temPrivilegio = formData.privilegios.includes('anciao') || formData.privilegios.includes('servo_ministerial');
+    
+    if (temPrivilegio && formData.senha.trim() === '') {
+      setMessage('É obrigatório definir uma senha para usuários com privilégios (Ancião ou Servo Ministerial).');
       setIsError(true);
       setIsLoading(false);
       return;
     }
+    // Se a senha for opcional (sem privilégios), o campo 'senha' pode ser vazio,
+    // e o backend (criar-publicador/route.js) o tratará como NULL.
+    // --- FIM DA NOVA LÓGICA ---
 
     try {
       const response = await fetch('/api/admin/criar-publicador', {
@@ -450,7 +458,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                 </h3>
 
                 <div>
-                  <label htmlFor="senha" className={labelClass}>Senha</label>
+                  <label htmlFor="senha" className={labelClass}>Senha (Opcional, exceto para privilégios)</label>
                   <div className="relative">
                     <input 
                       type={showPassword ? 'text' : 'password'}
@@ -460,7 +468,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                       onChange={handleChange} 
                       className={`${baseInputClass} pr-10`}
                       placeholder="Digite uma senha" 
-                      required
+                      // Removido 'required' do JSX
                     />
                     <button
                       type="button"
@@ -535,4 +543,4 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
       </div>
     </div>
   );
-}
+} 

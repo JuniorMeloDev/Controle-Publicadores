@@ -4,12 +4,11 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { DashboardLayout } from '@/app/components/DashboardLayout';
+import {DashboardLayout} from '@/app/components/DashboardLayout'; 
 import FiltroELista from '@/app/componentes/FiltroELista';
 import DetalhesPublicador from '@/app/componentes/DetalhesPublicador/DetalhesPublicador';
 import FormularioCadastro from '@/app/componentes/DetalhesPublicador/FormularioCadastro';
-import { Loader2, Users, ArrowLeft, X } from 'lucide-react'; 
-import { Button } from '@/app/components/ui/button';
+import { Loader2, X, Shuffle } from 'lucide-react'; 
 import {
   Sheet,
   SheetContent,
@@ -19,6 +18,13 @@ import {
   SheetClose 
 } from "@/app/components/ui/sheet";
 import TrocaGrupoSheet from '@/app/componentes/TrocaGrupoSheet'; 
+
+function getShortName(fullName) {
+    if (!fullName || typeof fullName !== 'string') return '';
+    const parts = fullName.split(' ').filter(Boolean);
+    if (parts.length === 1) return fullName;
+    return `${parts[0]} ${parts[parts.length - 1]}`;
+}
 
 function GerenciarContent() {
   const [publicadores, setPublicadores] = useState([]);
@@ -30,10 +36,9 @@ function GerenciarContent() {
   const [successMessage, setSuccessMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
 
-  // --- MUDANÇAS NOVAS PARA TROCA DE GRUPO ---
+  // --- ESTADOS PARA TROCA DE GRUPO ---
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false);
-  // Removido: selectedPublicadoresForTransfer (Seleção será feita dentro do modal)
-  // ------------------------------------------
+  // ------------------------------------
 
   const searchParams = useSearchParams();
 
@@ -44,7 +49,6 @@ function GerenciarContent() {
         if (!res.ok) throw new Error('Falha ao buscar publicadores');
         const data = await res.json();
         
-        // Mapeia publicadores para ter nome_curto (útil para TrocaGrupoSheet)
         const publicadoresFormatados = data.map(p => ({
             ...p,
             nome_curto: p.nome_chamado ? p.nome_chamado : getShortName(p.nome_completo)
@@ -58,15 +62,6 @@ function GerenciarContent() {
       }
   };
   
-  // Função auxiliar copiada de app/admin/designacoes/page.jsx
-  function getShortName(fullName) {
-      if (!fullName || typeof fullName !== 'string') return '';
-      const parts = fullName.split(' ').filter(Boolean);
-      if (parts.length === 1) return fullName;
-      return `${parts[0]} ${parts[parts.length - 1]}`;
-  }
-
-
   const fetchGrupos = async () => {
      try {
         const res = await fetch('/api/get-grupos');
@@ -91,14 +86,12 @@ function GerenciarContent() {
     }
   }, [searchParams]);
 
-  // --- FUNÇÕES HANDLER ATUALIZADAS ---
   const handleSelect = (id) => { 
-    // Modo de visualização/edição normal
     setSelectedPublicadorId(id); 
     setModoNovo(false); 
     setSuccessMessage(null); 
     setErrorMessage(null); 
-    setIsTransferSheetOpen(false); // Fecha o modal de transferência se estiver aberto
+    setIsTransferSheetOpen(false);
   };
 
   const handleNovoPublicador = () => { 
@@ -109,11 +102,11 @@ function GerenciarContent() {
     setIsTransferSheetOpen(false);
   };
 
-  // ATUALIZADO: Abertura imediata do modal de transferência
+  // FUNÇÃO QUE É CHAMADA PELO BOTÃO DE TROCA
   const handleStartTransfer = () => {
     setSelectedPublicadorId(null); 
     setModoNovo(false); 
-    setIsTransferSheetOpen(true);
+    setIsTransferSheetOpen(true); // Abre o modal de transferência
   };
 
   const handleCloseDrawer = () => { 
@@ -140,7 +133,6 @@ function GerenciarContent() {
   };
 
   const handleMessageDismiss = () => { setSuccessMessage(null); setErrorMessage(null); };
-  // -----------------------------------------------------
 
   const isSheetOpen = !!selectedPublicadorId || modoNovo || isTransferSheetOpen;
 
@@ -159,10 +151,7 @@ function GerenciarContent() {
                     selectedId={selectedPublicadorId}
                     onPublicadorSelect={handleSelect}
                     onNovoPublicador={handleNovoPublicador}
-                    // PROPRIEDADES NOVAS SIMPLIFICADAS
-                    isTransferMode={false} // Sempre falso aqui
-                    onStartTransfer={handleStartTransfer} // Abre o modal
-                    selectedForTransferCount={0} // Sempre zero
+                    onStartTransfer={handleStartTransfer} 
                 />
             )}
           </div>
@@ -176,6 +165,7 @@ function GerenciarContent() {
                 side="right" 
                 className="w-full sm:max-w-lg md:max-w-xl lg:max-w-3xl p-0 border-l border-gray-200 bg-white focus:outline-none"
             >
+                {/* CORREÇÃO DO ERRO DE ACESSIBILIDADE RADIX UI */}
                 <SheetHeader className="sr-only">
                     <SheetTitle>
                         {modoNovo ? "Cadastrar Novo Publicador" : "Editar Publicador"}
@@ -184,6 +174,17 @@ function GerenciarContent() {
                         Formulário para gerenciamento de dados do publicador.
                     </SheetDescription>
                 </SheetHeader>
+                
+                {/* BOTÃO DE FECHAR VISÍVEL PARA USER EXPERIENCE E ACESSIBILIDADE */}
+                <SheetClose 
+                    className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-neutral-950 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary" 
+                    asChild
+                >
+                    <button onClick={handleCloseDrawer} aria-label="Fechar">
+                         <X className="h-4 w-4" />
+                    </button>
+                </SheetClose>
+                {/* FIM DA CORREÇÃO */}
 
                 <div className="h-full w-full bg-white flex flex-col">
                     {modoNovo && (
@@ -207,7 +208,7 @@ function GerenciarContent() {
             </SheetContent>
         )}
         
-        {/* Conteúdo do Modal de Troca de Grupo - ATUALIZADO */}
+        {/* Conteúdo do Modal de Troca de Grupo (Inalterado) */}
         {isTransferSheetOpen && (
              <SheetContent 
                 side="right" 
@@ -217,7 +218,6 @@ function GerenciarContent() {
                     <SheetTitle className="text-xl font-bold text-gray-900">
                         Trocar Publicadores de Grupo
                     </SheetTitle>
-                    {/* Descrição será atualizada pelo próprio modal */}
                     <SheetDescription className="text-sm text-gray-500">
                        Selecione os publicadores para transferência.
                     </SheetDescription>
@@ -233,7 +233,6 @@ function GerenciarContent() {
                 </SheetClose>
                 
                 <TrocaGrupoSheet
-                    // Passamos a lista completa para o modal
                     publicadores={publicadores}
                     gruposList={gruposList}
                     onTransferSuccess={handleTransferSuccess}

@@ -1,3 +1,5 @@
+// app/api/alterar-senha/route.js
+
 import { verify } from 'jsonwebtoken';
 import { cookies } from 'next/headers';
 import { Pool } from '@neondatabase/serverless';
@@ -10,15 +12,30 @@ const pool = new Pool({
 
 const JWT_SECRET = process.env.JWT_SECRET || 'chave-secreta-de-teste-mude-depois';
 
+// Função auxiliar de validação (Regex)
+function isPasswordComplex(password) {
+    // Deve ter 8+ caracteres, 1 minúscula, 1 maiúscula, 1 número, 1 símbolo
+    if (password.length < 8) return false;
+    if (!/[a-z]/.test(password)) return false;
+    if (!/[A-Z]/.test(password)) return false;
+    if (!/[0-9]/.test(password)) return false;
+    if (!/[^a-zA-Z0-9]/.test(password)) return false;
+    return true;
+}
+
 export async function POST(req) {
   const body = await req.json();
   const { novaSenha } = body;
 
-  if (!novaSenha || novaSenha.trim().length < 4) {
-    return NextResponse.json({ message: 'A senha deve ter pelo menos 4 caracteres.' }, { status: 400 });
+  // 1. Validação de Complexidade no Backend
+  if (!isPasswordComplex(novaSenha)) {
+    return NextResponse.json(
+        { message: 'A senha deve ter 8+ caracteres, com letras maiúsculas, minúsculas, números e símbolos.' }, 
+        { status: 400 }
+    );
   }
 
-  const cookieStore = await cookies();
+  const cookieStore = cookies();
   const token = cookieStore.get('auth_token');
 
   if (!token) {
@@ -26,44 +43,33 @@ export async function POST(req) {
   }
 
   try {
-    // Pega o ID do usuário logado diretamente do token
     const decoded = verify(token.value, JWT_SECRET);
-    const userId = decoded.userId;
+    const userId = decoded.id;
 
-    // Gera o hash da nova senha
-    const salt = await bcrypt.genSalt(10);
-    const hashSenha = await bcrypt.hash(novaSenha, salt);
+    const hashedPassword = await bcrypt.hash(novaSenha, 10);
 
     const client = await pool.connect();
-    try {
-      // Atualiza apenas a senha e registra no histórico
-      await client.query('BEGIN');
 
-      await client.query(
-        'UPDATE publicadores SET senha = $1 WHERE id = $2',
-        [hashSenha, userId]
-      );
+    await client.query(
+      'UPDATE usuarios SET senha_hash = $1 WHERE id = $2',
+      [hashedPassword, userId]
+    );
 
-      // Opcional: Registrar no histórico que a senha foi alterada pelo próprio usuário
-      await client.query(
-        `INSERT INTO publicador_historico 
-         (publicador_id, campo_alterado, valor_antigo, valor_novo, data_mudanca) 
-         VALUES ($1, 'senha', '********', '********', NOW())`,
-        [userId]
-      );
+    client.release();
 
-      await client.query('COMMIT');
-
-      return NextResponse.json({ message: 'Senha alterada com sucesso!' }, { status: 200 });
-    } catch (dbErr) {
-      await client.query('ROLLBACK');
-      throw dbErr;
-    } finally {
-      client.release();
-    }
+    return NextResponse.json(
+      { message: 'Senha alterada com sucesso.' },
+      { status: 200 }
+    );
 
   } catch (err) {
     console.error('Erro ao alterar senha:', err);
-    return NextResponse.json({ message: 'Erro ao processar solicitação.' }, { status: 500 });
+    if (err.name === 'JsonWebTokenError') {
+       return NextResponse.json({ message: 'Sessão inválida. Faça login novamente.' }, { status: 401 });
+    }
+    return NextResponse.json(
+      { message: 'Erro interno ao tentar alterar a senha.' },
+      { status: 500 }
+    );
   }
 }

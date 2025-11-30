@@ -5,6 +5,29 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { IMaskInput } from 'react-imask';
+import { CheckCircle, X } from 'lucide-react'; 
+
+// --- NOVO COMPONENTE: SuccessToast ---
+function SuccessToast({ message, onClose }) {
+  // O Toast flutuante usa animação slide-in do Tailwind CSS
+  return (
+    <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-right duration-500">
+      <div 
+        className="bg-green-600 text-white p-4 rounded-lg shadow-xl flex items-center justify-between min-w-[300px]"
+        role="alert"
+      >
+        <div className="flex items-center gap-3">
+          <CheckCircle className="h-5 w-5" />
+          <span className="font-semibold">{message}</span>
+        </div>
+        <button onClick={onClose} className="p-1 hover:bg-green-700 rounded-full ml-4">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+// --------------------------------------
 
 const meses = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -13,9 +36,17 @@ const meses = [
 
 const getPreviousMonth = () => {
   const data = new Date();
-  data.setMonth(data.getMonth() - 1); 
+  const diaAtual = data.getDate();
+  
+  if (diaAtual <= 5) {
+    // Estamos nos primeiros 5 dias do mês, o relatório é para o mês anterior.
+    data.setMonth(data.getMonth() - 1); 
+  }
+  // Se estamos do dia 6 em diante, o relatório é para o mês atual.
+  
   return meses[data.getMonth()];
 };
+
 const mesAnterior = getPreviousMonth();
 
 const getServiceYearForMonth = (nomeMes) => {
@@ -44,15 +75,19 @@ function RelatorioForm() {
     ano_servico: getServiceYearForMonth(mesAnterior), 
     participou_ministerio: null, 
     pioneiro_auxiliar: false,
-    pioneiro_regular_local: false, 
+    pioneiro_regular_local: false, // Campo local e clicável
     estudos_biblicos: '',
     horas: '',
     observacoes: ''
   });
 
   const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [isError, setIsError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(''); 
+  const [isError, setIsError] = useState(false); 
+  
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
 
   const searchParams = useSearchParams();
   const publicadorId = searchParams.get('publicadorId');
@@ -66,7 +101,7 @@ function RelatorioForm() {
     
     if (publicadorId) {
       setIsLoading(true);
-      setMessage('Carregando dados do publicador...');
+      setErrorMessage('Carregando dados do publicador...');
       
       const fetchPublicadorData = async () => {
         try {
@@ -87,16 +122,15 @@ function RelatorioForm() {
             ...prev,
             nome_completo: data.nome_completo,
             data_nascimento: dataNascFormatada, 
-            // ATUALIZADO: nome_grupo não é mais carregado, se for necessário, use um estado local
             pioneiro_regular_local: isPioneiroRegular || false,
           }));
           
-          setMessage(''); 
+          setErrorMessage(''); 
           setIsError(false);
           
         } catch (err) {
           console.error(err);
-          setMessage(err.message);
+          setErrorMessage(err.message);
           setIsError(true);
         } finally {
           setIsLoading(false);
@@ -106,22 +140,33 @@ function RelatorioForm() {
       fetchPublicadorData();
     } 
   }, [publicadorId]); 
+  
+  // NOVO EFEITO: Gerenciar a duração do Toast de sucesso
+  useEffect(() => {
+    if (showSuccessToast) {
+      const timer = setTimeout(() => {
+        setShowSuccessToast(false);
+        // Se a intenção for recarregar a página após a notificação:
+        // window.location.reload(); 
+      }, 10000); // 10 segundos
+      return () => clearTimeout(timer);
+    }
+  }, [showSuccessToast]);
 
   // Handler de Submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // REMOVIDO: Validação de nome_grupo
-    
     if (formData.participou_ministerio === null) {
-        setMessage('Por favor, indique se participou ou não no ministério.');
+        setErrorMessage('Por favor, indique se participou ou não no ministério.');
         setIsError(true);
         return;
     }
     
     setIsLoading(true);
-    setMessage('');
+    setErrorMessage('');
     setIsError(false);
+    setShowSuccessToast(false);
     
     try {
       let finalApiUrl;
@@ -135,6 +180,7 @@ function RelatorioForm() {
           ano_servico: anoServicoFinal,
           participou_ministerio: participouMinisterioBooleano, 
           pioneiro_auxiliar: formData.pioneiro_auxiliar,
+          // O CAMPO PIONEIRO_REGULAR_LOCAL NÃO É INCLUÍDO NO relatorioData
           estudos_biblicos: formData.estudos_biblicos || null,
           horas: formData.horas || null,
           observacoes: formData.observacoes || null
@@ -145,14 +191,12 @@ function RelatorioForm() {
         finalBody = JSON.stringify({
           publicadorId: publicadorId,
           ...relatorioData
-          // REMOVIDO: nome_grupo do body
         });
       } else {
         finalApiUrl = '/api/enviar-relatorio-mensal';
         finalBody = JSON.stringify({
           nome_completo: formData.nome_completo,
           data_nascimento: formData.data_nascimento,
-          // REMOVIDO: nome_grupo do body
           ...relatorioData
         });
       }
@@ -166,25 +210,27 @@ function RelatorioForm() {
       const data = await response.json();
       
       if (response.ok) {
-        setMessage(data.message);
-        setIsError(false);
+        setSuccessMessage(data.message || 'Relatório enviado com sucesso!');
+        setShowSuccessToast(true);
+        
+        // Limpar o formulário
         setFormData(prev => ({
           ...prev,
           nome_completo: isManualEntry ? prev.nome_completo : '',
           data_nascimento: isManualEntry ? prev.data_nascimento : '',
           participou_ministerio: null, 
           pioneiro_auxiliar: false,
-          pioneiro_regular_local: prev.pioneiro_regular_local, 
+          pioneiro_regular_local: prev.pioneiro_regular_local, // Mantém o estado local PR
           estudos_biblicos: '',
           horas: '',
           observacoes: ''
         }));
       } else {
-        setMessage(data.message || 'Ocorreu um erro.');
+        setErrorMessage(data.message || 'Ocorreu um erro.');
         setIsError(true);
       }
     } catch (err) {
-      setMessage('Não foi possível conectar ao servidor.');
+      setErrorMessage('Não foi possível conectar ao servidor.');
       setIsError(true);
     } finally {
       setIsLoading(false);
@@ -214,16 +260,23 @@ function RelatorioForm() {
   return (
     // Estilo principal: Container branco.
     <div className="max-w-2xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-lg border border-gray-200 text-gray-900">
+      
+      {/* RENDERIZAÇÃO CONDICIONAL DO TOAST DE SUCESSO */}
+      {showSuccessToast && (
+          <SuccessToast 
+            message={successMessage} 
+            onClose={() => setShowSuccessToast(false)} 
+          />
+      )}
+
       <h2 className="text-3xl font-bold text-center mb-6 text-gray-900">
         {isManualEntry ? 'Enviar Relatório (Manual)' : 'Enviar Relatório Mensal'}
       </h2>
       
-      {message && (
-        <div className={`p-3 rounded-md mb-6 text-sm ${isError 
-          ? 'bg-red-50 text-red-700 border border-red-200' 
-          : 'bg-green-50 text-green-700 border border-green-200'}`
-        }>
-          {message}
+      {/* MENSAGENS DE ERRO */}
+      {errorMessage && isError && (
+        <div className={`p-3 rounded-md mb-6 text-sm bg-red-50 text-red-700 border border-red-200`}>
+          {errorMessage}
         </div>
       )}
 
@@ -244,8 +297,6 @@ function RelatorioForm() {
             />
           </div>
 
-          {/* REMOVIDO: Bloco Grupo de Campo */}
-          
           <div>
             <label htmlFor="data_nascimento" className={labelClass}>Data de Nascimento</label>
             <IMaskInput
@@ -318,7 +369,7 @@ function RelatorioForm() {
                         onChange={handleChange} // Clicável
                         className={checkboxClass} 
                     />
-                    <label htmlFor="pioneiro_regular_local" className={`${checkboxLabelClass} text-gray-700`}>
+                    <label htmlFor="pioneiro_regular_local" className={`${checkboxLabelClass} font-medium text-gray-700`}>
                         Pioneiro Regular
                     </label>
                 </div>
