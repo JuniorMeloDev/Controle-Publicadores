@@ -195,7 +195,7 @@ function RelatorioForm() {
       } else {
         finalApiUrl = '/api/enviar-relatorio-mensal';
         finalBody = JSON.stringify({
-          nome_completo: formData.nome_completo,
+          nome_completo: formData.nome_completo.trim(),
           data_nascimento: formData.data_nascimento,
           ...relatorioData
         });
@@ -369,7 +369,7 @@ function RelatorioForm() {
                         onChange={handleChange} // Clicável
                         className={checkboxClass} 
                     />
-                    <label htmlFor="pioneiro_regular_local" className={`${checkboxLabelClass} font-medium text-gray-700`}>
+                    <label htmlFor="pioneiro_regular_local" className={`${checkboxLabelClass} text-gray-700`}>
                         Pioneiro Regular
                     </label>
                 </div>

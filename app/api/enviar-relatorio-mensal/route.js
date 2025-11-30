@@ -22,13 +22,16 @@ export async function POST(req) {
   const body = await req.json();
   
   const {
-    nome_completo,
+    nome_completo: nomeSujeito,
     data_nascimento, 
     mes,
     ano_servico,
     ...dadosDoRelatorio 
   } = body;
 
+  // Limpa o nome logo no início no backend
+  const nomeCompletoLimpo = nomeSujeito.trim();
+  
   const isoDataNascimento = dmyToISO(data_nascimento); 
   const dmyDataNascimento = data_nascimento;           
 
@@ -45,7 +48,7 @@ export async function POST(req) {
   try {
     
     // 1. Identificação do Publicador: Usa COALESCE para tratar nome_chamado nulo
-    const searchTerm = `%${nome_completo}%`; 
+    const searchTerm = `%${nomeCompletoLimpo}%`; // <--- USANDO O NOME LIMPO
 
     const publicadorRes = await client.query(
       `SELECT id FROM publicadores 

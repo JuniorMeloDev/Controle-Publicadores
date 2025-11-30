@@ -1,7 +1,9 @@
+// app/admin/designacoes/page.jsx
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { DashboardLayout } from '@/app/components/DashboardLayout';
+import { DashboardLayout } from '@/app/components/DashboardLayout'; 
 import { Loader2, Printer, UploadCloud, Save, ChevronLeft, ChevronRight, Calendar, RefreshCw, History, FileText, Filter, X } from 'lucide-react';
 import TabelaDesignacoes from '@/app/componentes/TabelaDesignacoes';
 import { Button } from '@/app/components/ui/button';
@@ -370,8 +372,8 @@ export default function DesignacoesPage() {
       {/* Container Principal */}
       <div className="flex h-[calc(100vh-7rem)] bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         
-        {/* 1. SIDEBAR HISTÓRICO (w-60 = mais estreita) */}
-        <aside className="w-full md:w-60 border-r border-gray-200 shadow-sm shrink-0 flex flex-col overflow-hidden no-print bg-white">
+        {/* 1. SIDEBAR HISTÓRICO - RESPONSIVIDADE: Visível apenas em MD+ */}
+        <aside className="hidden md:flex w-full md:w-60 border-r border-gray-200 shadow-sm shrink-0 flex-col overflow-hidden no-print bg-white">
           
           {/* Cabeçalho + Filtros */}
           <div className="p-4 border-b border-gray-100 bg-gray-50/50 space-y-3">
@@ -446,26 +448,29 @@ export default function DesignacoesPage() {
           </div>
         </aside>
 
-        {/* 2. ÁREA PRINCIPAL (EDITOR) */}
+        {/* 2. ÁREA PRINCIPAL (EDITOR) - Ocupa toda a largura em mobile */}
         <div className="flex-1 flex flex-col bg-white overflow-hidden relative no-print min-w-0">
             
-            <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white z-10">
-                <div className="flex items-center gap-2">
+            {/* CABEÇALHO DO EDITOR - Ajustado para ser responsivo */}
+            <div className="p-4 border-b border-gray-200 flex flex-wrap justify-between items-center bg-white z-10 gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                    <FileText size={20} className="text-purple-600" />
-                   <h2 className="font-bold text-gray-900 hidden sm:block">Editor de Reunião</h2>
+                   <h2 className="font-bold text-gray-900 text-base">Editor de Reunião</h2>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 ml-auto shrink-0">
                     {hasData && (
-                      <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 mr-2">
+                      <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 mr-2 shrink-0">
                          <button onClick={() => { setCurrentIndex(c => Math.max(0, c - 1)); setSaveMessage({text:'', isError:false}); }} disabled={currentIndex === 0} className="p-1.5 hover:bg-white rounded-md disabled:opacity-30"><ChevronLeft size={16}/></button>
                          <span className="text-xs font-medium px-2 w-20 text-center text-gray-600">Semana {currentIndex + 1}</span>
                          <button onClick={() => { setCurrentIndex(c => Math.min(schedules.length - 1, c + 1)); setSaveMessage({text:'', isError:false}); }} disabled={currentIndex === schedules.length - 1} className="p-1.5 hover:bg-white rounded-md disabled:opacity-30"><ChevronRight size={16}/></button>
                       </div>
                     )}
-                    <label className="flex items-center gap-2 py-2 px-3 rounded-md text-sm bg-purple-600 hover:bg-purple-700 text-white cursor-pointer transition font-medium shadow-sm">
+                    {/* BOTÃO DE IMPORTAR - Visível em todas as telas */}
+                    <label className="flex items-center gap-2 py-2 px-3 rounded-md text-sm bg-purple-600 hover:bg-purple-700 text-white cursor-pointer transition font-medium shadow-sm shrink-0">
                         <UploadCloud size={16} /> 
                         <span className="hidden sm:inline">{hasData ? 'Importar Outro' : 'Importar RTF'}</span>
+                        <span className="sm:hidden">{hasData ? 'Trocar' : 'RTF'}</span> {/* Texto menor para mobile */}
                         <input type="file" multiple accept=".rtf, .txt" className="hidden" onChange={handleFilesParse} />
                     </label>
                 </div>
@@ -473,6 +478,7 @@ export default function DesignacoesPage() {
 
             {/* CONTEÚDO COM ROLAGEM */}
             <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50/30 scroll-smooth">
+                {/* ... (Conteúdo do editor TabelaDesignacoes) ... */}
                 
                 {isParsing ? (
                   <div className="flex flex-col items-center justify-center h-full gap-4 animate-in fade-in duration-300">
@@ -515,7 +521,7 @@ export default function DesignacoesPage() {
                       </div>
 
                       {/* Tabela */}
-                      <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-x-auto"> {/* Adicionado overflow-x-auto */}
                           <TabelaDesignacoes 
                               schedule={schedules[currentIndex]}
                               assignments={assignmentsList[currentIndex]}

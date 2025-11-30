@@ -208,7 +208,7 @@ function GerenciarContent() {
             </SheetContent>
         )}
         
-        {/* Conteúdo do Modal de Troca de Grupo (Inalterado) */}
+        {/* Conteúdo do Modal de Troca de Grupo */}
         {isTransferSheetOpen && (
              <SheetContent 
                 side="right" 
