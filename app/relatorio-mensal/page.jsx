@@ -381,7 +381,7 @@ function RelatorioForm() {
                         onChange={handleChange} // Clicável
                         className={checkboxClass} 
                     />
-                    <label htmlFor="pioneiro_regular_local" className={`${checkboxLabelClass} font-medium text-gray-700`}>
+                    <label htmlFor="pioneiro_regular_local" className={`${checkboxLabelClass} text-gray-700`}>
                         Pioneiro Regular
                     </label>
                 </div>

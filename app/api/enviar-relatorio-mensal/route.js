@@ -7,7 +7,6 @@ const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 });
 
-// --- FUNÇÃO AUXILIAR DE DATA ---
 function dmyToISO(dmy) {
   if (!dmy || String(dmy).length < 10) return null;
   const parts = String(dmy).split('/');
@@ -16,21 +15,14 @@ function dmyToISO(dmy) {
   if (isNaN(day) || isNaN(month) || isNaN(year) || year < 1900 || year > 2100) return null;
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
-// --- FIM DA FUNÇÃO DE DATA ---
 
-// --- FUNÇÃO AUXILIAR DE NORMALIZAÇÃO (Remove acentos) ---
 function normalizeString(str) {
   if (!str) return '';
-  // 1. Normaliza para forma NFD (decomposição de caracteres)
-  // 2. Remove todos os diacríticos (acentos) usando regex Unicode
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
-// --- FIM DA FUNÇÃO DE NORMALIZAÇÃO ---
-
 
 export async function POST(req) {
   const body = await req.json();
-  
   const {
     nome_completo: nomeSujeito,
     data_nascimento, 
@@ -39,106 +31,106 @@ export async function POST(req) {
     ...dadosDoRelatorio 
   } = body;
 
-  // 1. LIMPEZA E NORMALIZAÇÃO DO NOME DO USUÁRIO
-  const nomeCompletoLimpo = nomeSujeito.trim();
-  const nomeCompletoNormalizado = normalizeString(nomeCompletoLimpo).toLowerCase(); 
-  
+  const nomeCompletoNormalizado = normalizeString(nomeSujeito.trim()).toLowerCase(); 
   const isoDataNascimento = dmyToISO(data_nascimento); 
   const dmyDataNascimento = data_nascimento;           
 
   if (!isoDataNascimento) {
-    console.error("[ERRO] Data de Nascimento inválida:", data_nascimento);
-    return NextResponse.json(
-      { message: 'Data de Nascimento está em formato inválido. Use dd/mm/aaaa.' },
-      { status: 400 }
-    );
+    return NextResponse.json({ message: 'Data inválida.' }, { status: 400 });
   }
 
   const client = await pool.connect();
 
   try {
-    
-    // --- 1. LÓGICA ROBUSTA DE PESQUISA POR PALAVRAS ---
-    const searchTerms = nomeCompletoNormalizado.split(/\s+/).filter(word => word.length >= 2); 
-    
-    if (searchTerms.length === 0) {
-        return NextResponse.json(
-            { message: 'Digite pelo menos a primeira parte do seu nome para a pesquisa.' },
-            { status: 400 }
-        );
-    }
-    
-    const nameSearchConditions = searchTerms.map((_, index) => {
-        const placeholderIndex = index + 3; 
-        // Pesquisa ILIKE (case-insensitive) em Nome Completo ou Nome Chamado
-        return `(p.nome_completo ILIKE $${placeholderIndex} OR COALESCE(p.nome_chamado, '') ILIKE $${placeholderIndex})`;
-    }).join(' AND ');
-    
-    const searchValues = searchTerms.map(term => `%${term}%`);
-
-    const publicadorRes = await client.query(
-      `SELECT p.id 
-       FROM publicadores p
-       WHERE (p.data_nascimento = $1 OR p.data_nascimento = $2)
-       AND ${nameSearchConditions}`,
-      [
-        isoDataNascimento,        // $1
-        dmyDataNascimento,        // $2
-        ...searchValues           // $3, $4, $5...
-      ]
+    // ---------------------------------------------------------
+    // 1. BUSCA INTELIGENTE (Resolve o problema Terezinha/Fabrício)
+    // ---------------------------------------------------------
+    const candidatesRes = await client.query(
+      `SELECT id, nome_completo, nome_chamado 
+       FROM publicadores 
+       WHERE data_nascimento::text = $1 OR data_nascimento::text = $2`,
+      [isoDataNascimento, dmyDataNascimento]
     );
 
-    if (publicadorRes.rows.length === 0 || publicadorRes.rows.length > 1) {
-      const message = publicadorRes.rows.length === 0
-          ? 'Identificação falhou. Verifique se Nome e Data de Nascimento estão corretos.'
-          : 'Identificação falhou. Mais de um publicador foi encontrado com esses dados. Por favor, digite seu nome mais completo.';
-      return NextResponse.json({ message }, { status: publicadorRes.rows.length === 0 ? 404 : 400 });
+    let publicadorEncontrado = null;
+    const termosDigitados = nomeCompletoNormalizado.split(/\s+/).filter(w => w.length > 1);
+
+    if (candidatesRes.rows.length > 0) {
+        const matches = candidatesRes.rows.filter(p => {
+            const nomeBancoNorm = normalizeString(p.nome_completo).toLowerCase();
+            const apelidoBancoNorm = normalizeString(p.nome_chamado || '').toLowerCase();
+            return termosDigitados.every(termo => 
+                nomeBancoNorm.includes(termo) || apelidoBancoNorm.includes(termo)
+            );
+        });
+
+        if (matches.length === 1) publicadorEncontrado = matches[0];
+        else if (matches.length > 1) return NextResponse.json({ message: 'Nome ambíguo. Digite o nome completo.' }, { status: 400 });
+    }
+
+    if (!publicadorEncontrado) {
+      return NextResponse.json({ message: 'Dados não conferem. Verifique Nome e Data.' }, { status: 404 });
     }
     
-    const publicador = publicadorRes.rows[0];
+    const publicador = publicadorEncontrado;
 
-    // --- 2. VERIFICAÇÃO DE STATUS DE RELATÓRIO ---
+    // ---------------------------------------------------------
+    // 2. VERIFICAÇÃO INTELIGENTE DE DUPLICIDADE
+    // ---------------------------------------------------------
     
-    // a) Checa se o relatório de entrada é VAZIO (anulação)
-    const estudos = parseInt(dadosDoRelatorio.estudos_biblicos) || 0;
-    const horas = parseInt(dadosDoRelatorio.horas) || 0;
-
-    const relatorioVazio = !dadosDoRelatorio.participou_ministerio &&
-                         !dadosDoRelatorio.pioneiro_auxiliar &&
-                         estudos === 0 &&
-                         horas === 0;
+    // a) O usuário está enviando um relatório vazio (querendo anular)?
+    const novosEstudos = parseInt(dadosDoRelatorio.estudos_biblicos) || 0;
+    const novasHoras = parseInt(dadosDoRelatorio.horas) || 0;
+    const isNovoRelatorioVazio = !dadosDoRelatorio.participou_ministerio &&
+                                 !dadosDoRelatorio.pioneiro_auxiliar &&
+                                 novosEstudos === 0 && novasHoras === 0;
     
-    // b) Checa se JÁ EXISTE um relatório para o período
+    // b) O que já existe no banco?
     const existingReportRes = await client.query(
-      `SELECT publicador_id
-       FROM relatorios_mensais 
+      `SELECT * FROM relatorios_mensais 
        WHERE publicador_id = $1 AND mes = $2 AND ano_servico = $3`,
       [publicador.id, mes, ano_servico]
     );
-    const reportExists = existingReportRes.rows.length > 0;
-    
-    // --- 3. LÓGICA DE BLOQUEIO / INSERÇÃO / ANULAÇÃO ---
 
-    if (relatorioVazio) {
-        // CASO A: ANULAÇÃO (Relatório de entrada é vazio)
-        const deleteRes = await client.query(
-            `DELETE FROM relatorios_mensais 
-             WHERE publicador_id = $1 AND mes = $2 AND ano_servico = $3`,
-            [publicador.id, mes, ano_servico]
-        );
+    // Se já existe, vamos analisar se é um relatório "Real" ou um "Fantasma/Vazio"
+    let precisaBloquear = false;
+
+    if (existingReportRes.rows.length > 0) {
+        const relExistente = existingReportRes.rows[0];
         
-        const message = deleteRes.rowCount > 0 ? 'Relatório anulado com sucesso.' : 'Nenhum relatório a ser anulado.';
-        return NextResponse.json({ message }, { status: 200 });
+        // Verifica se o registro existente tem dados relevantes
+        const temDadosRelevantes = relExistente.participou_ministerio === true || 
+                                   (relExistente.horas && relExistente.horas > 0) || 
+                                   (relExistente.estudos_biblicos && relExistente.estudos_biblicos > 0);
+
+        if (temDadosRelevantes) {
+            // Se tem dados, BLOQUEIA (Protege o relatório preenchido)
+            precisaBloquear = true;
+        } else {
+            // Se existe mas é "Não participou" e sem horas (como o de Dezembro no seu log),
+            // PERMITE SOBRESCREVER. Removemos ele agora para inserir o novo limpo.
+            await client.query(
+                `DELETE FROM relatorios_mensais WHERE id = $1`,
+                [relExistente.id]
+            );
+        }
+    }
+
+    if (isNovoRelatorioVazio) {
+        // CASO A: ANULAÇÃO (Se o usuário enviou vazio, garantimos que foi deletado acima)
+        // Se não existia, deletar não faz nada, tudo certo.
+        return NextResponse.json({ message: 'Relatório anulado/limpo com sucesso.' }, { status: 200 });
         
-    } else if (reportExists) {
-        // CASO B: BLOQUEIO (Relatório de entrada NÃO é vazio E JÁ EXISTE)
+    } else if (precisaBloquear) {
+        // CASO B: BLOQUEIO (Tinha dados reais lá)
         return NextResponse.json(
-            { message: `Erro! Relatorio de ${mes} já enviado` },
+            { message: `Erro! O relatório de ${mes}/${ano_servico} já consta preenchido no sistema.` },
             { status: 400 }
         );
         
     } else {
-        // CASO C: INSERÇÃO (Relatório de entrada NÃO é vazio E NÃO EXISTE)
+        // CASO C: INSERÇÃO (Caminho livre)
+        // Aqui chegamos se não existia nada OU se existia apenas um registro vazio que deletamos acima.
         await client.query(
           `INSERT INTO relatorios_mensais 
            (publicador_id, mes, ano_servico, participou_ministerio, pioneiro_auxiliar, estudos_biblicos, horas, observacoes)
@@ -155,20 +147,12 @@ export async function POST(req) {
           ]
         );
 
-        return NextResponse.json(
-          { message: 'Relatório enviado com sucesso!' },
-          { status: 200 }
-        );
+        return NextResponse.json({ message: 'Relatório enviado com sucesso!' }, { status: 200 });
     }
 
   } catch (err) {
-    console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-    console.error('!!! ERRO DURANTE A TRANSAÇÃO: ROLLBACK !!!', err);
-    console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-    return NextResponse.json(
-      { message: 'Erro interno ao salvar/atualizar o relatório.' },
-      { status: 500 }
-    );
+    console.error('Erro no envio:', err);
+    return NextResponse.json({ message: 'Erro interno ao salvar.' }, { status: 500 });
   } finally {
     client.release();
   }
