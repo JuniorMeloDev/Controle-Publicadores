@@ -1,10 +1,8 @@
 @import "tailwindcss";
 
-
 :root {
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;
-  /* ... cores mantidas ... */
   --card: 0 0% 100%;
   --card-foreground: 240 10% 3.9%;
   --popover: 0 0% 100%;
@@ -25,7 +23,6 @@
   --radius: 0.5rem;
 }
 
-/* ... (classe .dark mantida) ... */
 .dark {
   --background: 240 10% 3.9%;
   --foreground: 0 0% 98%;
@@ -48,32 +45,41 @@
   --ring: 240 4.9% 83.9%;
 }
 
+/* --- CONFIGURAÇÃO DE IMPRESSÃO OTIMIZADA --- */
 
-/* --- CONFIGURAÇÃO DE IMPRESSÃO EXATA (A4) --- */
-
+/* Esconde o container de impressão na tela normal */
 .printable-content {
   display: none;
 }
 
 @media print {
+  /* Configuração da Página */
   @page {
     size: A4 portrait;
-    margin: 5mm; /* Pequena margem de segurança para a impressora */
+    margin: 10mm; /* Margem segura para não cortar em impressoras físicas */
   }
 
+  /* Reset crítico para permitir múltiplas páginas.
+     Removemos height: 100% e overflow: hidden.
+  */
   html, body {
     width: 100%;
-    height: 100%;
+    height: auto !important; /* Permite que o corpo cresça */
+    overflow: visible !important; /* Permite que o conteúdo transborde para a próxima página */
     margin: 0 !important;
     padding: 0 !important;
-    overflow: hidden !important;
     background-color: white !important;
   }
 
+  /* Oculta tudo por padrão */
   body * {
     visibility: hidden;
   }
 
+  /* Torna visível apenas o conteúdo de impressão e seus filhos.
+     Posicionamento absoluto garante que comece do topo, 
+     mas não limita a altura.
+  */
   .printable-content, 
   .printable-content * {
     visibility: visible !important;
@@ -81,27 +87,45 @@
 
   .printable-content {
     display: block !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100% !important;
-    
-    /* Força a altura exata de uma página A4 menos as margens */
-    /* height: 287mm !important; */
-    background-color: white !important;
-    z-index: 9999;
+    /* Height removido para permitir fluxo natural */
   }
 
-  /* Reseta displays */
-  .printable-content .flex { display: flex !important; }
+  /* Utilitários para quebra de página */
+  .print-page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  /* Evita quebras de página dentro de elementos importantes (como linhas de tabela) */
+  tr, td, th {
+    page-break-inside: avoid;
+  }
+
+  /* Reseta displays flex para funcionarem na impressão */
+  .printable-content .flex { 
+    display: flex !important; 
+  }
   
-  /* CORES PRETAS PARA IMPRESSÃO NÍTIDA */
-  .printable-content p, span, label, td, th, h1, h2, h3, div {
+  /* Cores pretas para impressão nítida e economia de tinta */
+  .printable-content p, 
+  .printable-content span, 
+  .printable-content label, 
+  .printable-content td, 
+  .printable-content th, 
+  .printable-content h1, 
+  .printable-content h2, 
+  .printable-content h3, 
+  .printable-content div {
     color: #000000 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
+  /* Remove estilos de input para parecer texto puro */
   .printable-content input {
     background: transparent !important;
     border: none !important;
@@ -109,10 +133,17 @@
     color: black !important;
   }
 
-  .printable-content table, th, td, .border, .border-2, .border-b {
+  /* Bordas nítidas */
+  .printable-content table, 
+  .printable-content th, 
+  .printable-content td, 
+  .printable-content .border, 
+  .printable-content .border-2, 
+  .printable-content .border-b {
     border-color: #000000 !important;
   }
   
-  .printable-content button { border: none !important; padding: 0 !important; }
+  /* Esconde elementos de interface */
+  .printable-content button { display: none !important; }
   .printable-content svg { display: none !important; }
 }

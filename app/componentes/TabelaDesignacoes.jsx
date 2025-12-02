@@ -14,17 +14,14 @@ const normalizeText = (text) => {
 const ConteudoParteEstilizado = ({ text, section }) => {
   if (!text) return null;
 
-  // Garante que "MIN" ou "Min" virem "min" minúsculo
   const normalizeMinutes = (str) => {
     return str.replace(/(\d+)\s*MIN/g, '$1 min').replace(/(\d+)\s*Min/g, '$1 min');
   };
 
-  // Formata fontes entre parênteses em Azul Claro (Cyan)
   const formatSource = (str) => {
     const parts = str.split(/(\([^)]+\))/g);
     return parts.map((part, i) => {
       if (part.startsWith('(') && part.endsWith(')')) {
-        // Se for apenas o tempo (ex: (10 min)), não colore de azul claro
         if (part.includes('min')) return part; 
         return <span key={i} className="text-cyan-700 font-normal">{part}</span>;
       }
@@ -34,7 +31,6 @@ const ConteudoParteEstilizado = ({ text, section }) => {
 
   const textFixed = normalizeMinutes(text);
 
-  // 1. TESOUROS: Azul Escuro
   if (section === 'treasures') {
     const match = textFixed.match(/^(.*?)(\(\d+\s*min\))(.*)$/i);
     if (match) {
@@ -62,7 +58,6 @@ const ConteudoParteEstilizado = ({ text, section }) => {
     return <span className="text-blue-900 font-bold">{textFixed}</span>;
   }
 
-  // 2. MINISTÉRIO: Amarelo Escuro (Título) + Preto (Resto)
   if (section === 'ministry') {
     const match = textFixed.match(/^(.*?)(\(\d+\s*min\))(:?)\s*(.*)$/i);
 
@@ -85,7 +80,6 @@ const ConteudoParteEstilizado = ({ text, section }) => {
     return <span className="text-amber-700 font-bold uppercase">{textFixed}</span>;
   }
 
-  // 3. VIDA CRISTÃ: Vermelho (Título) + Preto (Resto)
   if (section === 'living') {
     if (textFixed.toLowerCase().includes('cântico')) {
       return <span className="text-blue-800 font-bold">{textFixed}</span>;
@@ -259,9 +253,6 @@ const SelecaoPublicador = ({ partId, publicadores, assignments, handleAssignment
 export default function TabelaDesignacoes({ schedule, assignments, weekText, publicadores, onAssignmentChange, isPrintView = false }) {
   
   const widthNameCol = "w-1/3"; 
-  
-  // --- ESTILOS DE CÉLULAS ATUALIZADOS ---
-  // Adicionado print:py-3 para aumentar o espaçamento vertical e preencher a página
   const tdTime = "bg-gray-200 border border-gray-600 py-2 print:py-3 px-1 font-bold text-center w-16 align-middle text-base text-black print:bg-gray-200 print:text-black";
   const tdPart = "bg-white border border-gray-600 py-2 print:py-3 px-3 align-middle text-left text-base text-black";
   const tdName = `bg-white border border-gray-600 p-0 ${widthNameCol} align-middle text-center text-base text-black`;
@@ -279,13 +270,7 @@ export default function TabelaDesignacoes({ schedule, assignments, weekText, pub
       print:h-[290mm] print:w-full print:mb-0 
       print:flex print:flex-col
       page-break-inside-avoid p-4 print:p-0
-
     ">
-      {/* ALTERAÇÕES FEITAS:
-         - print:h-[290mm]: Altura de quase toda a folha A4 (297mm) para forçar o esticamento.
-         - Removido print:mt-12 para voltar ao topo.
-         - print:py-3 nas células (tdTime, tdPart) para aumentar altura das linhas.
-      */}
       
       {/* Cabeçalho */}
       <div className="flex border-b-[3px] border-black mb-0.5 shrink-0">
@@ -346,7 +331,9 @@ export default function TabelaDesignacoes({ schedule, assignments, weekText, pub
           {/* SEÇÃO MINISTÉRIO */}
           <tr><td colSpan="3" className={sectionHeader}>FAÇA SEU MELHOR NO MINISTÉRIO</td></tr>
           {schedule.ministry?.map((part, index) => {
-            const isDiscurso = part.title.toLowerCase().includes('discurso:');
+            // CORREÇÃO: Verificação flexível para 'discurso' (sem os dois pontos rígidos)
+            const isDiscurso = part.title.toLowerCase().includes('discurso');
+            
             return (
               <tr key={`m-${index}`}>
                 <td className={tdTime}></td>

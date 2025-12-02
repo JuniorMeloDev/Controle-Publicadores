@@ -13,6 +13,8 @@ function getPartTitles(scheduleData) {
     'oracao_final': 'Oração Final',
     'comentarios_iniciais': scheduleData.openingComments || 'Comentários Iniciais',
     'comentarios_finais': scheduleData.finalComments || 'Comentários Finais',
+    // 1. CORREÇÃO: Adicionamos o mapeamento para o Cântico do Meio ser salvo
+    'cantico_meio': scheduleData.middleSong || 'Cântico do Meio',
   };
 
   scheduleData.treasures?.forEach((part, index) => {
@@ -20,7 +22,9 @@ function getPartTitles(scheduleData) {
   });
   
   scheduleData.ministry?.forEach((part, index) => {
+    // 2. CORREÇÃO: Verificação mais flexível para 'discurso' (sem os dois pontos obrigatórios)
     const isDiscurso = part.title.toLowerCase().includes('discurso');
+    
     if (isDiscurso) {
       titles[`ministerio_${index}`] = part.title;
     } else {
@@ -30,7 +34,15 @@ function getPartTitles(scheduleData) {
   });
 
   scheduleData.living?.forEach((part, index) => {
-    titles[`vida_${index}`] = part.title;
+    // 3. CORREÇÃO: Detectar Estudo Bíblico para salvar as duas partes (Dirigente/Leitor)
+    const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
+    
+    if (isBibleStudy) {
+       titles[`vida_${index}_1`] = part.title; // Dirigente
+       titles[`vida_${index}_2`] = part.title; // Leitor
+    } else {
+       titles[`vida_${index}`] = part.title;
+    }
   });
 
   return titles;
@@ -49,16 +61,7 @@ export async function POST(request) {
   try {
     await client.query('BEGIN');
 
-    // 1. Cria a tabela para guardar o JSON do programa (se não existir)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS reunioes_dados (
-        data_reuniao DATE PRIMARY KEY,
-        dados_json JSONB NOT NULL,
-        descricao_texto TEXT
-      );
-    `);
-
-    // 2. Salva ou Atualiza o Programa da Reunião (JSON)
+    // 1. Salva ou Atualiza o Programa da Reunião (JSON)
     await client.query(`
       INSERT INTO reunioes_dados (data_reuniao, dados_json, descricao_texto)
       VALUES ($1, $2, $3)
@@ -66,33 +69,38 @@ export async function POST(request) {
       DO UPDATE SET dados_json = $2, descricao_texto = $3
     `, [meetingDate, JSON.stringify(scheduleData), scheduleData.weekDate]);
 
-    // 3. Salva as Designações (Publicadores)
+    // 2. Salva as Designações (Publicadores)
     const partTitles = getPartTitles(scheduleData);
     const weekDateString = scheduleData.weekDate || 'Semana';
 
     const pubRes = await client.query('SELECT id, nome_completo FROM publicadores');
     const publicadorMap = new Map(pubRes.rows.map(p => [p.nome_completo, p.id]));
 
+    // Limpa designações anteriores desta data para evitar duplicidade ou lixo
+    await client.query('DELETE FROM designacoes_reuniao WHERE data_reuniao = $1', [meetingDate]);
+
     const insertQuery = `
       INSERT INTO designacoes_reuniao (publicador_id, data_reuniao, descricao_semana, nome_parte)
       VALUES ($1, $2, $3, $4)
-      ON CONFLICT (publicador_id, data_reuniao, nome_parte) DO NOTHING
     `;
-    
-    // Remove designações anteriores dessa data para evitar duplicatas/lixo se mudar o nome da parte
-    await client.query('DELETE FROM designacoes_reuniao WHERE data_reuniao = $1', [meetingDate]);
 
+    // Itera sobre as designações enviadas pelo front
     for (const [partId, nomeCompleto] of Object.entries(assignments)) {
       if (nomeCompleto && publicadorMap.has(nomeCompleto)) {
         const publicadorId = publicadorMap.get(nomeCompleto);
-        const nomeParte = partTitles[partId] || partId; 
+        
+        // Pega o título real da parte usando o ID (ex: 'vida_0_1' vira 'Estudo Bíblico...')
+        const nomeParte = partTitles[partId]; 
 
-        await client.query(insertQuery, [
-          publicadorId,
-          meetingDate,
-          weekDateString,
-          nomeParte
-        ]);
+        // Só salva se tivermos um título de parte válido mapeado
+        if (nomeParte) {
+            await client.query(insertQuery, [
+              publicadorId,
+              meetingDate,
+              weekDateString,
+              nomeParte
+            ]);
+        }
       }
     }
 
