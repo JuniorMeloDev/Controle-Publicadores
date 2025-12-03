@@ -13,7 +13,6 @@ function getPartTitles(scheduleData) {
     'oracao_final': 'Oração Final',
     'comentarios_iniciais': scheduleData.openingComments || 'Comentários Iniciais',
     'comentarios_finais': scheduleData.finalComments || 'Comentários Finais',
-    // 1. CORREÇÃO: Adicionamos o mapeamento para o Cântico do Meio ser salvo
     'cantico_meio': scheduleData.middleSong || 'Cântico do Meio',
   };
 
@@ -22,9 +21,7 @@ function getPartTitles(scheduleData) {
   });
   
   scheduleData.ministry?.forEach((part, index) => {
-    // 2. CORREÇÃO: Verificação mais flexível para 'discurso' (sem os dois pontos obrigatórios)
     const isDiscurso = part.title.toLowerCase().includes('discurso');
-    
     if (isDiscurso) {
       titles[`ministerio_${index}`] = part.title;
     } else {
@@ -34,12 +31,10 @@ function getPartTitles(scheduleData) {
   });
 
   scheduleData.living?.forEach((part, index) => {
-    // 3. CORREÇÃO: Detectar Estudo Bíblico para salvar as duas partes (Dirigente/Leitor)
     const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
-    
     if (isBibleStudy) {
-       titles[`vida_${index}_1`] = part.title; // Dirigente
-       titles[`vida_${index}_2`] = part.title; // Leitor
+       titles[`vida_${index}_1`] = part.title; 
+       titles[`vida_${index}_2`] = part.title; 
     } else {
        titles[`vida_${index}`] = part.title;
     }
@@ -61,7 +56,7 @@ export async function POST(request) {
   try {
     await client.query('BEGIN');
 
-    // 1. Salva ou Atualiza o Programa da Reunião (JSON)
+    // 1. Salva o Programa
     await client.query(`
       INSERT INTO reunioes_dados (data_reuniao, dados_json, descricao_texto)
       VALUES ($1, $2, $3)
@@ -69,14 +64,15 @@ export async function POST(request) {
       DO UPDATE SET dados_json = $2, descricao_texto = $3
     `, [meetingDate, JSON.stringify(scheduleData), scheduleData.weekDate]);
 
-    // 2. Salva as Designações (Publicadores)
+    // 2. Salva as Designações
     const partTitles = getPartTitles(scheduleData);
     const weekDateString = scheduleData.weekDate || 'Semana';
 
+    // Busca IDs
     const pubRes = await client.query('SELECT id, nome_completo FROM publicadores');
     const publicadorMap = new Map(pubRes.rows.map(p => [p.nome_completo, p.id]));
 
-    // Limpa designações anteriores desta data para evitar duplicidade ou lixo
+    // Limpa anteriores
     await client.query('DELETE FROM designacoes_reuniao WHERE data_reuniao = $1', [meetingDate]);
 
     const insertQuery = `
@@ -84,15 +80,11 @@ export async function POST(request) {
       VALUES ($1, $2, $3, $4)
     `;
 
-    // Itera sobre as designações enviadas pelo front
     for (const [partId, nomeCompleto] of Object.entries(assignments)) {
       if (nomeCompleto && publicadorMap.has(nomeCompleto)) {
         const publicadorId = publicadorMap.get(nomeCompleto);
-        
-        // Pega o título real da parte usando o ID (ex: 'vida_0_1' vira 'Estudo Bíblico...')
         const nomeParte = partTitles[partId]; 
 
-        // Só salva se tivermos um título de parte válido mapeado
         if (nomeParte) {
             await client.query(insertQuery, [
               publicadorId,
@@ -105,7 +97,7 @@ export async function POST(request) {
     }
 
     await client.query('COMMIT');
-    return NextResponse.json({ message: 'Designações e Programa salvos com sucesso!' }, { status: 201 });
+    return NextResponse.json({ message: 'Salvo com sucesso!' }, { status: 201 });
 
   } catch (err) {
     await client.query('ROLLBACK');

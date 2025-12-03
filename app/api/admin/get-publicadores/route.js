@@ -14,6 +14,7 @@ export async function GET() {
         p.nome_completo, 
         p.data_nascimento, 
         p.data_batismo,
+        p.email,
         p.nome_chamado,
         g.nome_grupo, 
         p.privilegios, 

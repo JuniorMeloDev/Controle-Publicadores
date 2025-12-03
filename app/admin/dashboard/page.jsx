@@ -298,7 +298,7 @@ export default function Dashboard() {
                   <CardTitle className="text-gray-900 group-hover:text-purple-700 transition-colors">
                     Gerenciar Publicadores
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-gray-600">
                     Visualizar lista, editar dados e adicionar novos publicadores.
                   </CardDescription>
                 </CardHeader>
@@ -319,7 +319,7 @@ export default function Dashboard() {
                   <CardTitle className="text-gray-900 group-hover:text-blue-700 transition-colors">
                     Designações da Reunião
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-gray-600">
                     Gerar programa da reunião importando arquivos RTF.
                   </CardDescription>
                 </CardHeader>
