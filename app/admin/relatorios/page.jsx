@@ -1,11 +1,32 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/app/components/ui/card';
-import { FileText, BarChart, Calendar, ArrowRight } from 'lucide-react';
+import { FileText, BarChart, Calendar, ArrowRight, Lock } from 'lucide-react';
 import Link from 'next/link';
 
 export default function RelatoriosHubPage() {
+  const [isAnciao, setIsAnciao] = useState(false);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch('/api/usuario-atual');
+        if (res.ok) {
+          const data = await res.json();
+          setIsAnciao(data.isAnciao);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsLoadingUser(false);
+      }
+    };
+    fetchUser();
+  }, []);
+
   const reports = [
     {
       title: "Registro de Publicador (S-21)",
@@ -15,7 +36,8 @@ export default function RelatoriosHubPage() {
       color: "text-blue-600",
       bgColor: "bg-blue-50",
       hoverRing: "group-hover:ring-blue-100",
-      active: true
+      active: true,
+      needsElder: true
     },
     {
        title: "Análise de Campo",
@@ -48,33 +70,52 @@ export default function RelatoriosHubPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-           {reports.map((report, idx) => (
-             <Link 
-                key={idx} 
-                href={report.href} 
-                className={`block group h-full ${!report.active ? 'pointer-events-none opacity-60 grayscale' : ''}`}
-             >
-                <Card className={`h-full border-gray-200 bg-white transition-all cursor-pointer ${report.active ? `hover:border-${report.color.split('-')[1]}-300 hover:shadow-md group-hover:ring-2 ${report.hoverRing}` : ''}`}>
-                  <CardHeader>
-                    <div className={`mb-2 w-10 h-10 rounded-full ${report.bgColor} flex items-center justify-center transition-colors`}>
-                      <report.icon className={`w-5 h-5 ${report.color}`} />
-                    </div>
-                    <CardTitle className={`text-gray-900 ${report.active ? 'group-hover:text-primary transition-colors' : ''}`}>
-                      {report.title}
-                    </CardTitle>
-                    <CardDescription className="text-gray-600">
-                      {report.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className={`flex items-center text-sm font-medium mt-2 ${report.active ? 'text-primary' : 'text-gray-400'}`}>
-                      {report.active ? 'Acessar' : 'Em breve'} 
-                      {report.active && <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" />}
-                    </div>
-                  </CardContent>
-                </Card>
-             </Link>
-           ))}
+           {reports.map((report, idx) => {
+             const isLocked = !isLoadingUser && report.needsElder && !isAnciao;
+             const isActive = report.active && !isLocked;
+             
+             return (
+              <Link 
+                  key={idx} 
+                  href={isActive ? report.href : '#'} 
+                  className={`block group h-full ${!isActive ? 'cursor-not-allowed' : ''}`}
+                  onClick={(e) => !isActive && e.preventDefault()}
+              >
+                  <Card className={`h-full border-gray-200 bg-white transition-all 
+                      ${isActive 
+                        ? `cursor-pointer hover:border-${report.color.split('-')[1]}-300 hover:shadow-md group-hover:ring-2 ${report.hoverRing}` 
+                        : 'opacity-75 grayscale-[0.5]'}
+                  `}>
+                    <CardHeader>
+                      <div className={`mb-2 w-10 h-10 rounded-full flex items-center justify-center transition-colors
+                          ${isLocked ? 'bg-gray-100' : report.bgColor}
+                      `}>
+                        {isLocked ? <Lock className="w-5 h-5 text-gray-500" /> : <report.icon className={`w-5 h-5 ${report.color}`} />}
+                      </div>
+                      <CardTitle className={`text-gray-900 ${isActive ? 'group-hover:text-primary transition-colors' : ''}`}>
+                        {report.title}
+                      </CardTitle>
+                      <CardDescription className="text-gray-600">
+                        {report.description}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className={`flex items-center text-sm font-medium mt-2 
+                          ${isActive ? 'text-primary' : 'text-gray-400'}
+                      `}>
+                        {isLocked ? (
+                            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Apenas Anciãos</span>
+                        ) : (
+                            isActive ? (
+                                <>Acessar <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" /></>
+                            ) : 'Em breve'
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+              </Link>
+             );
+           })}
         </div>
       </div>
     </DashboardLayout>

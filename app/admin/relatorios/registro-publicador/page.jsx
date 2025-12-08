@@ -6,19 +6,43 @@ import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
 import { Checkbox } from '@/app/components/ui/checkbox'; // Assuming you have/will create this, or use standard input
-import { Loader2, Search, Printer, FileText, CheckSquare, Square, Users } from 'lucide-react';
+import { Loader2, Search, Printer, FileText, CheckSquare, Square, Users, Trash2 } from 'lucide-react';
 import S21Card from '@/app/components/relatorios/S21Card';
 
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 import { Suspense } from 'react';
 
 function RelatoriosContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [publicadores, setPublicadores] = useState([]);
   const [grupos, setGrupos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [checkingAuth, setCheckingAuth] = useState(true); // Estágio de verificação de permissão
   
+  // Verificação de Acesso (Apenas Anciãos)
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/usuario-atual');
+        if (res.ok) {
+           const user = await res.json();
+           if (!user.isAnciao) {
+              // Se não for ancião, redireciona
+              router.push('/admin/relatorios'); 
+              return;
+           }
+        }
+      } catch (error) {
+        console.error("Erro ao verificar permissão", error);
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+    checkAuth();
+  }, [router]);
+
   // Estados de Filtro e Seleção
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
@@ -130,7 +154,7 @@ function RelatoriosContent() {
      }
   };
 
-  if (loading) return (
+  if (loading || checkingAuth) return (
      <DashboardLayout>
        <div className="flex h-full items-center justify-center"><Loader2 className="animate-spin text-purple-600" /></div>
      </DashboardLayout>
@@ -170,13 +194,13 @@ function RelatoriosContent() {
                             placeholder="Buscar publicador..." 
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-9"
+                            className="pl-9 text-gray-500"
                          />
                       </div>
                       <select 
                          value={selectedGroup} 
                          onChange={(e) => setSelectedGroup(e.target.value)}
-                         className="h-10 rounded-md border border-gray-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-purple-500"
+                         className="h-10 rounded-md border border-gray-200 text-gray-500 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-purple-500"
                       >
                          <option value="">Todos os Grupos</option>
                          {grupos.map(g => <option key={g} value={g}>{g}</option>)}
@@ -185,6 +209,17 @@ function RelatoriosContent() {
 
                    {/* BOTÕES DE AÇÃO */}
                    <div className="flex gap-2 items-center">
+                       {selectedIds.size > 0 && (
+                           <Button
+                               variant="outline"
+                               size="sm"
+                               onClick={() => setSelectedIds(new Set())}
+                               className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                           >
+                               <Trash2 className="w-4 h-4 mr-2" />
+                               Remover Selecionado(s)
+                           </Button>
+                       )}
                        <span className="text-sm text-gray-500 font-medium">
                           {selectedIds.size} selecionado(s)
                        </span>

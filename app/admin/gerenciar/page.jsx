@@ -140,7 +140,7 @@ function GerenciarContent() {
     <DashboardLayout>
       <div className="flex h-[calc(100vh-7rem)] bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           
-          <div className="flex-1 flex flex-col bg-gray-50/30">
+          <div className="flex-1 flex flex-col bg-gray-50/30 min-w-0">
             {isLoadingList ? (
                 <div className="flex-1 flex items-center justify-center gap-2 text-gray-500">
                 <Loader2 className="animate-spin text-purple-600" /> Carregando...

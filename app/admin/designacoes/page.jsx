@@ -16,7 +16,7 @@ export default function DesignacoesPage() {
          </div>
 
          <Tabs defaultValue="vida-ministerio" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 max-w-lg mb-4">
+            <TabsList className="grid w-full grid-cols-1 md:grid-cols-3 h-auto max-w-lg mb-4 gap-2">
               <TabsTrigger value="vida-ministerio">Vida e Ministério</TabsTrigger>
               <TabsTrigger value="discursos-publicos">Discursos Públicos</TabsTrigger>
               <TabsTrigger value="privilegios-mecanicos">Privilégios Mecânicos</TabsTrigger>

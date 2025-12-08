@@ -71,14 +71,14 @@ export default function FiltroELista({
   return (
     <div className="h-full flex flex-col overflow-hidden bg-white md:bg-gray-50/50">
       <div className="p-4 border-b border-gray-200 shrink-0 bg-white">
-        <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
           <div>
             <h2 className="text-base font-bold text-gray-900">Congregação</h2>
             <p className="text-xs text-gray-500">{publicadores.length} registros</p>
           </div>
           
           {/* GRUPO DE BOTÕES DE AÇÃO: shrink-0 garante que eles não sejam espremidos */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
             
             {/* BOTÃO DE TRANSFERÊNCIA */}
             <button 

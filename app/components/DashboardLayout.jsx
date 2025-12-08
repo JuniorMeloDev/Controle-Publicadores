@@ -299,13 +299,13 @@ export function DashboardLayout({ children }) {
               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
             </Button>
 
-            <div className="relative pl-2 border-l border-gray-100" ref={userMenuRef}>
+            <div className="relative pl-4 border-l border-gray-100" ref={userMenuRef}>
                 <button 
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center gap-3 hover:bg-gray-50 p-1 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-purple-100"
+                  className="flex items-center gap-4 hover:bg-gray-50 py-1.5 px-3 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-purple-100"
                 >
                     <div className="text-right hidden md:block">
-                        <p className="text-sm font-medium text-gray-900">
+                        <p className="text-sm font-medium text-gray-900 whitespace-nowrap">
                             {nomeExibicao}
                         </p>
                         <p className="text-xs text-gray-500">
