@@ -580,6 +580,7 @@ export function LifeMinistryTab() {
       {/* MODAL DE HISTÓRICO (MOBILE) */}
       <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
         <SheetContent side="left" className="p-0 w-72">
+             <SheetTitle className="hidden">Histórico de Designações</SheetTitle>
              <HistorySidebar 
                 items={sidebarItems}
                 month={month}

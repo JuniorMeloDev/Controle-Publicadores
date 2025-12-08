@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Loader2, Users, Save, CheckCircle2, Menu } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
-import { Sheet, SheetContent } from '@/app/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/app/components/ui/sheet';
 import { PublisherCombobox } from '@/app/components/reunioes/PublisherCombobox';
 import { HistorySidebar } from '@/app/components/designacoes/HistorySidebar';
 
@@ -151,6 +151,7 @@ export function MechanicalPrivilegesTab() {
        {/* MOBILE SIDEBAR */}
        <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
             <SheetContent side="left" className="p-0 w-72">
+                 <SheetTitle className="hidden">Histórico de Privilégios</SheetTitle>
                  <HistorySidebar 
                     items={sidebarItems}
                     month={month}

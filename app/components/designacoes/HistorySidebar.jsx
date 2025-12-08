@@ -67,7 +67,7 @@ export function HistorySidebar({
     // Sidebar receives `availableYears` (calculated by parent) and `filteredItems`.
     
     return (
-        <aside className="hidden md:flex w-full md:w-64 border-r border-gray-200 shadow-sm shrink-0 flex-col overflow-hidden bg-white h-full min-h-[500px]">
+        <aside className="flex w-full md:w-64 border-r border-gray-200 shadow-sm shrink-0 flex-col overflow-hidden bg-white h-full min-h-[500px]">
             <div className="p-4 border-b border-gray-100 bg-gray-50/50 space-y-3">
                 <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-base">

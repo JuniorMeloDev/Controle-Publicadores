@@ -6,7 +6,7 @@ import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
-import { Sheet, SheetContent, SheetTrigger } from '@/app/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/app/components/ui/sheet';
 import {
   Dialog,
   DialogContent,
@@ -182,6 +182,7 @@ export function PublicSpeechTab() {
         {/* MOBILE SIDEBAR */}
         <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
             <SheetContent side="left" className="p-0 w-72">
+                 <SheetTitle className="hidden">Histórico de Discursos</SheetTitle>
                  <HistorySidebar 
                     items={sidebarItems}
                     month={month}
