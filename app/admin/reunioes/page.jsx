@@ -9,7 +9,8 @@ import { Label } from '@/app/components/ui/label';
 import { Plus, Calendar, Users, Video, Search, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/app/components/ui/dialog";
-
+import { PublisherCombobox } from '@/app/components/reunioes/PublisherCombobox';
+import { StatusToast } from '@/app/components/ui/status-toast';
 
 export default function ReunioesPage() {
   const [meetings, setMeetings] = useState([]);
@@ -18,9 +19,22 @@ export default function ReunioesPage() {
   const [newMeetingDate, setNewMeetingDate] = useState('');
   const [newMeetingType, setNewMeetingType] = useState('Meio de Semana');
   const [creating, setCreating] = useState(false);
+  const [toast, setToast] = useState(null);
+  
+  // New State for Privileges
+  const [publishers, setPublishers] = useState([]);
+  const [privileges, setPrivileges] = useState({
+     leitor_id: null,
+     indicador_interno_id: null,
+     indicador_externo_volante_id: null,
+     indicador_externo_id: null,
+     volante_id: null,
+     anciao_apoio_id: null
+  });
 
   async function fetchMeetings() {
     try {
+      setLoading(true);
       const res = await fetch('/api/admin/reunioes');
       if (res.ok) {
         const data = await res.json();
@@ -28,6 +42,7 @@ export default function ReunioesPage() {
       }
     } catch (error) {
       console.error('Erro ao buscar reuniões:', error);
+      setToast({ message: 'Erro ao buscar reuniões.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -35,6 +50,8 @@ export default function ReunioesPage() {
 
   useEffect(() => {
     fetchMeetings();
+    // Fetch publishers for the combobox
+    fetch('/api/admin/get-publicadores').then(res => res.json()).then(setPublishers).catch(console.error);
   }, []);
 
   const handleCreateMeeting = async () => {
@@ -44,18 +61,35 @@ export default function ReunioesPage() {
       const res = await fetch('/api/admin/reunioes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: newMeetingDate, tipo: newMeetingType })
+        body: JSON.stringify({ 
+            data: newMeetingDate, 
+            tipo: newMeetingType,
+            ...privileges
+        })
       });
+      
+      const data = await res.json();
       
       if (res.ok) {
         setIsDialogOpen(false);
         setNewMeetingDate('');
+        // Reset privileges
+        setPrivileges({
+            leitor_id: null,
+            indicador_interno_id: null,
+            indicador_externo_volante_id: null,
+            indicador_externo_id: null,
+            volante_id: null,
+            anciao_apoio_id: null
+        });
+        setToast({ message: 'Reunião criada com sucesso!', type: 'success' });
         fetchMeetings();
       } else {
-        alert('Erro ao criar reunião. Verifique se já existe uma nesta data.');
+        setToast({ message: data.message || 'Erro ao criar reunião.', type: 'error' });
       }
     } catch (error) {
        console.error(error);
+       setToast({ message: 'Erro de conexão.', type: 'error' });
     } finally {
       setCreating(false);
     }
@@ -63,7 +97,9 @@ export default function ReunioesPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="p-6 space-y-6">
+        <StatusToast message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
+
         <div className="flex justify-between items-center">
            <div>
              <h1 className="text-2xl font-bold text-gray-900">Gerenciamento de Reuniões</h1>
@@ -76,35 +112,85 @@ export default function ReunioesPage() {
                  <Plus className="w-4 h-4 mr-2" /> Nova Reunião
                </Button>
              </DialogTrigger>
-             <DialogContent>
+             <DialogContent className="bg-white sm:max-w-lg">
                <DialogHeader>
-                 <DialogTitle>Registrar Nova Reunião</DialogTitle>
+                 <DialogTitle className="text-lg font-semibold text-gray-900">Registrar Nova Reunião</DialogTitle>
                </DialogHeader>
-               <div className="space-y-4 py-4">
-                 <div className="space-y-2">
-                   <Label>Data da Reunião</Label>
-                   <Input 
-                      type="date" 
-                      value={newMeetingDate} 
-                      onChange={(e) => setNewMeetingDate(e.target.value)} 
-                   />
+               <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto px-1">
+                 <div className="grid grid-cols-2 gap-4">
+                     <div className="space-y-2">
+                       <Label className="text-gray-700 font-medium">Data da Reunião</Label>
+                       <Input 
+                          type="date" 
+                          value={newMeetingDate} 
+                          onChange={(e) => setNewMeetingDate(e.target.value)} 
+                          className="text-gray-900" 
+                       />
+                     </div>
+                     <div className="space-y-2">
+                       <Label className="text-gray-700 font-medium">Tipo</Label>
+                       <select 
+                          className="w-full border border-gray-300 rounded-md p-2 text-sm text-gray-900 bg-white focus:ring-2 focus:ring-purple-600 focus:border-transparent"
+                          value={newMeetingType}
+                          onChange={(e) => setNewMeetingType(e.target.value)}
+                       >
+                         <option value="Meio de Semana">Meio de Semana</option>
+                         <option value="Fim de Semana">Fim de Semana</option>
+                         <option value="Especial">Especial</option>
+                       </select>
+                     </div>
                  </div>
-                 <div className="space-y-2">
-                   <Label>Tipo</Label>
-                   <select 
-                      className="w-full border border-gray-300 rounded-md p-2 text-sm"
-                      value={newMeetingType}
-                      onChange={(e) => setNewMeetingType(e.target.value)}
-                   >
-                     <option value="Meio de Semana">Meio de Semana</option>
-                     <option value="Fim de Semana">Fim de Semana</option>
-                     <option value="Especial">Especial</option>
-                   </select>
+
+                 <div className="pt-4 border-t border-gray-100">
+                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                        <Users className="w-4 h-4 text-purple-600" />
+                        Privilégios Mecânicos
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {newMeetingType === 'Fim de Semana' && (
+                            <PublisherCombobox 
+                                label="Leitor" 
+                                publishers={publishers}
+                                value={privileges.leitor_id}
+                                onChange={(val) => setPrivileges(p => ({...p, leitor_id: val}))}
+                            />
+                        )}
+                        <PublisherCombobox 
+                            label="Indicador Int." 
+                            publishers={publishers}
+                            value={privileges.indicador_interno_id}
+                            onChange={(val) => setPrivileges(p => ({...p, indicador_interno_id: val}))}
+                        />
+                        <PublisherCombobox 
+                            label="Ind. Ext/Volante" 
+                            publishers={publishers}
+                            value={privileges.indicador_externo_volante_id}
+                            onChange={(val) => setPrivileges(p => ({...p, indicador_externo_volante_id: val}))}
+                        />
+                        <PublisherCombobox 
+                            label="Indicador Ext." 
+                            publishers={publishers}
+                            value={privileges.indicador_externo_id}
+                            onChange={(val) => setPrivileges(p => ({...p, indicador_externo_id: val}))}
+                        />
+                        <PublisherCombobox 
+                            label="Volante" 
+                            publishers={publishers}
+                            value={privileges.volante_id}
+                            onChange={(val) => setPrivileges(p => ({...p, volante_id: val}))}
+                        />
+                        <PublisherCombobox 
+                            label="Ancião de Apoio" 
+                            publishers={publishers}
+                            value={privileges.anciao_apoio_id}
+                            onChange={(val) => setPrivileges(p => ({...p, anciao_apoio_id: val}))}
+                        />
+                    </div>
                  </div>
                </div>
                <DialogFooter>
-                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-                 <Button onClick={handleCreateMeeting} disabled={creating} className="bg-purple-600">
+                 <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="border-gray-300 text-gray-700 font-medium hover:bg-gray-50 hover:text-gray-900">Cancelar</Button>
+                 <Button onClick={handleCreateMeeting} disabled={creating} className="bg-purple-600 hover:bg-purple-700 text-white">
                     {creating ? <Loader2 className="animate-spin w-4 h-4" /> : 'Criar'}
                  </Button>
                </DialogFooter>

@@ -143,7 +143,7 @@ export function DashboardLayout({ children }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+    <div className="h-screen overflow-hidden bg-gray-50 flex flex-col md:flex-row">
       
       {/* === MODAL DE ALTERAR SENHA === */}
       {isPasswordModalOpen && (
@@ -367,7 +367,7 @@ export function DashboardLayout({ children }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-6 md:p-8 print:p-0 print:overflow-visible print:bg-white">
+        <main className="flex-1 overflow-y-auto bg-gray-50 p-2 md:p-2 print:p-0 print:overflow-visible print:bg-white">
             {children}
         </main>
       </div>
