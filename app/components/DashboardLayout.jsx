@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
+import { GlobalSearch } from '@/app/components/GlobalSearch';
 
 // Definição dos menus do sistema
 const navigation = [
@@ -291,13 +292,7 @@ export function DashboardLayout({ children }) {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="relative hidden sm:block">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Buscar..."
-                className="pl-10 w-64 bg-gray-50 border-gray-200 focus:bg-white transition-all text-gray-600"
-              />
-            </div>
+            <GlobalSearch />
             
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="w-5 h-5 text-gray-500" />

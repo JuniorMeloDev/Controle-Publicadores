@@ -9,7 +9,10 @@ import { Checkbox } from '@/app/components/ui/checkbox'; // Assuming you have/wi
 import { Loader2, Search, Printer, FileText, CheckSquare, Square, Users } from 'lucide-react';
 import S21Card from '@/app/components/relatorios/S21Card';
 
+import { useSearchParams } from 'next/navigation';
+
 export default function RelatoriosPage() {
+  const searchParams = useSearchParams();
   const [publicadores, setPublicadores] = useState([]);
   const [grupos, setGrupos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,6 +21,22 @@ export default function RelatoriosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
+  
+  // Auto-Select from URL
+  useEffect(() => {
+     if (!loading && publicadores.length > 0) {
+        const idParam = searchParams.get('id');
+        if (idParam) {
+            const pubExists = publicadores.find(p => p.id === idParam || p.id === parseInt(idParam));
+            if (pubExists) {
+                setSelectedIds(new Set([pubExists.id]));
+                // Optional: Filter to show only this one or just highlight? 
+                // Let's filter the view to this publisher too for clarity
+                setSearchTerm(pubExists.nome_completo); 
+            }
+        }
+     }
+  }, [loading, publicadores, searchParams]);
   
   // Estado de Impressão
   const [isPrinting, setIsPrinting] = useState(false);

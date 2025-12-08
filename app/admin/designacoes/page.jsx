@@ -1,5 +1,7 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
+
 import { useState, useEffect, useMemo } from 'react';
 import { DashboardLayout } from '@/app/components/DashboardLayout'; 
 import { Loader2, Printer, UploadCloud, Save, ChevronLeft, ChevronRight, Calendar, RefreshCw, History, FileText, X, Mail, MessageCircle, Plus, CheckCircle, AlertTriangle, Menu } from 'lucide-react';
@@ -256,6 +258,29 @@ export default function DesignacoesPage() {
       return () => clearTimeout(timer);
     }
   }, [toastData]);
+
+  // --- MODAL DE DESIGNAÇÕES POR PUBLICADOR (DEEP LINK) ---
+  const searchParams = useSearchParams(); // Requires: import { useSearchParams } from 'next/navigation';
+  const [pubModalData, setPubModalData] = useState({ open: false, name: '', assignments: [] });
+
+  useEffect(() => {
+    const highlightId = searchParams.get('highlight');
+    if (highlightId) {
+        // Fetch specific publisher assignments
+        fetch(`/api/admin/get-designacoes-publicador?id=${highlightId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.assignments) {
+                    setPubModalData({ 
+                        open: true, 
+                        name: data.publisher, 
+                        assignments: data.assignments 
+                    });
+                }
+            })
+            .catch(err => console.error("Erro ao carregar designações do publicador", err));
+    }
+  }, [searchParams]);
 
   const refreshSavedMeetings = async () => {
     try {
@@ -740,6 +765,61 @@ export default function DesignacoesPage() {
       <div className="designacoes-print-wrapper printable-content">
         {schedules.map((schedule, idx) => (<div key={idx} className="print-page-break"><TabelaDesignacoes schedule={schedule} assignments={assignmentsList[idx]} weekText={weekDescriptions[idx]} publicadores={publicadores} isPrintView={true} /></div>))}
       </div>
+
+      {/* MODAL DE VISUALIZAÇÃO DE DESIGNACÕES FUTURAS */}
+      {pubModalData.open && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+              <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-purple-50">
+                 <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-purple-600" /> 
+                    <span>Designações Futuras</span>
+                 </h3>
+                 <button onClick={() => { setPubModalData(prev => ({ ...prev, open: false })); window.history.replaceState(null, '', '/admin/designacoes'); }} className="text-gray-400 hover:text-gray-600">
+                    <X size={20} />
+                 </button>
+              </div>
+              <div className="p-6 max-h-[60vh] overflow-y-auto">
+                 <p className="text-sm text-gray-500 mb-4">
+                    Listando designações de <strong>{pubModalData.name}</strong> a partir de hoje.
+                 </p>
+                 {pubModalData.assignments.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 bg-gray-50 rounded-lg border border-gray-100 border-dashed">
+                        <Calendar className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p>Nenhuma designação futura encontrada.</p>
+                    </div>
+                 ) : (
+                    <div className="space-y-2">
+                       {pubModalData.assignments.map((assign, idx) => (
+                          <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 border border-gray-100 rounded-lg hover:border-purple-200 transition-colors">
+                              <div className="flex items-center gap-3">
+                                 <div className="bg-purple-100 p-2 rounded-md">
+                                    <span className="text-xs font-bold text-purple-700 block text-center leading-none">
+                                        {new Date(assign.data_reuniao).getDate()}
+                                    </span>
+                                    <span className="text-[10px] text-purple-600 uppercase block text-center leading-none mt-0.5">
+                                        {new Date(assign.data_reuniao).toLocaleString('pt-BR', { month: 'short' }).replace('.','')}
+                                    </span>
+                                 </div>
+                                 <span className="font-medium text-gray-900 text-sm">{assign.nome_parte}</span>
+                              </div>
+                              <div className="text-xs text-gray-400">
+                                 {new Date(assign.data_reuniao).getFullYear()}
+                              </div>
+                          </div>
+                       ))}
+                    </div>
+                 )}
+              </div>
+              <div className="p-4 bg-gray-50 border-t border-gray-100 text-right">
+                  <Button onClick={() => { setPubModalData(prev => ({ ...prev, open: false })); window.history.replaceState(null, '', '/admin/designacoes'); }} variant="outline" size="sm">
+                    Fechar
+                  </Button>
+              </div>
+           </div>
+        </div>
+      )}
+
     </DashboardLayout>
   );
 }

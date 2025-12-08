@@ -118,11 +118,16 @@ export async function GET(request) {
         
         const allPubIds = allPubsRes.rows.map(r => r.id);
         
-        // Identify who reported in CURRENT selection (from listResult)
-        const reportedIds = new Set(listResult.rows.map(r => r.id));
+        // CORRECTION:
+        // We cannot rely on 'listResult' to know who reported, because 'listResult' might be filtered (e.g., excluding Auxiliaries).
+        // We need to know who reported AT ALL in this month to validly say they are NOT irregular.
         
-        // Identify Missing IDs
-        const missingIds = allPubIds.filter(id => !reportedIds.has(id));
+        const reportedIdsQuery = `SELECT publicador_id FROM relatorios_mensais WHERE mes = $1 AND ano_servico = $2`;
+        const reportedIdsRes = await client.query(reportedIdsQuery, [mes, ano_servico]);
+        const actuallyReportedIds = new Set(reportedIdsRes.rows.map(r => r.publicador_id));
+        
+        // Identify Missing IDs (All Target Pubs - Those Who Reported)
+        const missingIds = allPubIds.filter(id => !actuallyReportedIds.has(id));
         
         if (missingIds.length > 0) {
             // Check usage for last 6 months to see if they are Inactive
