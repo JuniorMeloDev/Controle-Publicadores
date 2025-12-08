@@ -11,7 +11,9 @@ import S21Card from '@/app/components/relatorios/S21Card';
 
 import { useSearchParams } from 'next/navigation';
 
-export default function RelatoriosPage() {
+import { Suspense } from 'react';
+
+function RelatoriosContent() {
   const searchParams = useSearchParams();
   const [publicadores, setPublicadores] = useState([]);
   const [grupos, setGrupos] = useState([]);
@@ -269,5 +271,17 @@ export default function RelatoriosPage() {
           </div>
        )}
     </DashboardLayout>
+  );
+}
+
+export default function RelatoriosPage() {
+  return (
+    <Suspense fallback={
+       <DashboardLayout>
+         <div className="flex h-full items-center justify-center"><Loader2 className="animate-spin text-purple-600" /></div>
+       </DashboardLayout>
+    }>
+      <RelatoriosContent />
+    </Suspense>
   );
 }
