@@ -25,12 +25,8 @@ const getCurrentServiceYear = (monthIndex = new Date().getMonth()) => {
 
 const getPreviousMonthAndYear = () => {
     const data = new Date();
-    const diaAtual = data.getDate();
-    
-    // Se estamos nos primeiros dias, o relatório é para o mês anterior.
-    if (diaAtual <= 5) {
-      data.setMonth(data.getMonth() - 1); 
-    }
+    // Sempre pega o mês anterior
+    data.setMonth(data.getMonth() - 1); 
     
     const mesIndex = data.getMonth();
     
@@ -41,6 +37,7 @@ const getPreviousMonthAndYear = () => {
             : mesIndex + 4 // Janeiro (0) -> 4, Fevereiro (1) -> 5, ...
     ]; 
     
+    // O ano de serviço deve ser calculado com base no MÊS ANTERIOR (o mês do relatório)
     const ano = getCurrentServiceYear(mesIndex);
     
     return { mes: nomeMes, ano: ano };
@@ -65,6 +62,12 @@ async function fetchGrupos() {
      return res.json();
 }
 
+async function fetchMeetingStats() {
+    const res = await fetch('/api/admin/dashboard/stats');
+    if (!res.ok) return { nextMeeting: null, meetingsThisMonth: 0 };
+    return res.json();
+}
+
 
 export default function Dashboard() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -86,11 +89,12 @@ export default function Dashboard() {
 
   // Dados da API
   const [statusRelatorios, setStatusRelatorios] = useState([]);
+  const [meetingStats, setMeetingStats] = useState({ nextMeeting: null, meetingsThisMonth: 0 }); // Novo state
   const [isPageLoading, setIsPageLoading] = useState(true);
 
 
   // ------------------------------------------------------------------
-  // 1. CARREGAMENTO INICIAL (Grupos + Status)
+  // 1. CARREGAMENTO INICIAL (Grupos + Status + Stats)
   // ------------------------------------------------------------------
 
   const loadReportStatus = async (mes, ano) => {
@@ -100,7 +104,7 @@ export default function Dashboard() {
       const data = await fetchStatus(mes, ano);
       setStatusRelatorios(data);
     } catch (err) {
-      setErrorStatus(err.message);
+      console.error(err);
       setStatusRelatorios([]);
     } finally {
       setLoadingStatus(false);
@@ -112,6 +116,10 @@ export default function Dashboard() {
     try {
         const gruposData = await fetchGrupos();
         setGruposList(gruposData);
+        
+        const mStats = await fetchMeetingStats();
+        setMeetingStats(mStats);
+
         await loadReportStatus(defaultPeriod.mes, defaultPeriod.ano);
     } catch (err) {
         console.error("Erro ao carregar dados iniciais:", err);
@@ -224,8 +232,10 @@ export default function Dashboard() {
     },
     { 
       label: "Reuniões do Mês", 
-      value: "4", 
-      change: "Próxima: 24/04", 
+      value: meetingStats.meetingsThisMonth.toString(),
+      change: meetingStats.nextMeeting 
+        ? `Próxima: ${new Date(meetingStats.nextMeeting).getUTCDate().toString().padStart(2, '0')}/${(new Date(meetingStats.nextMeeting).getUTCMonth() + 1).toString().padStart(2, '0')}`
+        : "Nenhuma Agendada", 
       icon: Calendar, 
       color: "text-purple-600", 
       bg: "bg-purple-100",

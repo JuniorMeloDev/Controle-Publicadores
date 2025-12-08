@@ -6,7 +6,8 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Search, Bell, Home, Users, Calendar, 
   LogOut, Menu, ChevronRight, Workflow,
-  User, Key, ChevronDown, X, Loader2
+  User, Key, ChevronDown, X, Loader2,
+  Clock, BarChart3
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -16,6 +17,8 @@ const navigation = [
   { name: "Visão Geral", href: "/admin/dashboard", icon: Home },
   { name: "Publicadores", href: "/admin/gerenciar", icon: Users },
   { name: "Designações", href: "/admin/designacoes", icon: Calendar },
+  { name: "Reuniões", href: "/admin/reunioes", icon: Clock },
+  { name: "Relatórios", href: "/admin/relatorios", icon: BarChart3 },
 ];
 
 export function DashboardLayout({ children }) {
