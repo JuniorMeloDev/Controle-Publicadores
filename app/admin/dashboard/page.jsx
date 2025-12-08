@@ -228,7 +228,8 @@ export default function Dashboard() {
       change: "Próxima: 24/04", 
       icon: Calendar, 
       color: "text-purple-600", 
-      bg: "bg-purple-100" 
+      bg: "bg-purple-100",
+      link: "/admin/reunioes"
     },
     { 
       label: `Relatórios (${selectedMonth}/${selectedYear})`, 
@@ -269,6 +270,7 @@ export default function Dashboard() {
               className="border-gray-200 shadow-sm hover:shadow-md transition-shadow bg-white cursor-pointer"
               onClick={stat.action || (() => {})}
             >
+              <Link href={stat.link || '#'} className={!stat.link ? 'pointer-events-none' : ''}>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className={`w-12 h-12 ${stat.bg} rounded-lg flex items-center justify-center`}>
@@ -281,6 +283,7 @@ export default function Dashboard() {
                 <div className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</div>
                 <div className="text-sm text-gray-500">{stat.label}</div>
               </CardContent>
+              </Link>
             </Card>
           ))}
         </div>
@@ -331,26 +334,26 @@ export default function Dashboard() {
               </Card>
             </Link>
 
-            <div className="block h-full opacity-60 grayscale">
-              <Card className="h-full border-gray-200 bg-gray-50 border-dashed">
+            <Link href="/admin/relatorios" className="block group h-full">
+              <Card className="h-full border-gray-200 bg-white hover:border-green-300 hover:shadow-md transition-all cursor-pointer group-hover:ring-2 group-hover:ring-green-100">
                 <CardHeader>
-                  <div className="mb-2 w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-gray-500" />
+                  <div className="mb-2 w-10 h-10 rounded-full bg-green-50 flex items-center justify-center group-hover:bg-green-100 transition-colors">
+                    <FileText className="w-5 h-5 text-green-600" />
                   </div>
-                  <CardTitle className="text-gray-600">
-                    Ver Relatórios
+                  <CardTitle className="text-gray-900 group-hover:text-green-700 transition-colors">
+                    Relatórios
                   </CardTitle>
-                  <CardDescription>
-                    Visualizar e filtrar relatórios mensais (Em breve).
+                  <CardDescription className="text-gray-600">
+                    Central de relatórios, registros S-21 e análises.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center text-sm font-medium text-gray-500 mt-2">
-                    Indisponível
+                  <div className="flex items-center text-sm font-medium text-green-600 mt-2">
+                    Visualizar <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" />
                   </div>
                 </CardContent>
               </Card>
-            </div>
+            </Link>
           </div>
         </div>
       </div>

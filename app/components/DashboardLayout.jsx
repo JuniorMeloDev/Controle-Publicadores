@@ -218,6 +218,7 @@ export function DashboardLayout({ children }) {
       <aside className={`
         fixed md:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transition-transform duration-300 ease-in-out
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        print:hidden
       `}>
         <div className="h-full flex flex-col">
           <div className="p-6 border-b border-gray-100 flex items-center justify-between">
@@ -270,8 +271,8 @@ export function DashboardLayout({ children }) {
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <header className="h-16 border-b border-gray-200 bg-white px-6 flex items-center justify-between shrink-0">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden print:h-auto print:overflow-visible">
+        <header className="h-16 border-b border-gray-200 bg-white px-6 flex items-center justify-between shrink-0 print:hidden">
           <div className="flex items-center gap-4">
             <button 
                 className="md:hidden p-2 -ml-2 text-gray-500"
@@ -368,7 +369,7 @@ export function DashboardLayout({ children }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-6 md:p-8">
+        <main className="flex-1 overflow-y-auto bg-gray-50 p-6 md:p-8 print:p-0 print:overflow-visible print:bg-white">
             {children}
         </main>
       </div>
