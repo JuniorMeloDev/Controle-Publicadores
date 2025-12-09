@@ -7,7 +7,7 @@ import {
   Search, Bell, Home, Users, Calendar, 
   LogOut, Menu, ChevronRight, Workflow,
   User, Key, ChevronDown, X, Loader2,
-  Clock, BarChart3
+  Clock, BarChart3, Settings
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -20,6 +20,7 @@ const navigation = [
   { name: "Designações", href: "/admin/designacoes", icon: Calendar },
   { name: "Reuniões", href: "/admin/reunioes", icon: Clock },
   { name: "Relatórios", href: "/admin/relatorios", icon: BarChart3 },
+  { name: "Configurações", href: "/admin/configuracoes", icon: Settings },
 ];
 
 export function DashboardLayout({ children }) {

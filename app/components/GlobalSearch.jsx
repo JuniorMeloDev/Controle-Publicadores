@@ -57,7 +57,7 @@ export function GlobalSearch() {
   };
 
   return (
-    <div className="relative hidden sm:block w-full max-w-md" ref={containerRef}>
+    <div className="relative w-full max-w-md" ref={containerRef}>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
         <input
@@ -69,7 +69,7 @@ export function GlobalSearch() {
           }}
           onFocus={() => { if(query.length >= 2) setIsOpen(true); }}
           placeholder="Pesquisar..."
-          className="pl-10 pr-4 py-2 w-64 focus:w-80 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-purple-100 focus:border-purple-300 transition-all text-sm text-gray-700 outline-none placeholder:text-gray-400"
+          className="pl-10 pr-4 py-2 w-32 sm:w-64 focus:w-48 sm:focus:w-80 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-purple-100 focus:border-purple-300 transition-all text-sm text-gray-700 outline-none placeholder:text-gray-400"
         />
         {loading && (
             <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -80,7 +80,7 @@ export function GlobalSearch() {
 
       {/* Dropdown Results */}
       {isOpen && (results.pages.length > 0 || results.publishers.length > 0) && (
-        <div className="absolute top-full text-left mt-2 w-96 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute top-full left-1/2 -translate-x-1/2 text-left mt-2 w-[90vw] sm:w-96 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100 origin-top">
             
             {/* Pages Section */}
             {results.pages.length > 0 && (
@@ -154,7 +154,7 @@ export function GlobalSearch() {
 
       {/* No Results */}
       {isOpen && query.length >= 2 && !loading && results.pages.length === 0 && results.publishers.length === 0 && (
-          <div className="absolute top-full text-left mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 p-4 z-50 text-center">
+          <div className="absolute top-full left-1/2 -translate-x-1/2 text-left mt-2 w-[80vw] sm:w-80 bg-white rounded-xl shadow-xl border border-gray-100 p-4 z-50 text-center">
               <p className="text-sm text-gray-500">Nenhum resultado encontrado para "{query}".</p>
           </div>
       )}
