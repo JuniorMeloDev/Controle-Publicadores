@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/app/components/ui/card';
-import { FileText, BarChart, Calendar, ArrowRight, Lock } from 'lucide-react';
+import { FileText, BarChart, Calendar, ArrowRight, Lock, Users } from 'lucide-react';
 import Link from 'next/link';
 
 export default function RelatoriosHubPage() {
@@ -58,6 +58,16 @@ export default function RelatoriosHubPage() {
       bgColor: "bg-gray-100",
       hoverRing: "",
       active: false
+    },
+    {
+      title: "Relatório de Assistência",
+      description: "Gráficos de comparecimento, Zoom e faltantes.",
+      href: "/admin/relatorios/assistencia",
+      icon: Users,
+      color: "text-purple-600",
+      bgColor: "bg-purple-50",
+      hoverRing: "group-hover:ring-purple-100",
+      active: true
     }
   ];
 

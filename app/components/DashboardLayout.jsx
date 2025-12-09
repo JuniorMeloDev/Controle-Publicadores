@@ -144,7 +144,7 @@ export function DashboardLayout({ children }) {
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-gray-50 flex flex-col md:flex-row">
+    <div className="h-screen overflow-hidden bg-gray-50 flex flex-col md:flex-row print:h-auto print:overflow-visible">
       
       {/* === MODAL DE ALTERAR SENHA === */}
       {isPasswordModalOpen && (
