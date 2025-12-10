@@ -4,6 +4,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, ShieldCheck, Star, X, Plus, ChevronDown, ChevronUp, Shuffle } from 'lucide-react'; 
+import { normalizeString } from '@/lib/utils'; 
 
 export default function FiltroELista({ 
     publicadores = [], 
@@ -35,10 +36,17 @@ export default function FiltroELista({
     return Array.from(map.entries()).map(([nome, total]) => ({ nome, total })).sort((a,b) => a.nome.localeCompare(b.nome));
   }, [publicadores]);
 
+
+
   const filtrados = useMemo(() => {
     let lista = publicadores;
     if (debouncedSearch !== '') {
-      lista = lista.filter((p) => (p.nome_completo || '').toLowerCase().includes(debouncedSearch) || (p.nome_grupo || '').toLowerCase().includes(debouncedSearch));
+        const searchNorm = normalizeString(debouncedSearch);
+        lista = lista.filter((p) => {
+            const nome = normalizeString(p.nome_completo || '');
+            const grupo = normalizeString(p.nome_grupo || '');
+            return nome.includes(searchNorm) || grupo.includes(searchNorm);
+        });
     }
     if (grupoSelecionado !== '') {
       lista = lista.filter((p) => (p.nome_grupo || '—') === grupoSelecionado);

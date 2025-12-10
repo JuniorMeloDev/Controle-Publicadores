@@ -50,14 +50,14 @@ export default function RelatoriosHubPage() {
        active: true
     },
     {
-      title: "Histórico de Designações",
-      description: "Relatório de partes e designações passadas.",
-      href: "#",
-      icon: Calendar,
-      color: "text-gray-400",
-      bgColor: "bg-gray-100",
-      hoverRing: "",
-      active: false
+      title: "Privilégios Mecânicos",
+      description: "Imprimir cartões e lista de privilégios.",
+      href: "/admin/relatorios/privilegios-mecanicos",
+      icon: Calendar, 
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+      hoverRing: "group-hover:ring-blue-100",
+      active: true
     },
     {
       title: "Relatório de Assistência",
