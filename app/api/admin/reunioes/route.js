@@ -16,22 +16,41 @@ async function ensureColumns(client) {
         'indicador_externo_volante_id', 
         'indicador_externo_id', 
         'volante_id', 
-        'anciao_apoio_id'
+        'anciao_apoio_id',
+        'visitantes'
     ];
     
     for (const col of columns) {
         try {
-            await client.query(`ALTER TABLE reunioes_registro ADD COLUMN IF NOT EXISTS ${col} INTEGER REFERENCES publicadores(id) ON DELETE SET NULL`);
+            if (col === 'visitantes') {
+                await client.query(`ALTER TABLE reunioes_registro ADD COLUMN IF NOT EXISTS ${col} INTEGER DEFAULT 0`);
+            } else {
+                // For other columns (which are foreign keys)
+                await client.query(`ALTER TABLE reunioes_registro ADD COLUMN IF NOT EXISTS ${col} INTEGER`);
+                // Add foreign key constraint if it's an _id column
+                if (col.endsWith('_id')) {
+                    // Use a separate ALTER TABLE for constraint to avoid issues if column already exists
+                    await client.query(`
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_${col}' AND conrelid = 'reunioes_registro'::regclass) THEN
+                                ALTER TABLE reunioes_registro ADD CONSTRAINT fk_${col} FOREIGN KEY (${col}) REFERENCES publicadores(id) ON DELETE SET NULL;
+                            END IF;
+                        END
+                        $$;
+                    `).catch(() => {}); // Catch potential errors if constraint already exists or other issues
+                }
+            }
         } catch (e) {
             // Check if error is because column exists (older postgres might not support IF NOT EXISTS in ADD COLUMN)
             // But Neon is likely modern. Ignore safe errors.
-            console.log(`Column check ${col}:`, e.message);
+            // console.log(`Column check ${col}:`, e.message);
         }
     }
 }
 
 // GET: List recent meetings with summary
-export async function GET() {
+export async function GET(request) {
   const client = await pool.connect();
   try {
     // 1. Ensure Table and Columns
@@ -49,19 +68,48 @@ export async function GET() {
     } catch (e) { console.error("Migration error:", e); }
 
     // 2. Query
-    const res = await client.query(`
+    // 2. Build Query
+    const url = new URL(request.url);
+    const month = url.searchParams.get('month');
+    const year = url.searchParams.get('year');
+    
+    let query = `
       SELECT 
         r.*,
         COUNT(CASE WHEN a.modalidade = 'Presencial' THEN 1 END)::int as presencial,
         COUNT(CASE WHEN a.modalidade = 'Zoom' THEN 1 END)::int as zoom,
-        COUNT(a.id)::int as total
-        -- We could join here for names if needed, but keeping it light for now
+        (COUNT(a.id)::int + COALESCE(r.visitantes, 0)) as total
       FROM reunioes_registro r
       LEFT JOIN assistencia_detalhe a ON r.id = a.reuniao_id
+    `;
+    
+    const params = [];
+    const conditions = [];
+    
+    if (year) {
+        conditions.push(`EXTRACT(YEAR FROM r.data) = $${params.length + 1}`);
+        params.push(year);
+    }
+    
+    if (month) {
+        conditions.push(`EXTRACT(MONTH FROM r.data) = $${params.length + 1}`);
+        params.push(month);
+    }
+    
+    if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+    
+    query += `
       GROUP BY r.id
       ORDER BY r.data DESC
-      LIMIT 20
-    `);
+    `;
+    
+    if (!year && !month) {
+         query += ' LIMIT 20'; // Default limit if no filter
+    }
+
+    const res = await client.query(query, params);
     
     // Format dates safely
     const meetings = res.rows.map(row => ({

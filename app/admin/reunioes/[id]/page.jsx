@@ -20,6 +20,7 @@ export default function DetalheReuniaoPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGroup, setFilterGroup] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set()); // For bulk selection
+  const [visitantes, setVisitantes] = useState(0); // Visitors count
   
   // Toast State
   const [showToast, setShowToast] = useState(false);
@@ -31,18 +32,22 @@ export default function DetalheReuniaoPage() {
      return {
          presencial: data.filter(p => p.modalidade === 'Presencial').length,
          zoom: data.filter(p => p.modalidade === 'Zoom').length,
-         total: data.filter(p => p.modalidade).length
+         total: data.filter(p => p.modalidade).length + parseInt(visitantes || 0)
      };
-  }, [data]);
+  }, [data, visitantes]);
 
   useEffect(() => {
     async function fetchData() {
        try {
-         const res = await fetch(`/api/admin/reunioes/${params.id}/assistencia`);
-         if (res.ok) {
-            const json = await res.json();
-            setData(json);
-         }
+          const res = await fetch(`/api/admin/reunioes/${params.id}/assistencia`);
+          const resDetails = await fetch(`/api/admin/reunioes/${params.id}`);
+
+          if (res.ok && resDetails.ok) {
+             const json = await res.json();
+             const jsonDetails = await resDetails.json();
+             setData(json);
+             setVisitantes(jsonDetails.visitantes || 0);
+          }
        } catch (err) {
          console.error(err);
          setToastMessage('Erro ao carregar dados.');
@@ -117,6 +122,13 @@ export default function DetalheReuniaoPage() {
             body: JSON.stringify({ assistanceData: payload })
         });
         
+        // Also save visitors count
+        await fetch(`/api/admin/reunioes/${params.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ visitantes: parseInt(visitantes) })
+        });
+        
         if (res.ok) {
             setToastMessage('Salvo com sucesso!');
             setToastType('success');
@@ -181,7 +193,19 @@ export default function DetalheReuniaoPage() {
                    </div>
                 </div>
              </div>
-             <Button onClick={handleSave} disabled={saving} className="bg-purple-600 hover:bg-purple-700 min-w-[120px]">
+             <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">Visitantes:</span>
+                    <Input 
+                        type="number" 
+                        min="0"
+                        value={visitantes} 
+                        onChange={(e) => setVisitantes(e.target.value)} 
+                        className="w-20 h-8 text-center text-gray-900 font-bold border-gray-400 focus:border-purple-500 bg-white"
+                    />
+                </div>
+           </div>
+                <Button onClick={handleSave} disabled={saving} className="bg-purple-600 hover:bg-purple-700 min-w-[120px]">
                 {saving ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                 Salvar
              </Button>

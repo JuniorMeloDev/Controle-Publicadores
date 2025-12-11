@@ -301,13 +301,13 @@ export default function PrivilegiosMecanicosReport() {
                                     <thead>
                                         {/* Date Row 1 */}
                                         <tr className={`bg-white print:bg-white text-black font-bold border-b border-black print-color-adjust-exact ${fontClass}`}>
-                                            <th className={`border-r border-black ${cellPadding} w-32 bg-white uppercase text-blue-800`}>Privilégio</th>
+                                            <th className={`border-r border-black ${cellPadding} w-[30%] bg-white uppercase text-blue-800`}>Privilégio</th>
                                             {chunk.map(item => (
                                                 <th key={item.id} className={`border-l border-black ${cellPadding} w-[14%]`}>
                                                     {new Date(item.data).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC'})}
                                                 </th>
                                             ))}
-                                            {Array.from({length: chunkSize - chunk.length}).map((_, i) => <th key={i} className={`border-l border-black ${cellPadding}`}></th>)}
+                                            {Array.from({length: chunkSize - chunk.length}).map((_, i) => <th key={i} className={`border-l border-black ${cellPadding} w-[14%]`}></th>)}
                                         </tr>
                                         {/* Date Row 2 (Weekday) */}
                                         <tr className={`bg-white print:bg-white text-black font-semibold border-b border-black text-[9px] sm:text-[10px]`}>

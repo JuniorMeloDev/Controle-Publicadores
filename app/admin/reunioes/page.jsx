@@ -3,39 +3,43 @@
 import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { Button } from '@/app/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
-import { Plus, Calendar, Users, Video, Search, Loader2 } from 'lucide-react';
+import { Loader2, Search, Filter } from 'lucide-react';
 import Link from 'next/link';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/app/components/ui/dialog";
-import { PublisherCombobox } from '@/app/components/reunioes/PublisherCombobox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { StatusToast } from '@/app/components/ui/status-toast';
+
+const MONTHS = [
+  { value: '1', label: 'Janeiro' },
+  { value: '2', label: 'Fevereiro' },
+  { value: '3', label: 'Março' },
+  { value: '4', label: 'Abril' },
+  { value: '5', label: 'Maio' },
+  { value: '6', label: 'Junho' },
+  { value: '7', label: 'Julho' },
+  { value: '8', label: 'Agosto' },
+  { value: '9', label: 'Setembro' },
+  { value: '10', label: 'Outubro' },
+  { value: '11', label: 'Novembro' },
+  { value: '12', label: 'Dezembro' },
+];
 
 export default function ReunioesPage() {
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [newMeetingDate, setNewMeetingDate] = useState('');
-  const [newMeetingType, setNewMeetingType] = useState('Meio de Semana');
-  const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState(null);
   
-  // New State for Privileges
-  const [publishers, setPublishers] = useState([]);
-  const [privileges, setPrivileges] = useState({
-     leitor_id: null,
-     indicador_interno_id: null,
-     indicador_externo_volante_id: null,
-     indicador_externo_id: null,
-     volante_id: null,
-     anciao_apoio_id: null
-  });
+  // Filters
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const [year, setYear] = useState(currentYear.toString());
+  const [month, setMonth] = useState(currentMonth.toString());
 
   async function fetchMeetings() {
     try {
       setLoading(true);
-      const res = await fetch('/api/admin/reunioes');
+      const res = await fetch(`/api/admin/reunioes?year=${year}&month=${month}`);
       if (res.ok) {
         const data = await res.json();
         setMeetings(data);
@@ -50,205 +54,114 @@ export default function ReunioesPage() {
 
   useEffect(() => {
     fetchMeetings();
-    // Fetch publishers for the combobox
-    fetch('/api/admin/get-publicadores').then(res => res.json()).then(setPublishers).catch(console.error);
-  }, []);
-
-  const handleCreateMeeting = async () => {
-    if (!newMeetingDate) return;
-    setCreating(true);
-    try {
-      const res = await fetch('/api/admin/reunioes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            data: newMeetingDate, 
-            tipo: newMeetingType,
-            ...privileges
-        })
-      });
-      
-      const data = await res.json();
-      
-      if (res.ok) {
-        setIsDialogOpen(false);
-        setNewMeetingDate('');
-        // Reset privileges
-        setPrivileges({
-            leitor_id: null,
-            indicador_interno_id: null,
-            indicador_externo_volante_id: null,
-            indicador_externo_id: null,
-            volante_id: null,
-            anciao_apoio_id: null
-        });
-        setToast({ message: 'Reunião criada com sucesso!', type: 'success' });
-        fetchMeetings();
-      } else {
-        setToast({ message: data.message || 'Erro ao criar reunião.', type: 'error' });
-      }
-    } catch (error) {
-       console.error(error);
-       setToast({ message: 'Erro de conexão.', type: 'error' });
-    } finally {
-      setCreating(false);
-    }
-  };
+  }, [year, month]);
 
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
         <StatusToast message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
 
+        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
            <div>
              <h1 className="text-2xl font-bold text-gray-900">Gerenciamento de Reuniões</h1>
-             <p className="text-gray-500">Registre a assistência e acompanhe as métricas.</p>
+             <p className="text-gray-500">Visualize e gerencie as reuniões e assistências.</p>
            </div>
-           
-           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-             <DialogTrigger asChild>
-               <Button className="bg-purple-600 hover:bg-purple-700">
-                 <Plus className="w-4 h-4 mr-2" /> Nova Reunião
-               </Button>
-             </DialogTrigger>
-             <DialogContent className="bg-white sm:max-w-lg">
-               <DialogHeader>
-                 <DialogTitle className="text-lg font-semibold text-gray-900">Registrar Nova Reunião</DialogTitle>
-               </DialogHeader>
-               <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto px-1">
-                 <div className="grid grid-cols-2 gap-4">
-                     <div className="space-y-2">
-                       <Label className="text-gray-700 font-medium">Data da Reunião</Label>
-                       <Input 
-                          type="date" 
-                          value={newMeetingDate} 
-                          onChange={(e) => setNewMeetingDate(e.target.value)} 
-                          className="text-gray-900" 
-                       />
-                     </div>
-                     <div className="space-y-2">
-                       <Label className="text-gray-700 font-medium">Tipo</Label>
-                       <select 
-                          className="w-full border border-gray-300 rounded-md p-2 text-sm text-gray-900 bg-white focus:ring-2 focus:ring-purple-600 focus:border-transparent"
-                          value={newMeetingType}
-                          onChange={(e) => setNewMeetingType(e.target.value)}
-                       >
-                         <option value="Meio de Semana">Meio de Semana</option>
-                         <option value="Fim de Semana">Fim de Semana</option>
-                         <option value="Especial">Especial</option>
-                       </select>
-                     </div>
-                 </div>
-
-                 <div className="pt-4 border-t border-gray-100">
-                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                        <Users className="w-4 h-4 text-purple-600" />
-                        Privilégios Mecânicos
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {newMeetingType === 'Fim de Semana' && (
-                            <PublisherCombobox 
-                                label="Leitor" 
-                                publishers={publishers}
-                                value={privileges.leitor_id}
-                                onChange={(val) => setPrivileges(p => ({...p, leitor_id: val}))}
-                            />
-                        )}
-                        <PublisherCombobox 
-                            label="Indicador Int." 
-                            publishers={publishers}
-                            value={privileges.indicador_interno_id}
-                            onChange={(val) => setPrivileges(p => ({...p, indicador_interno_id: val}))}
-                        />
-                        <PublisherCombobox 
-                            label="Ind. Ext/Volante" 
-                            publishers={publishers}
-                            value={privileges.indicador_externo_volante_id}
-                            onChange={(val) => setPrivileges(p => ({...p, indicador_externo_volante_id: val}))}
-                        />
-                        <PublisherCombobox 
-                            label="Indicador Ext." 
-                            publishers={publishers}
-                            value={privileges.indicador_externo_id}
-                            onChange={(val) => setPrivileges(p => ({...p, indicador_externo_id: val}))}
-                        />
-                        <PublisherCombobox 
-                            label="Volante" 
-                            publishers={publishers}
-                            value={privileges.volante_id}
-                            onChange={(val) => setPrivileges(p => ({...p, volante_id: val}))}
-                        />
-                        <PublisherCombobox 
-                            label="Ancião de Apoio" 
-                            publishers={publishers}
-                            value={privileges.anciao_apoio_id}
-                            onChange={(val) => setPrivileges(p => ({...p, anciao_apoio_id: val}))}
-                        />
-                    </div>
-                 </div>
-               </div>
-               <DialogFooter>
-                 <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="border-gray-300 text-gray-700 font-medium hover:bg-gray-50 hover:text-gray-900">Cancelar</Button>
-                 <Button onClick={handleCreateMeeting} disabled={creating} className="bg-purple-600 hover:bg-purple-700 text-white">
-                    {creating ? <Loader2 className="animate-spin w-4 h-4" /> : 'Criar'}
-                 </Button>
-               </DialogFooter>
-             </DialogContent>
-           </Dialog>
         </div>
 
-        {loading ? (
-           <div className="flex justify-center p-8"><Loader2 className="animate-spin text-purple-600" /></div>
-        ) : (
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {meetings.map((meeting) => (
-                <Link key={meeting.id} href={`/admin/reunioes/${meeting.id}`} className="block group">
-                  <Card className="hover:shadow-md transition-shadow cursor-pointer border-gray-200 group-hover:border-purple-300">
-                    <CardHeader className="pb-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                           <CardDescription className="uppercase text-xs font-bold tracking-wider text-purple-600 mb-1">
-                             {meeting.tipo}
-                           </CardDescription>
-                           <CardTitle className="text-gray-900">
-                             {meeting.data_formatada}
-                           </CardTitle>
-                        </div>
-                        <Calendar className="text-gray-300 w-5 h-5 group-hover:text-purple-400" />
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                       <div className="flex items-center gap-4 text-sm mt-2">
-                          <div className="flex items-center gap-1.5 text-gray-600">
-                            <Users className="w-4 h-4" />
-                            <span className="font-semibold">{meeting.presencial || 0}</span>
-                            <span className="text-xs text-gray-400">Presencial</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-gray-600">
-                            <Video className="w-4 h-4" />
-                            <span className="font-semibold">{meeting.zoom || 0}</span>
-                            <span className="text-xs text-gray-400">Zoom</span>
-                          </div>
-                       </div>
-                       <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
-                          <span>Total: <strong className="text-gray-900">{meeting.total || 0}</strong></span>
-                          <span className="text-purple-600 font-medium group-hover:underline">Gerenciar Assistência &rarr;</span>
-                       </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-              
-              {meetings.length === 0 && (
-                <div className="col-span-full text-center py-12 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-                   <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                   <p>Nenhuma reunião registrada.</p>
-                   <p className="text-sm">Clique em "Nova Reunião" para começar.</p>
-                </div>
-              )}
-           </div>
-        )}
+        {/* Filters */}
+        <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-wrap gap-4 items-end">
+            <div className="space-y-1">
+                <Label className="text-xs font-bold text-gray-700 uppercase tracking-wide">Ano</Label>
+                <Select value={year} onValueChange={setYear}>
+                    <SelectTrigger className="w-32 bg-white border-gray-300 text-gray-900 font-medium">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map(y => (
+                            <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            <div className="space-y-1">
+                <Label className="text-xs font-bold text-gray-700 uppercase tracking-wide">Mês</Label>
+                <Select value={month} onValueChange={setMonth}>
+                    <SelectTrigger className="w-40 bg-white border-gray-300 text-gray-900 font-medium">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {MONTHS.map(m => (
+                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            <div className="flex-1"></div>
+            {/* <Button variant="outline" onClick={fetchMeetings} className="gap-2">
+                <Filter className="w-4 h-4" /> Atualizar
+            </Button> */}
+        </div>
+
+        {/* List View */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50 text-gray-700 font-medium border-b border-gray-200">
+                        <tr>
+                            <th className="px-6 py-3">Data</th>
+                            <th className="px-6 py-3">Dia da Semana</th>
+                            <th className="px-6 py-3">Tipo</th>
+                            <th className="px-6 py-3 text-center">Presencial</th>
+                            <th className="px-6 py-3 text-center">Zoom</th>
+                            <th className="px-6 py-3 text-center">Visitantes</th>
+                            <th className="px-6 py-3 text-center">Total</th>
+                            <th className="px-6 py-3 text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {loading ? (
+                             <tr><td colSpan="7" className="p-8 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></td></tr>
+                        ) : meetings.length === 0 ? (
+                             <tr><td colSpan="7" className="p-8 text-center text-gray-500">Nenhuma reunião encontrada para este período.</td></tr>
+                        ) : (
+                            meetings.map((meeting) => (
+                                <tr key={meeting.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-3 font-medium text-gray-900 border-l-4 border-transparent hover:border-purple-500">
+                                        {meeting.data_formatada}
+                                    </td>
+                                    <td className="px-6 py-3 capitalize text-gray-600">
+                                        {new Date(meeting.data).toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'UTC' })}
+                                    </td>
+                                    <td className="px-6 py-3">
+                                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${
+                                            meeting.tipo === 'Meio de Semana' 
+                                                ? 'bg-blue-50 text-blue-700 border-blue-100' 
+                                                : meeting.tipo === 'Especial'
+                                                ? 'bg-orange-50 text-orange-700 border-orange-100'
+                                                : 'bg-purple-50 text-purple-700 border-purple-100'
+                                        }`}>
+                                            {meeting.tipo}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-3 text-center text-gray-600">{meeting.presencial || '-'}</td>
+                                    <td className="px-6 py-3 text-center text-gray-600">{meeting.zoom || '-'}</td>
+                                    <td className="px-6 py-3 text-center text-gray-600">{meeting.visitantes || '-'}</td>
+                                    <td className="px-6 py-3 text-center font-bold text-gray-900">{meeting.total || '-'}</td>
+                                    <td className="px-6 py-3 text-right">
+                                        <Link href={`/admin/reunioes/${meeting.id}`}>
+                                            <Button variant="ghost" size="sm" className="text-purple-600 hover:text-purple-700 hover:bg-purple-50">
+                                                Gerenciar
+                                            </Button>
+                                        </Link>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
       </div>
     </DashboardLayout>
   );

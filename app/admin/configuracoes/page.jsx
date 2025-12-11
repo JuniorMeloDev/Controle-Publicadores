@@ -6,9 +6,10 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import { StatusToast } from "@/app/components/ui/status-toast";
-import { Trash2, Calendar, Save, Plus, Loader2 } from 'lucide-react';
+import { Trash2, Calendar, Save, Plus, Loader2, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 const WEEKDAYS = [
     { value: 'Segunda-feira', label: 'Segunda-feira' },
@@ -42,6 +43,17 @@ export default function ConfiguracoesPage() {
     // Events State
     const [events, setEvents] = useState([]);
     const [newEvent, setNewEvent] = useState({ date: '', name: '', type: 'Outro' });
+
+    // Generation State
+    const [genOpen, setGenOpen] = useState(false);
+    const [genStep, setGenStep] = useState(1); // 1 = Select, 2 = Preview
+    const [genPeriod, setGenPeriod] = useState('mensal');
+    const [genLoading, setGenLoading] = useState(false);
+    const [previewData, setPreviewData] = useState({ meetings: [], warnings: [] });
+    
+    // Result Modal State
+    const [resultOpen, setResultOpen] = useState(false);
+    const [resultData, setResultData] = useState({ success: true, message: '', details: [] });
 
     useEffect(() => {
         fetchData();
@@ -77,7 +89,6 @@ export default function ConfiguracoesPage() {
                     dia_fim_semana: weekendDay
                 })
             });
-            // Show feedback toast
             setToast({ message: 'Dias de reunião salvos com sucesso!', type: 'success' });
             setTimeout(() => setToast({ message: '', type: '' }), 3000);
         } catch (error) {
@@ -90,10 +101,6 @@ export default function ConfiguracoesPage() {
 
     const handleAddEvent = async () => {
         if (!newEvent.date || !newEvent.name) return;
-        
-        // Extract year from date to ensure consistency? Or allow adding future events?
-        // Assuming we add to the current selected year context mostly.
-        
         try {
             const res = await fetch('/api/admin/configuracoes', {
                 method: 'POST',
@@ -103,13 +110,11 @@ export default function ConfiguracoesPage() {
                     data: newEvent.date,
                     nome: newEvent.name,
                     tipo: newEvent.type,
-                    ano: parseInt(newEvent.date.split('-')[0]) // Use the year from the date
+                    ano: parseInt(newEvent.date.split('-')[0])
                 })
             });
-            
             if (res.ok) {
                 const addedEvent = await res.json();
-                // If the added event belongs to the currently viewed year, add to list
                 if (addedEvent.ano === year) {
                     setEvents([...events, addedEvent].sort((a,b) => new Date(a.data) - new Date(b.data)));
                 }
@@ -134,10 +139,103 @@ export default function ConfiguracoesPage() {
         }
     };
 
+    // GENERATION LOGIC
+    const handlePreview = async () => {
+        setGenLoading(true);
+        try {
+            const res = await fetch('/api/admin/reunioes/gerar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    action: 'preview', 
+                    period: genPeriod, 
+                    year: year 
+                })
+            });
+            
+            if(res.ok) {
+                const data = await res.json();
+                setPreviewData(data);
+                setGenStep(2);
+            } else {
+                const err = await res.json();
+                setToast({ message: err.message || 'Erro ao gerar prévia.', type: 'error' });
+            }
+        } catch (error) {
+            console.error(error);
+            setToast({ message: 'Erro de conexão.', type: 'error' });
+        } finally {
+            setGenLoading(false);
+        }
+    };
+
+    const handleConfirmGeneration = async () => {
+        setGenLoading(true);
+        const toCreate = previewData.meetings.filter(m => !m.exists);
+        
+        if (toCreate.length === 0) {
+             setGenLoading(false);
+             setResultData({
+                 success: true,
+                 message: 'Nenhuma nova reunião para criar.',
+                 details: ['Todas as reuniões do período já existem.']
+             });
+             setGenOpen(false);
+             setResultOpen(true);
+             return;
+        }
+
+        try {
+            const res = await fetch('/api/admin/reunioes/gerar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    action: 'create', 
+                    year: year,
+                    options: { meetings_to_create: toCreate }
+                })
+            });
+            
+            const data = await res.json();
+            
+            if(res.ok) {
+                setGenOpen(false);
+                setGenStep(1);
+                // Show success modal
+                setResultData({
+                    success: true,
+                    message: data.message,
+                    details: [`${toCreate.length} reuniões criadas com sucesso.`]
+                });
+                setResultOpen(true);
+            } else {
+                // Show error modal
+                 setResultData({
+                    success: false,
+                    message: 'Erro ao criar reuniões',
+                    details: [data.message || 'Erro desconhecido.']
+                });
+                setGenOpen(false);
+                setResultOpen(true);
+            }
+        } catch (error) {
+             setResultData({
+                success: false,
+                message: 'Erro de conexão',
+                details: [error.message]
+            });
+            setGenOpen(false);
+            setResultOpen(true);
+        } finally {
+            setGenLoading(false);
+        }
+    };
+
     return (
         <DashboardLayout>
             <div className="p-4 sm:p-6 space-y-6 max-w-5xl mx-auto">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                {/* Header... (Same as before) */}
+                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Configurações Gerais</h1>
                         <p className="text-gray-500">Gerencie os dias de reunião e eventos especiais do calendário.</p>
@@ -165,7 +263,7 @@ export default function ConfiguracoesPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         
                         {/* CARD 1: DIAS DE REUNIÃO */}
-                        <Card className="border-gray-200 shadow-sm">
+                        <Card className="border-gray-200 shadow-sm flex flex-col">
                             <CardHeader className="bg-gray-50/50 pb-4 border-b border-gray-100">
                                 <CardTitle className="flex items-center gap-2 text-gray-900">
                                     <Calendar className="w-5 h-5 text-blue-600" />
@@ -175,7 +273,7 @@ export default function ConfiguracoesPage() {
                                     Defina em quais dias da semana ocorrem as reuniões regulares.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="pt-6 space-y-6">
+                            <CardContent className="pt-6 space-y-6 flex-1">
                                 <div className="space-y-4">
                                     <div className="space-y-2">
                                         <Label className="text-gray-700">Reunião de Meio de Semana (Vida e Ministério)</Label>
@@ -201,15 +299,133 @@ export default function ConfiguracoesPage() {
                                         </Select>
                                     </div>
                                 </div>
-                                <Button onClick={handleSaveWeekdays} disabled={saving} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                                    {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                                    Salvar Dias
-                                </Button>
+                                <div className="space-y-3 pt-2">
+                                    <Button onClick={handleSaveWeekdays} disabled={saving} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                                        {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                                        Salvar Dias
+                                    </Button>
+
+                                    {/* create meetings button */}
+                                    <Dialog open={genOpen} onOpenChange={(open) => { if(!open) setGenStep(1); setGenOpen(open); }}>
+                                        <DialogTrigger asChild>
+                                            <Button variant="outline" className="w-full border-purple-200 text-purple-700 hover:bg-purple-50">
+                                                <Sparkles className="w-4 h-4 mr-2" /> Criar Reuniões Automaticamente
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="max-w-2xl bg-white max-h-[85vh] overflow-hidden flex flex-col">
+                                            <DialogHeader>
+                                                <DialogTitle>Gerador Automático de Reuniões</DialogTitle>
+                                                <DialogDescription>
+                                                    O sistema criará as reuniões com base nos dias configurados e nos eventos especiais.
+                                                </DialogDescription>
+                                            </DialogHeader>
+
+                                            <div className="flex-1 overflow-y-auto py-4 px-1">
+                                                {genStep === 1 ? (
+                                                    <div className="space-y-4">
+                                                        <div className="space-y-2">
+                                                            <Label className="text-gray-900 font-semibold">Período de Criação (a partir de amanhã)</Label>
+                                                            <Select value={genPeriod} onValueChange={setGenPeriod}>
+                                                                <SelectTrigger className="w-full text-gray-900 border-gray-300">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="mensal">Próximo Mês</SelectItem>
+                                                                    <SelectItem value="trimestral">Próximo Trimestre</SelectItem>
+                                                                    <SelectItem value="semestral">Próximo Semestre</SelectItem>
+                                                                    <SelectItem value="anual">Até o final do ano ({year})</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                        <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-700 space-y-2">
+                                                            <p className="font-semibold flex items-center gap-2">
+                                                                <CheckCircle2 className="w-4 h-4" /> Regras Consideradas:
+                                                            </p>
+                                                            <ul className="list-disc list-inside space-y-1 ml-1 opacity-90 font-medium">
+                                                                <li>Assembleias/Congressos cancelam reuniões conflitantes.</li>
+                                                                <li>Visitas do Superintendente movem a reunião para Terça-feira.</li>
+                                                                <li>Memoriais cancelam a reunião do dia.</li>
+                                                                <li>Assembleias no fim de semana cancelam o meio de semana anterior.</li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-6">
+                                                        {/* Warnings */}
+                                                        {previewData.warnings.length > 0 && (
+                                                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                                                <h4 className="flex items-center gap-2 text-yellow-800 font-semibold mb-2">
+                                                                    <AlertTriangle className="w-4 h-4" /> Avisos e Exceções
+                                                                </h4>
+                                                                <ul className="text-sm text-yellow-700 space-y-1">
+                                                                    {previewData.warnings.map((w, i) => (
+                                                                        <li key={i}>• {w}</li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Table */}
+                                                        <div>
+                                                            <h4 className="font-semibold text-gray-900 mb-2">Reuniões a serem criadas ({previewData.meetings.filter(m => !m.exists).length})</h4>
+                                                            <div className="border border-gray-200 rounded-md overflow-hidden bg-white text-sm">
+                                                                <table className="w-full text-left">
+                                                                    <thead className="bg-gray-100 border-b border-gray-200">
+                                                                        <tr>
+                                                                            <th className="p-2 font-semibold text-gray-700">Data</th>
+                                                                            <th className="p-2 font-semibold text-gray-700">Dia</th>
+                                                                            <th className="p-2 font-semibold text-gray-700">Tipo</th>
+                                                                            <th className="p-2 font-semibold text-gray-700">Status</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="divide-y divide-gray-100">
+                                                                        {previewData.meetings.map((m, idx) => (
+                                                                            <tr key={idx} className={m.exists ? 'bg-gray-50' : 'bg-white'}>
+                                                                                <td className={`p-2 font-medium ${m.exists ? 'text-gray-500' : 'text-gray-900'}`}>{new Date(m.data).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
+                                                                                <td className="p-2 capitalize text-gray-600">{m.weekday}</td>
+                                                                                <td className="p-2 text-gray-700">{m.tipo}</td>
+                                                                                <td className="p-2 text-xs">
+                                                                                    {m.exists ? (
+                                                                                        <span className="text-gray-500 font-medium">Já existe</span>
+                                                                                    ) : (
+                                                                                        <span className="text-green-600 font-bold">Novo</span>
+                                                                                    )}
+                                                                                    {m.reason && m.reason !== 'Agenda Regular' && (
+                                                                                        <span className="block text-[10px] text-blue-600 truncate max-w-[150px]">{m.reason}</span>
+                                                                                    )}
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <DialogFooter className="mt-4 border-t pt-4">
+                                                {genStep === 1 ? (
+                                                    <Button onClick={handlePreview} disabled={genLoading} className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white">
+                                                        {genLoading ? <Loader2 className="animate-spin w-4 h-4 ml-2" /> : 'Gerar Prévia'}
+                                                    </Button>
+                                                ) : (
+                                                    <div className="flex gap-2 w-full justify-end">
+                                                        <Button variant="outline" onClick={() => setGenStep(1)}>Voltar</Button>
+                                                        <Button onClick={handleConfirmGeneration} disabled={genLoading || previewData.meetings.filter(m => !m.exists).length === 0} className="bg-green-600 hover:bg-green-700 text-white">
+                                                            {genLoading ? <Loader2 className="animate-spin w-4 h-4" /> : 'Confirmar e Criar'}
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </DialogFooter>
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
                             </CardContent>
                         </Card>
 
-                        {/* CARD 2: EVENTOS ESPECIAIS */}
-                        <Card className="border-gray-200 shadow-sm lg:row-span-2 h-fit">
+                        {/* CARD 2: EVENTOS ESPECIAIS (Same as before) */}
+                         <Card className="border-gray-200 shadow-sm lg:row-span-2 h-fit">
                             <CardHeader className="bg-gray-50/50 pb-4 border-b border-gray-100">
                                 <CardTitle className="text-orange-900 flex items-center gap-2">
                                     <Calendar className="w-5 h-5 text-orange-600" />
@@ -299,6 +515,29 @@ export default function ConfiguracoesPage() {
                 type={toast.type} 
                 onClose={() => setToast({ ...toast, message: '' })} 
             />
+
+            {/* Result Modal */}
+            <Dialog open={resultOpen} onOpenChange={setResultOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className={resultData.success ? "text-green-600" : "text-red-600"}>
+                            {resultData.success ? 'Sucesso!' : 'Atenção'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {resultData.message}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-2">
+                        <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                            {resultData.details.map((d, i) => <li key={i}>{d}</li>)}
+                        </ul>
+                    </div>
+                    <DialogFooter>
+                        <Button onClick={() => setResultOpen(false)}>Fechar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             </div>
         </DashboardLayout>
     );
