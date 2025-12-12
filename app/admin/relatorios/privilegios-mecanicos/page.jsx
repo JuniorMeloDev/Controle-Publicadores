@@ -27,7 +27,14 @@ export default function PrivilegiosMecanicosReport() {
   const [data, setData] = useState([]);
   
   // New Filter State
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const getCurrentMonthFirstDay = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}-01`;
+  };
+
+  const [startDate, setStartDate] = useState(getCurrentMonthFirstDay());
   const [endDate, setEndDate] = useState('');
   const [limit, setLimit] = useState(10);
 
@@ -43,10 +50,9 @@ export default function PrivilegiosMecanicosReport() {
    });
 
   // Fetch on mount or when filter changes (debounced?)
-  // For now, let's trigger on Search button or changes of limit
   useEffect(() => {
     generateReport();
-  }, [limit]); // Re-fetch if limit changes? Or just on button? Let's stick to button for dates.
+  }, [limit]);
 
   const generateReport = async () => {
     setLoading(true);
@@ -90,7 +96,7 @@ export default function PrivilegiosMecanicosReport() {
   };
 
   const chunks = [];
-  const chunkSize = 5; // Maybe configurable too?
+  const chunkSize = 5; 
   for (let i = 0; i < data.length; i += chunkSize) {
     chunks.push(data.slice(i, i + chunkSize));
   }
@@ -296,28 +302,29 @@ export default function PrivilegiosMecanicosReport() {
                 ) : (
                     <div className="space-y-4"> 
                         {chunks.map((chunk, idx) => (
-                            <div key={idx} className="border border-black bg-white print:break-inside-avoid">
-                                <table className="w-full text-center border-collapse table-fixed">
+                            <div key={idx} className="border border-black print:border-none bg-white print:break-inside-avoid overflow-x-auto">
+                                <table className="w-full text-center border-collapse min-w-[600px] print:min-w-0">
                                     <thead>
                                         {/* Date Row 1 */}
-                                        <tr className={`bg-white print:bg-white text-black font-bold border-b border-black print-color-adjust-exact ${fontClass}`}>
-                                            <th className={`border-r border-black ${cellPadding} w-[30%] bg-white uppercase text-blue-800`}>Privilégio</th>
+                                        <tr className={`bg-white print:bg-white text-black font-bold border-b border-black print:border-none print-color-adjust-exact ${fontClass}`}>
+                                            {/* ALTERADO: print:border-2 em TODOS os THs */}
+                                            <th className={`border-r border-black print:border-2 ${cellPadding} min-w-[120px] bg-white uppercase text-blue-800 sticky left-0 print:static z-10 text-sm`}>Privilégio</th>
                                             {chunk.map(item => (
-                                                <th key={item.id} className={`border-l border-black ${cellPadding} w-[14%]`}>
+                                                <th key={item.id} className={`border-l border-black print:border-2 ${cellPadding} min-w-[100px]`}>
                                                     {new Date(item.data).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC'})}
                                                 </th>
                                             ))}
-                                            {Array.from({length: chunkSize - chunk.length}).map((_, i) => <th key={i} className={`border-l border-black ${cellPadding} w-[14%]`}></th>)}
+                                            {Array.from({length: chunkSize - chunk.length}).map((_, i) => <th key={i} className={`border-l border-black print:border-2 ${cellPadding} min-w-[100px]`}></th>)}
                                         </tr>
                                         {/* Date Row 2 (Weekday) */}
-                                        <tr className={`bg-white print:bg-white text-black font-semibold border-b border-black text-[9px] sm:text-[10px]`}>
-                                            <th className="border-r border-black bg-white"></th>
+                                        <tr className={`bg-white print:bg-white text-black font-semibold border-b border-black print:border-none text-[9px] sm:text-[10px]`}>
+                                            <th className="border-r border-black print:border-2 bg-white sticky left-0 print:static z-10"></th>
                                             {chunk.map(item => (
-                                                <th key={item.id} className={`border-l border-black p-0 capitalize`}>
+                                                <th key={item.id} className={`border-l border-black print:border-2 p-0 capitalize min-w-[100px]`}>
                                                     {new Date(item.data).toLocaleDateString('pt-BR', {weekday: 'long', timeZone: 'UTC'}).split('-')[0]}
                                                 </th>
                                             ))}
-                                            {Array.from({length: chunkSize - chunk.length}).map((_, i) => <th key={i} className="border-l border-black"></th>)}
+                                            {Array.from({length: chunkSize - chunk.length}).map((_, i) => <th key={i} className="border-l border-black print:border-2 min-w-[100px]"></th>)}
                                         </tr>
                                     </thead>
                                     <tbody className={`text-black font-medium leading-tight ${fontClass}`}>
@@ -329,8 +336,11 @@ export default function PrivilegiosMecanicosReport() {
                                             { label: 'Volante', prop: 'volante', field: 'nome' },
                                             { label: 'Ancião de Apoio', prop: 'apoio', field: 'nome' },
                                         ].map((rowDef, rIdx) => (
-                                            <tr key={rIdx} className={rIdx !== 5 ? "border-b border-black" : ""}>
-                                                <td className={`border-r border-black ${cellPadding} font-bold bg-white text-left pl-2`}>{rowDef.label}</td>
+                                            <tr key={rIdx} className="border-b border-black print:border-none">
+                                                {/* ALTERADO: print:border-2 em TODOS os TDs */}
+                                                <td className={`border-r border-black print:border-2 border-b border-black ${cellPadding} font-bold bg-white text-left pl-2 sticky left-0 print:static z-10 text-xs print:text-sm`}>
+                                                    {rowDef.label}
+                                                </td>
                                                 {chunk.map(item => {
                                                     const name = getShortName(item[`${rowDef.prop}_nome`], item[`${rowDef.prop}_chamado`]);
                                                     const isSemana = item.tipo === 'Meio de Semana';
@@ -340,12 +350,12 @@ export default function PrivilegiosMecanicosReport() {
                                                         else display = '';
                                                     }
                                                     return (
-                                                        <td key={item.id} className={`border-l border-black ${cellPadding} bg-white whitespace-nowrap overflow-hidden text-ellipsis`}>
+                                                        <td key={item.id} className={`border-l border-black print:border-2 ${cellPadding} bg-white whitespace-nowrap`}>
                                                             {display}
                                                         </td>
                                                     );
                                                 })}
-                                                {Array.from({length: chunkSize - chunk.length}).map((_, i) => <td key={i} className={`border-l border-black ${cellPadding}`}></td>)}
+                                                {Array.from({length: chunkSize - chunk.length}).map((_, i) => <td key={i} className={`border-l border-black print:border-2 ${cellPadding}`}></td>)}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -358,7 +368,7 @@ export default function PrivilegiosMecanicosReport() {
             
             <style jsx global>{`
                 @media print {
-                    @page { margin: ${marginClass}; size: ${printConfig.orientation}; } 
+                    @page { margin: 0; size: ${printConfig.orientation}; } 
                     body * { visibility: hidden; }
                     #print-area, #print-area * { visibility: visible; }
                     #print-area {
@@ -367,7 +377,7 @@ export default function PrivilegiosMecanicosReport() {
                         top: 0;
                         width: 100%;
                         margin: 0;
-                        padding: 0 10px;
+                        padding: ${marginClass};
                     }
                     .print-color-adjust-exact { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                 }

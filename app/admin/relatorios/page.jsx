@@ -74,7 +74,7 @@ export default function RelatoriosHubPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
+        <div className="text-center">
            <h1 className="text-2xl font-bold text-gray-900">Central de Relatórios</h1>
            <p className="text-gray-500">Selecione o tipo de relatório que deseja visualizar ou imprimir.</p>
         </div>
@@ -111,13 +111,13 @@ export default function RelatoriosHubPage() {
                     </CardHeader>
                     <CardContent>
                       <div className={`flex items-center text-sm font-medium mt-2 
-                          ${isActive ? 'text-primary' : 'text-gray-400'}
+                          ${isActive ? 'text-gray-900 font-semibold' : 'text-gray-400'}
                       `}>
                         {isLocked ? (
                             <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Apenas Anciãos</span>
                         ) : (
                             isActive ? (
-                                <>Acessar <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" /></>
+                                <>Acessar <ArrowRight className="text-gray-900 w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" /></>
                             ) : 'Em breve'
                         )}
                       </div>

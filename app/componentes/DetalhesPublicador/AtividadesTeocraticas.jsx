@@ -150,7 +150,26 @@ export default function AtividadesTeocraticas({
             </option>
           ))}
         </select>
+        {/* BOTÕES DE AÇÃO */}
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={isEditing ? handleSave : () => { setIsEditing(true); setMessage({text:'', type:''}); }}
+              disabled={isLoadingSave}
+              className={`
+                 ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}
+                 text-white shadow-md transition-all
+              `}
+            >
+              {isEditing ? (
+                isLoadingSave ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />
+              ) : (
+                <Edit className="w-4 h-4 mr-2" />
+              )}
+              {isLoadingSave ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Editar Relatório')}
+            </Button>
+          </div>
       </div>
+      
 
       {/* CONTEÚDO DO ANO SELECIONADO */}
       {selectedYear && (
@@ -174,34 +193,7 @@ export default function AtividadesTeocraticas({
             </div>
           </div>
 
-          {/* BOTÕES DE AÇÃO */}
-          <div className="flex flex-wrap gap-3">
-            <Button
-              onClick={isEditing ? handleSave : () => { setIsEditing(true); setMessage({text:'', type:''}); }}
-              disabled={isLoadingSave}
-              className={`
-                 ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}
-                 text-white shadow-md transition-all
-              `}
-            >
-              {isEditing ? (
-                isLoadingSave ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />
-              ) : (
-                <Edit className="w-4 h-4 mr-2" />
-              )}
-              {isLoadingSave ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Editar Relatório')}
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={handlePrint}
-              disabled={isEditing}
-              className="border-gray-300 text-gray-700 hover:bg-gray-50"
-            >
-              <Printer className="w-4 h-4 mr-2" />
-              Imprimir Este Ano
-            </Button>
-          </div>
+          
 
           {/* --- ÁREA ESPECÍFICA DE IMPRESSÃO DESTE COMPONENTE --- */}
           {/* O CSS global oculta tudo com .no-print e mostra .print-block.

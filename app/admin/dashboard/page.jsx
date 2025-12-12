@@ -265,7 +265,7 @@ export default function Dashboard() {
     <DashboardLayout>
       <div className="space-y-8">
         {/* Cabeçalho da Página */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col items-center justify-center gap-4 text-center">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-gray-900">Visão Geral</h1>
             <p className="text-gray-500 mt-1">Bem-vindo ao painel de controle da congregação.</p>

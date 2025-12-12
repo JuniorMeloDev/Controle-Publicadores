@@ -395,7 +395,7 @@ export default function AssistenciaPage() {
         <DashboardLayout>
             <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
                 {/* HEADER */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex flex-col items-center justify-center gap-4 text-center">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Relatório de Assistência</h1>
                         <p className="text-gray-700">Análise de assistência às reuniões.</p>

@@ -21,11 +21,14 @@ export function HistorySidebar({
     year, 
     setYear,
     onSelect,
-    selectedId 
+    selectedId,
+    availableYearsProp // Optional: Pass years from parent
 }) {
     
-    // Compute available years from items
+    // Compute available years from items if not provided
     const availableYears = useMemo(() => {
+        if (availableYearsProp && availableYearsProp.length > 0) return availableYearsProp;
+        
         const years = new Set();
         items.forEach(item => {
             if (item.date) {
@@ -34,7 +37,7 @@ export function HistorySidebar({
             }
         });
         return Array.from(years).sort().reverse();
-    }, [items]);
+    }, [items, availableYearsProp]);
 
     // Filtering logic is done by PARENT usually to sync main view, 
     // BUT we need to display filtered items in the list too. 

@@ -26,7 +26,7 @@ const EVENT_TYPES = [
     { value: 'Congresso', label: 'Congresso' },
     { value: 'Visita do Superintendente', label: 'Visita do Superintendente' },
     { value: 'Feriado', label: 'Feriado' },
-    { value: 'Memorial', label: 'Memorial' },
+    { value: 'Celebração', label: 'Celebração' },
     { value: 'Outro', label: 'Outro' },
 ];
 
@@ -312,7 +312,7 @@ export default function ConfiguracoesPage() {
                                                 <Sparkles className="w-4 h-4 mr-2" /> Criar Reuniões Automaticamente
                                             </Button>
                                         </DialogTrigger>
-                                        <DialogContent className="max-w-2xl bg-white max-h-[85vh] overflow-hidden flex flex-col">
+                                        <DialogContent className="max-w-2xl bg-white max-h-[85vh] overflow-hidden flex flex-col text-gray-900">
                                             <DialogHeader>
                                                 <DialogTitle>Gerador Automático de Reuniões</DialogTitle>
                                                 <DialogDescription>
@@ -344,8 +344,8 @@ export default function ConfiguracoesPage() {
                                                             <ul className="list-disc list-inside space-y-1 ml-1 opacity-90 font-medium">
                                                                 <li>Assembleias/Congressos cancelam reuniões conflitantes.</li>
                                                                 <li>Visitas do Superintendente movem a reunião para Terça-feira.</li>
-                                                                <li>Memoriais cancelam a reunião do dia.</li>
-                                                                <li>Assembleias no fim de semana cancelam o meio de semana anterior.</li>
+                                                                <li>Celebrações cancelam a reunião do dia da semana ou fim de semana.</li>
+                                                                <li>Assembleias cancelam as reuniões daquela semana.</li>
                                                             </ul>
                                                         </div>
                                                     </div>
@@ -518,7 +518,7 @@ export default function ConfiguracoesPage() {
 
             {/* Result Modal */}
             <Dialog open={resultOpen} onOpenChange={setResultOpen}>
-                <DialogContent>
+                <DialogContent className="bg-white">
                     <DialogHeader>
                         <DialogTitle className={resultData.success ? "text-green-600" : "text-red-600"}>
                             {resultData.success ? 'Sucesso!' : 'Atenção'}

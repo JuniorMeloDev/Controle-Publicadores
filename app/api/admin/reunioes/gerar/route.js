@@ -84,6 +84,12 @@ export async function POST(request) {
             let skip = false;
             let reason = '';
 
+            // Helper for formatting date to BR standard in warnings
+            const formatDateBR = (dateStr) => {
+                const [y, m, d] = dateStr.split('-');
+                return `${d}-${m}-${y}`;
+            };
+
             // Check if it's a meeting day
             if (weekday === config.dia_meio_semana) type = 'Meio de Semana';
             if (weekday === config.dia_fim_semana) type = 'Fim de Semana';
@@ -91,82 +97,78 @@ export async function POST(request) {
             if (type) {
                 // RULE 1: Special Events on the day itself
                 if (eventOnDay) {
-                    // Memorial handling
-                    if (eventOnDay.tipo === 'Memorial') {
-                       // Cancels the meeting of that specific day
+                    // Celebração handling (Exact day match)
+                    if (eventOnDay.tipo === 'Celebração') {
                        skip = true;
-                       reason = `Memorial neste dia (${eventOnDay.nome})`;
+                       reason = `Celebração neste dia (${eventOnDay.nome})`;
                     } 
                     // Assemblies/Congresses always cancel the specific day meeting if it coincides
                     else if (['Assembleia', 'Congresso'].includes(eventOnDay.tipo)) {
                         skip = true;
                         reason = `${eventOnDay.tipo} neste dia`;
                     }
-                    // Visit handling - Handled separately logic below?
                 }
             }
 
 
-            // RULE 2: Complex Interactions (Weekend Assembly cancels preceding Midweek)
-            // If today is Midweek, check for upcoming Weekend events
+            // RULE 2: Complex Interactions (Weekend Assembly cancels preceding Midweek, Celebração cancels Midweek)
+            // If today is Midweek, check for upcoming Weekend events OR Celebração in the week
             if (type === 'Meio de Semana' && !skip) {
-                // Find next Weekend meeting date
-                // Simple heuristic: look ahead up to 6 days for the configured weekend day
-                let nextWeekend = new Date(current);
-                for(let i=1; i<=6; i++) {
-                    nextWeekend.setDate(nextWeekend.getDate() + 1);
-                    if (getWeekdayName(nextWeekend) === config.dia_fim_semana) break;
-                }
-                
-                // Check if there is an Assembly/Congress on that weekend date
-                const weekendEvent = events.find(e => 
-                    e.dateObj.toISOString().split('T')[0] === nextWeekend.toISOString().split('T')[0] &&
-                    ['Assembleia', 'Congresso'].includes(e.tipo)
-                );
-
-                if (weekendEvent) {
-                    skip = true;
-                    reason = `Antecede ${weekendEvent.tipo} no fim de semana (${weekendEvent.data.toISOString().split('T')[0]})`;
-                }
-                
-                // Check if VISIT is this week (Visit forces midweek to TUESDAY)
-                // We need to know if "current" is Tuesday. If not, and there is a visit, we might skip/move.
-                // Actually the rule is: "se for visita ... a reuniao de meio de semana deve sempre ser na terça feira"
-                // So if today is NOT Tuesday, but it is the Midweek day (e.g. Wednesday), and there is a Visit this week...
-                // Ideally we find the "Visit" event for this week.
-                // Let's assume Visit event is registered on the TUESDAY of that week? Or the Visit is a week-long range?
-                // Usually Visit is registered as a "Visita do Superintendente" event on a specific date (Start of week? Or just an event?)
-                // USER SAID: "se for um visita do superitendente a reuniao do meio de semana deve sempre ser na terça feira"
-                // Implementation: Check if there is a 'Visita do Superintendente' in the same week (Mon-Sun).
-                // If so, ONLY generate a meeting if today is Tuesday.
-                
+                // Find start and end of current week (Monday to Sunday)
                 const startOfWeek = new Date(current);
                 startOfWeek.setDate(current.getDate() - current.getDay() + 1); // Monday
                 const endOfWeek = new Date(startOfWeek);
                 endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
-                
-                const visitInWeek = events.find(e => 
-                    e.tipo === 'Visita do Superintendente' && 
+
+                // Check for Celebração in this week
+                const celebracaoInWeek = events.find(e => 
+                    e.tipo === 'Celebração' && 
                     e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
                 );
 
-                if (visitInWeek) {
-                    if (weekday !== 'Terça-feira') {
+                if (celebracaoInWeek) {
+                    skip = true;
+                    const celDate = celebracaoInWeek.dateObj.toISOString().split('T')[0];
+                    reason = `Celebração nesta semana (${formatDateBR(celDate)})`;
+                }
+
+                if (!skip) {
+                     // Find next Weekend meeting date
+                    let nextWeekend = new Date(current);
+                    for(let i=1; i<=6; i++) {
+                        nextWeekend.setDate(nextWeekend.getDate() + 1);
+                        if (getWeekdayName(nextWeekend) === config.dia_fim_semana) break;
+                    }
+                    
+                    // Check if there is an Assembly/Congress on that weekend date
+                    const weekendEvent = events.find(e => 
+                        e.dateObj.toISOString().split('T')[0] === nextWeekend.toISOString().split('T')[0] &&
+                        ['Assembleia', 'Congresso'].includes(e.tipo)
+                    );
+
+                    if (weekendEvent) {
                         skip = true;
-                        reason = `Semana de Visita: Reunião movida para Terça-feira`;
-                        // But we also need to CREATE the Tuesday meeting if it's not the configured day
-                        // This logic parses "configured days". If configured is Wed, skip Wed.
-                        // We need a separate pass or logic to "Push" a Tuesday meeting?
-                        // Let's stick to: If Configured Day != Tuesday, skip. 
-                        // AND we need to inject a Tuesday meeting if Configured Day != Tuesday.
+                        const weDate = weekendEvent.data.toISOString().split('T')[0];
+                        reason = `Antecede ${weekendEvent.tipo} no fim de semana (${formatDateBR(weDate)})`;
+                    }
+                    
+                    // Check for Visit (Move logic)
+                    const visitInWeek = events.find(e => 
+                        e.tipo === 'Visita do Superintendente' && 
+                        e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
+                    );
+
+                    if (visitInWeek) {
+                        if (weekday !== 'Terça-feira') {
+                            skip = true;
+                            reason = `Semana de Visita: Reunião movida para Terça-feira`;
+                        }
                     }
                 }
             }
 
              // RULE 3: Visit injection (if configured day is NOT Tuesday)
-             // Check if today is Tuesday, and Configured Day is NOT Tuesday.
              if (weekday === 'Terça-feira' && config.dia_meio_semana !== 'Terça-feira') {
-                 // Check for visit in this week
                 const startOfWeek = new Date(current);
                 startOfWeek.setDate(current.getDate() - current.getDay() + 1);
                 const endOfWeek = new Date(startOfWeek);
@@ -178,26 +180,20 @@ export async function POST(request) {
                 );
 
                 if (visitInWeek) {
-                    // Force create extra/moved meeting
-                    if (!proposedMeetings.find(m => m.data === dateStr)) { // Avoid dupes
+                    if (!proposedMeetings.find(m => m.data === dateStr)) { 
                          proposedMeetings.push({
                             data: dateStr,
                             tipo: 'Meio de Semana',
                             weekday: 'Terça-feira',
                             reason: 'Reunião de Visita (Forçada na Terça)'
                         });
-                        warnings.push(`Reunião de Visita gerada excepcionalmente na Terça-feira (${dateStr})`);
+                        warnings.push(`Reunião de Visita gerada excepcionalmente na Terça-feira (${formatDateBR(dateStr)})`);
                     }
                 }
              }
 
             // General Generation logic for Configured Days
             if (type && !skip) {
-                // Check database if exists (Only for preview? Or just rely on unique constraint later?)
-                // For preview, we assume if it's in the list it's new.
-                // Ideally we shouldn't create if already exists in DB. 
-                // Let's check DB existence in bulk efficiently? Or just iterate.
-                // For now, let's propose it. The "Confirm" step will handle DB inserts.
                 proposedMeetings.push({
                     data: dateStr,
                     tipo: type,
@@ -205,7 +201,7 @@ export async function POST(request) {
                     reason: 'Agenda Regular'
                 });
             } else if (skip && type) {
-                warnings.push(`Reunião de ${type} em ${dateStr} pulada: ${reason}`);
+                warnings.push(`Reunião de ${type} em ${formatDateBR(dateStr)} pulada: ${reason}`);
             }
 
             current.setDate(current.getDate() + 1);

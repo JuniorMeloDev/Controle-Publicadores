@@ -27,9 +27,9 @@ export function MechanicalPrivilegesTab() {
   const [publishers, setPublishers] = useState([]);
   const [savingId, setSavingId] = useState(null);
 
-  // Filter States
-  const [month, setMonth] = useState('');
-  const [year, setYear] = useState('');
+  // Filter States - Default to Current Month/Year
+  const [month, setMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
+  const [year, setYear] = useState(String(new Date().getFullYear()));
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // State for selection
@@ -38,35 +38,6 @@ export function MechanicalPrivilegesTab() {
   useEffect(() => {
     fetchData();
   }, []);
-
-  useEffect(() => {
-      // Auto-select first meeting if none selected and meetings exist
-      if (!selectedMeetingId && meetings.length > 0) {
-          setSelectedMeetingId(meetings[0].id);
-      }
-  }, [meetings]);
-
-  async function fetchData() {
-    setLoading(true);
-    try {
-        const [mRes, pRes] = await Promise.all([
-            fetch('/api/admin/reunioes'),
-            fetch('/api/admin/get-publicadores')
-        ]);
-        if (mRes.ok) {
-            const data = await mRes.json();
-            const normalized = data.map(m => ({
-                ...m,
-                dataISO: m.data.split('T')[0]
-            }));
-            const sorted = normalized.sort((a, b) => new Date(b.dataISO) - new Date(a.dataISO));
-            setMeetings(sorted);
-            if(sorted.length > 0) setSelectedMeetingId(sorted[0].id);
-        }
-        if (pRes.ok) setPublishers(await pRes.json());
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
-  }
 
   // Filtering
   const filteredMeetings = useMemo(() => {
@@ -79,6 +50,49 @@ export function MechanicalPrivilegesTab() {
     }
     return list;
   }, [meetings, month, year]);
+
+  useEffect(() => {
+      // Auto-select first meeting if none selected and filtered meetings exist
+      // Priority: Select first from filtered list
+      if (filteredMeetings.length > 0) {
+           // Only change if current selection is NOT in the filtered list?
+           // Or just default to first one when filter changes?
+           // Let's keep it simple: if selection is null, pick first.
+           if (!selectedMeetingId) setSelectedMeetingId(filteredMeetings[0].id);
+      }
+  }, [filteredMeetings]);
+
+  async function fetchData() {
+    setLoading(true);
+    try {
+        // Increase limit to ensuring we get recent history (e.g. 100 meetings ~ 1 year)
+        const [mRes, pRes] = await Promise.all([
+            fetch('/api/admin/reunioes?limit=100'),
+            fetch('/api/admin/get-publicadores')
+        ]);
+        if (mRes.ok) {
+            const data = await mRes.json();
+            const normalized = data.map(m => ({
+                ...m,
+                dataISO: m.data.split('T')[0]
+            }));
+            const sorted = normalized.sort((a, b) => new Date(a.dataISO) - new Date(b.dataISO));
+            setMeetings(sorted);
+            // Don't auto-select here, let the effect handle it
+        }
+        if (pRes.ok) setPublishers(await pRes.json());
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }
+
+  // Compute available years from ALL meetings (unfiltered) to pass to Sidebar
+  const allYears = useMemo(() => {
+    const years = new Set();
+    meetings.forEach(m => {
+        if (m.dataISO) years.add(m.dataISO.split('-')[0]);
+    });
+    return Array.from(years).sort().reverse();
+  }, [meetings]);
 
   // Sidebar Items
   const sidebarItems = useMemo(() => {
@@ -145,6 +159,7 @@ export function MechanicalPrivilegesTab() {
                 setYear={setYear}
                 onSelect={handleSidebarSelect}
                 selectedId={selectedMeetingId}
+                availableYearsProp={allYears}
             />
        </div>
 

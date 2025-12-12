@@ -56,7 +56,7 @@ const S21Card = ({ publisherData, serviceYear }) => {
   }), { hours: 0, studies: 0 });
 
   return (
-    <div className="w-[95%] max-w-[210mm] border-2 border-black p-4 bg-white text-black font-sans mx-auto page-break-inside-avoid mb-8 print:mb-2 print:break-inside-avoid relative print:w-full print:max-w-none">
+    <div className="w-[95%] max-w-[210mm] border-2 border-black p-4 bg-white text-black font-sans mx-auto page-break-inside-avoid mb-8 print:mb-2 print:break-inside-avoid relative print:w-full print:max-w-none print:mx-0">
        
        {/* Título Principal */}
        <div className="text-center mb-4">

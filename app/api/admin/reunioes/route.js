@@ -105,17 +105,111 @@ export async function GET(request) {
       ORDER BY r.data DESC
     `;
     
+    const limit = url.searchParams.get('limit');
+
     if (!year && !month) {
-         query += ' LIMIT 20'; // Default limit if no filter
+         query += ` LIMIT ${limit ? parseInt(limit) : 20}`; // Default limit 20
     }
 
     const res = await client.query(query, params);
     
-    // Format dates safely
-    const meetings = res.rows.map(row => ({
-        ...row,
-        data_formatada: new Date(row.data).toLocaleDateString('pt-BR', {timeZone: 'UTC'})
-    }));
+    // Format dates safely and Check Conflicts
+    
+    // 1. Fetch Context (Config & Events) for conflict detection
+    // Optimization: Only if we have some meetings found
+    let meetings = [];
+    if (res.rows.length > 0) {
+        // Assume all meetings are roughly same year context, or use the query year
+        const queryYear = year || new Date().getFullYear();
+        
+        const [configRes, eventsRes] = await Promise.all([
+            client.query('SELECT dia_meio_semana, dia_fim_semana FROM configuracoes_gerais WHERE ano = $1', [queryYear]),
+            client.query('SELECT * FROM eventos_especiais WHERE ano = $1', [queryYear])
+        ]);
+
+        const config = configRes.rows[0];
+        const events = eventsRes.rows.map(e => ({...e, dateObj: new Date(e.data)}));
+
+        meetings = res.rows.map(row => {
+            const meetingDate = new Date(row.data);
+            const dateStr = meetingDate.toISOString().split('T')[0];
+            const result = {
+                ...row,
+                data_formatada: meetingDate.toLocaleDateString('pt-BR', {timeZone: 'UTC'}),
+                cancelado: false,
+                motivo_cancelamento: ''
+            };
+
+            if (!config) return result; // Safety
+
+            // Conflict Logic (Mirrors Generator Logic)
+            
+            // 1. Exact Day Conflict (Assemblies, Congress, Celebration)
+            const eventOnDay = events.find(e => e.dateObj.toISOString().split('T')[0] === dateStr);
+            if (eventOnDay) {
+                if (['Assembleia', 'Congresso', 'Celebração', 'Memorial'].includes(eventOnDay.tipo)) {
+                    result.cancelado = true;
+                    result.motivo_cancelamento = `${eventOnDay.tipo} neste dia`;
+                }
+            }
+
+            // 2. Complex Rules for Midweek
+            // We assume 'Meio de Semana' type is stored in DB row.tipo, or we deduce from config days?
+            // The DB stores 'Meio de Semana' or 'Fim de Semana'.
+            if (!result.cancelado && row.tipo === 'Meio de Semana') {
+                
+                // 2a. Check for Celebração in the same week
+                const current = new Date(meetingDate);
+                const startOfWeek = new Date(current);
+                startOfWeek.setDate(current.getUTCDate() - current.getUTCDay() + 1); // Monday
+                const endOfWeek = new Date(startOfWeek);
+                endOfWeek.setDate(startOfWeek.getUTCDate() + 6); // Sunday
+
+                const celInWeek = events.find(e => 
+                    e.tipo === 'Celebração' && 
+                    e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
+                );
+                
+                if (celInWeek) {
+                    result.cancelado = true;
+                    result.motivo_cancelamento = `Celebração na semana (${celInWeek.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})})`;
+                }
+
+                // 2b. Check for Assembly on UPCOMING weekend (Antecede Assembleia)
+                if (!result.cancelado) {
+                    let nextWeekend = new Date(current);
+                    // Look ahead for the configured weekend day
+                    // Simple heuristic: check next 6 days for config.dia_fim_semana
+                    // Map weekday name to index for comparison?
+                    // Let's iterate day by day up to 6 days
+                    const daysMap = {'Domingo': 0, 'Segunda-feira': 1, 'Terça-feira': 2, 'Quarta-feira': 3, 'Quinta-feira': 4, 'Sexta-feira': 5, 'Sábado': 6};
+                    const targetDayIdx = daysMap[config.dia_fim_semana];
+                    
+                    if (targetDayIdx !== undefined) {
+                         for(let i=1; i<=6; i++) {
+                            const d = new Date(current);
+                            d.setDate(d.getUTCDate() + i);
+                            if (d.getUTCDay() === targetDayIdx) {
+                                // Found the weekend meeting day. Check for Assembly.
+                                const dateStrWe = d.toISOString().split('T')[0];
+                                const weekendEvent = events.find(e => 
+                                    e.dateObj.toISOString().split('T')[0] === dateStrWe &&
+                                    ['Assembleia', 'Congresso'].includes(e.tipo)
+                                );
+                                if (weekendEvent) {
+                                    result.cancelado = true;
+                                    result.motivo_cancelamento = `Antecede ${weekendEvent.tipo} (${weekendEvent.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})})`;
+                                }
+                                break; 
+                            }
+                         }
+                    }
+                }
+            }
+
+            return result;
+        });
+    }
 
     return NextResponse.json(meetings, { status: 200 });
   } catch (err) {

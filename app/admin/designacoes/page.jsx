@@ -33,7 +33,7 @@ function DesignacoesContent() {
 
   return (
       <div className="p-2 space-y-4">
-         <div>
+         <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900">Gerenciamento de Designações</h1>
             <p className="text-gray-500">Planeje e organize as reuniões e privilégios.</p>
          </div>
