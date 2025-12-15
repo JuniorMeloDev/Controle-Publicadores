@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { jsPDF } from "jspdf";
 import { Loader2, Printer, UploadCloud, Save, ChevronLeft, ChevronRight, Calendar, RefreshCw, History, FileText, X, Mail, MessageCircle, Plus, CheckCircle, AlertTriangle, Menu } from 'lucide-react';
 import TabelaDesignacoes from '@/app/componentes/TabelaDesignacoes';
 import { Button } from '@/app/components/ui/button';
@@ -173,6 +174,7 @@ const HistoryList = ({ listaFiltrada, meetingDates, currentIndex, hasData, handl
 );
 
 import { HistorySidebar } from '@/app/components/designacoes/HistorySidebar';
+import { MobileDesignationModal } from './MobileDesignationModal';
 
 // ... (imports remain)
 
@@ -195,6 +197,7 @@ export function LifeMinistryTab() {
   const [month, setMonth] = useState('');
   const [year, setYear] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMobileModalOpen, setIsMobileModalOpen] = useState(false);
 
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   // Removed isHistoryModalOpen as we use Sidebar/Sheet now
@@ -304,7 +307,12 @@ export function LifeMinistryTab() {
       setWeekDescriptions([meeting.descricao]);
       setMeetingDates([meeting.dataSQL]);
       setAssignmentsList([reconstructedAssignments]);
+      setAssignmentsList([reconstructedAssignments]);
       setCurrentIndex(0);
+
+      if (window.innerWidth < 768) {
+        setIsMobileModalOpen(true);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -363,7 +371,12 @@ export function LifeMinistryTab() {
       setAssignmentsList(newAssignments);
       setWeekDescriptions(newDescriptions);
       setMeetingDates(newDates);
+      setMeetingDates(newDates);
       setCurrentIndex(0);
+      
+      if (window.innerWidth < 768) {
+        setIsMobileModalOpen(true);
+      }
 
     } catch (err) {
       setError(`Falha: ${err.message}`);
@@ -439,6 +452,375 @@ export function LifeMinistryTab() {
     } catch (err) { 
       setToastData({ message: err.message, type: 'error' });
     } finally { setIsSaving(false); }
+  };
+
+  const handleGeneratePDF = () => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const schedule = schedules[currentIndex];
+    const assignments = assignmentsList[currentIndex];
+    const weekText = weekDescriptions[currentIndex];
+
+    if (!schedule || !assignments) return;
+
+    // --- CONFIGURAÇÕES GERAIS ---
+    const margin = 5;
+    const pageWidth = 210;
+    const contentWidth = pageWidth - (margin * 2);
+    let currentY = margin;
+
+    // Cores
+    const colors = {
+        blue: [23, 58, 110],
+        orange: [160, 80, 0],   // Amber-700 approx
+        red: [150, 0, 0],
+        black: [0, 0, 0],
+        gray: [100, 100, 100],
+        cyan: [0, 150, 150]
+    };
+    
+    const borderColor = [0, 0, 0];
+    const headerBgFn = () => doc.setFillColor(240, 240, 240);
+    const timeBgFn = () => doc.setFillColor(230, 230, 230);
+    const sectionBgFn = (c) => () => doc.setFillColor(...c); // Header section
+    const highlightBgFn = () => doc.setFillColor(230, 230, 230); // Destaque Presidente
+
+    // --- HELPERS DE TEXTO RICO ---
+
+    // 1. Parsing: Transforma string crua em array de pedaços com estilo
+    const parseRichText = (text, type) => {
+        const parts = [];
+        if (!text) return parts;
+        const normalized = text.replace(/(\d+)\s*MIN/g, '$1 min').replace(/(\d+)\s*Min/g, '$1 min');
+
+        if (type === 'treasures') {
+            const match = normalized.match(/^(.*?)(\(\d+\s*min\))(.*)$/i);
+            if (match) {
+                // Título (com ou sem numero)
+                let title = match[1];
+                const numMatch = title.match(/^(\d+\.)\s*(.*)$/);
+                if (numMatch) {
+                     parts.push({ text: numMatch[1] + " ", color: colors.blue, font: "bold" });
+                     parts.push({ text: numMatch[2], color: colors.blue, font: "bold" });
+                } else {
+                     parts.push({ text: title, color: colors.blue, font: "bold" });
+                }
+                // Tempo
+                parts.push({ text: " " + match[2], color: colors.black, font: "bold" }); // Negrito para tempo
+                // Resto
+                if (match[3]) parts.push({ text: match[3], color: colors.black, font: "bold" });
+            } else {
+                parts.push({ text: normalized, color: colors.blue, font: "bold" });
+            }
+        
+        } else if (type === 'ministry') {
+           const match = normalized.match(/^(.*?)(\(\d+\s*min\))(:?)\s*(.*)$/i);
+           if (match) {
+               parts.push({ text: match[1].toUpperCase(), color: colors.orange, font: "bold" }); // Título
+               parts.push({ text: " " + match[2] + match[3], color: colors.black, font: "bold" }); // Tempo
+               
+               // Source parsing para parenteses em outra cor
+               const source = match[4];
+               const sourceParts = source.split(/(\([^)]+\))/g);
+               sourceParts.forEach(sp => {
+                   if (sp.startsWith('(') && sp.endsWith(')')) {
+                       // Se for (...min) ignora cor diferente, senão cyan
+                       if (sp.includes('min')) parts.push({ text: " " + sp, color: colors.black, font: "bold" });
+                       else parts.push({ text: " " + sp, color: colors.cyan, font: "normal" });
+                   } else if (sp.trim()) {
+                       parts.push({ text: " " + sp, color: colors.black, font: "bold" });
+                   }
+               });
+           } else {
+               parts.push({ text: normalized.toUpperCase(), color: colors.orange, font: "bold" });
+           }
+
+        } else if (type === 'living') {
+            if (normalized.toLowerCase().includes('cântico')) {
+                parts.push({ text: normalized, color: colors.blue, font: "bold" });
+                return parts;
+            }
+            const match = normalized.match(/^(.*?)(\(\d+\s*min\))(:?)\s*(.*)$/i);
+            if (match) {
+                parts.push({ text: match[1], color: colors.red, font: "bold" });
+                parts.push({ text: " " + match[2] + match[3], color: colors.black, font: "bold" });
+                // Source
+                if (match[4]) parts.push({ text: " " + match[4], color: colors.black, font: "bold" });
+            } else {
+                parts.push({ text: normalized, color: colors.red, font: "bold" });
+            }
+        } else {
+            // Default / Normal
+            parts.push({ text: normalized, color: colors.black, font: "normal" });
+        }
+        return parts;
+    };
+
+    // 2. Measure & Render: Calcula quebras de linha e desenha
+    const measureAndRender = (richParts, x, y, maxWidth, lineHeight = 5, dryRun = false) => {
+        doc.setFontSize(10); // Base size
+        let cursorX = 0;
+        let cursorY = 0; // Relative Y
+        let maxLineWidth = 0;
+        
+        // Simulação de linhas
+        let lines = []; 
+        let currentLine = [];
+        let currentLineWidth = 0;
+
+        // Flatten words
+        const words = [];
+        richParts.forEach(part => {
+             doc.setFont("helvetica", part.font || "normal");
+             const partWords = part.text.split(/(\s+)/); // Keep spaces
+             const { text: fullText, ...style } = part; // Separa o texto full do estilo
+             
+             partWords.forEach(w => {
+                 if (!w) return;
+                 const wWidth = doc.getTextWidth(w);
+                 words.push({ text: w, width: wWidth, ...style });
+             });
+        });
+
+        // Word Wrap
+        words.forEach(word => {
+            if (currentLineWidth + word.width > maxWidth && currentLineWidth > 0 && word.text.trim()) {
+                lines.push(currentLine);
+                currentLine = [];
+                currentLineWidth = 0;
+                // Se word for espaço no inicio da linha nova, ignorar (opcional, mas simples aqui)
+                 if (!word.text.trim()) return;
+            }
+            currentLine.push(word);
+            currentLineWidth += word.width;
+        });
+        if (currentLine.length > 0) lines.push(currentLine);
+
+        const totalHeight = lines.length * lineHeight;
+        
+        // Render
+        if (!dryRun) {
+            // Centralizar verticalmente: calcular startY baseado na altura total do bloco e na altura da célula
+            // mas esta função espera que o chamador passe o Y correto para começar a desenhar as linhas
+            // Vamos desenhar linha a linha a partir de y
+            
+            lines.forEach((line, i) => {
+                let lineX = x; // Align Left always for parts
+                const lineY = y + (i * lineHeight) + (lineHeight * 0.7); // Baseline approx
+                
+                line.forEach(word => {
+                    doc.setFont("helvetica", word.font || "normal");
+                    doc.setTextColor(...(word.color || colors.black));
+                    doc.text(word.text, lineX, lineY);
+                    lineX += word.width;
+                });
+            });
+        }
+
+        return totalHeight;
+    };
+
+    // --- DRAWING PRIMITIVES ---
+
+    const drawRect = (x, y, w, h, fillFn = null, strokeColor = borderColor) => {
+        if (fillFn) { fillFn(); doc.rect(x, y, w, h, 'F'); }
+        doc.setDrawColor(...strokeColor); doc.setLineWidth(0.3);
+        doc.rect(x, y, w, h, 'S');
+    };
+
+    const drawTextCentered = (text, x, y, w, h, fontSize=11, fontStyle='normal', color=colors.black) => {
+        doc.setFontSize(fontSize); doc.setFont("helvetica", fontStyle); doc.setTextColor(...color);
+        const textW = doc.getTextWidth(text);
+        
+        // Wrap se precisar (nomes grandes)
+        if (textW > w - 2) {
+             const lines = doc.splitTextToSize(text, w - 2);
+             const blockH = lines.length * 5;
+             const startY = y + (h - blockH) / 2 + 3.5;
+             doc.text(lines, x + w/2, startY, { align: 'center' });
+        } else {
+             doc.text(text, x + w/2, y + h/2 + 1.5, { align: 'center', baseline: 'middle' });
+        }
+    };
+
+    const getName = (fullName) => {
+        if (!fullName) return "";
+        const pub = publicadores.find(p => p.nome_completo === fullName);
+        return pub ? pub.nome_curto : getShortName(fullName);
+    };
+
+    // --- CONSTRUÇÃO ---
+
+    // 1. Title Header
+    const headerH = 40; // Mais alto
+    const colNameW = 75; // Largura da coluna de nomes
+    const infoW = colNameW; // Alinhado com a coluna de nomes
+    const infoX = margin + contentWidth - infoW; // Posição X exata do final
+    
+    // Fix Overlap: Main Title box takes remaining width
+    const titleBoxW = contentWidth - infoW; 
+
+    drawRect(margin, currentY, titleBoxW, headerH, headerBgFn);
+    
+    doc.setFontSize(15); doc.setTextColor(...colors.blue); doc.setFont("helvetica", "bold");
+    doc.text(weekText || "", margin + (titleBoxW / 2), currentY + 14, { align: "center" });
+    
+    doc.setFontSize(19); doc.setTextColor(...colors.black);
+    doc.text("NOSSA VIDA E MINISTÉRIO CRISTÃO", margin + (titleBoxW / 2), currentY + 28, { align: "center" });
+
+    const infoTitleH = 10;
+    const infoRowH = (headerH - infoTitleH) / 2;
+
+    drawRect(infoX, currentY, infoW, infoTitleH, headerBgFn);
+    drawTextCentered("Salão Principal", infoX, currentY, infoW, infoTitleH, 11, "bold");
+
+    drawRect(infoX, currentY + infoTitleH, infoW, infoRowH); // Pres
+    doc.setFontSize(10); doc.setTextColor(...colors.black); doc.text("Presidente:", infoX + 2, currentY + infoTitleH + infoRowH/2 + 1.5);
+    drawTextCentered(getName(assignments.presidente), infoX + 22, currentY + infoTitleH, infoW - 22, infoRowH, 12, "normal");
+
+    drawRect(infoX, currentY + infoTitleH + infoRowH, infoW, infoRowH); // Ajudante
+    doc.setFontSize(10); doc.setTextColor(...colors.black); doc.text("Ajudante:", infoX + 2, currentY + infoTitleH + infoRowH + infoRowH/2 + 1.5);
+    drawTextCentered(getName(assignments.ajudante), infoX + 22, currentY + infoTitleH + infoRowH, infoW - 22, infoRowH, 12, "normal");
+
+    currentY += headerH;
+
+    // --- TABELA ---
+    const colTimeW = 16;
+    // colNameW já definido acima como 75
+    const colPartW = contentWidth - colTimeW - colNameW;
+    const minH = 12; // Altura mínima maior para encher a folha
+
+    const drawRow = (time, richParts, nameVal, type) => {
+        // Handle "Oração --->" right alignment special case
+        let oracaoLabel = "";
+        let finalRichParts = richParts;
+        if (Array.isArray(richParts)) {
+             finalRichParts = JSON.parse(JSON.stringify(richParts));
+             const oraIdx = finalRichParts.findIndex(p => p.text.includes("Oração --->"));
+             if (oraIdx !== -1) {
+                 oracaoLabel = "Oração --->";
+                 finalRichParts[oraIdx].text = finalRichParts[oraIdx].text.replace("Oração --->", "").trim();
+             }
+        }
+
+        // Calculate Height
+        let textH = 0;
+        if (type !== 'header') {
+            textH = measureAndRender(finalRichParts, 0, 0, colPartW - 4, 6, true); // lineHeight 6
+        }
+        let h = Math.max(minH, textH + 5); 
+        
+        // Header Row
+        if (type === 'header') {
+             drawRect(margin, currentY, contentWidth, 9, sectionBgFn(richParts.color), richParts.color);
+             
+             // Icon logic removed
+
+             
+             doc.setTextColor(255, 255, 255); doc.setFontSize(12); doc.setFont("helvetica", "bold");
+             doc.text(richParts.text, margin + contentWidth/2, currentY + 6, { align: "center" });
+             currentY += 9;
+             return;
+        }
+
+        // Normal Row
+        // Column 1: Time
+        drawRect(margin, currentY, colTimeW, h, timeBgFn);
+        doc.setFontSize(10); doc.setTextColor(...colors.black); doc.setFont("helvetica", "bold");
+        if (time) doc.text(time, margin + colTimeW/2, currentY + h/2 + 1, { align: "center", baseline: "middle" });
+
+        // Column 2: Part (Rich Text) - REMOVED Highlight for President here
+        drawRect(margin + colTimeW, currentY, colPartW, h);
+        const textYStart = currentY + (h - textH) / 2 - 2; 
+        measureAndRender(finalRichParts, margin + colTimeW + 2, textYStart, colPartW - 4, 6, false);
+        
+        // Draw Oração label
+        if (oracaoLabel) {
+            doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(...colors.black);
+            doc.text(oracaoLabel, margin + colTimeW + colPartW - 2, currentY + h/2 + 1, { align: "right", baseline: "middle" });
+        }
+
+        // Column 3: Name
+        // Only highlight specific cell if President
+        if (Array.isArray(nameVal)) { // Split Cell
+             const halfH = h / 2;
+             const isPres0 = (assignments.presidente && nameVal[0] === assignments.presidente);
+             const isPres1 = (assignments.presidente && nameVal[1] === assignments.presidente);
+
+             // Custom Fills before Outline
+             if (isPres0) { highlightBgFn(); doc.rect(margin + colTimeW + colPartW, currentY, colNameW, halfH, 'F'); }
+             if (isPres1) { highlightBgFn(); doc.rect(margin + colTimeW + colPartW, currentY + halfH, colNameW, halfH, 'F'); }
+
+             // Draw Outer Outline
+             drawRect(margin + colTimeW + colPartW, currentY, colNameW, h);
+             
+             drawTextCentered(getName(nameVal[0]) || "---", margin + colTimeW + colPartW, currentY, colNameW, halfH, 12);
+             drawTextCentered(getName(nameVal[1]) || "---", margin + colTimeW + colPartW, currentY + halfH, colNameW, halfH, 12);
+        } else {
+             const isPres = (assignments.presidente && nameVal === assignments.presidente);
+             drawRect(margin + colTimeW + colPartW, currentY, colNameW, h, isPres ? highlightBgFn : null);
+             drawTextCentered(getName(nameVal) || "", margin + colTimeW + colPartW, currentY, colNameW, h, 12);
+        }
+
+        currentY += h;
+    };
+
+    // 1. Initial
+    const initParts = parseRichText(`${schedule.initialSong}    Oração --->`, 'normal');
+    if (initParts[0]) initParts[0] = { ...initParts[0], color: colors.blue, font: "bold" };
+    drawRow('19:30', initParts, assignments.oracao_inicial);
+    
+    drawRow('19:35', parseRichText(schedule.openingComments || 'Comentários Iniciais', 'normal'), assignments.comentarios_iniciais);
+
+    // 2. Treasures
+    drawRow('', { text: 'TESOUROS DA PALAVRA DE DEUS', color: colors.blue }, '', 'header');
+    schedule.treasures?.forEach((part, idx) => {
+        drawRow('', parseRichText(part.title, 'treasures'), assignments[`tesouro_${idx}`]);
+    });
+    
+    if (assignments.leitura_biblia) {
+         drawRow('', parseRichText('Leitura da Bíblia (4 min)', 'treasures'), assignments.leitura_biblia);
+    }
+
+    // 3. Ministry
+    drawRow('', { text: 'FAÇA SEU MELHOR NO MINISTÉRIO', color: colors.orange }, '', 'header');
+    schedule.ministry?.forEach((part, idx) => {
+        const parts = parseRichText(part.title, 'ministry');
+        const isDiscurso = part.title.toLowerCase().includes('discurso');
+        
+        if (isDiscurso) {
+            drawRow('', parts, assignments[`ministerio_${idx}`] || assignments[`ministerio_${idx}_1`]);
+        } else {
+            const s = assignments[`ministerio_${idx}_1`] || assignments[`ministerio_${idx}`];
+            const a = assignments[`ministerio_${idx}_2`];
+            drawRow('', parts, [s, a]); 
+        }
+    });
+
+    // 4. Living
+    drawRow('', { text: 'NOSSA VIDA CRISTÃ', color: colors.red }, '', 'header');
+    drawRow('', parseRichText(schedule.middleSong || "Cântico do Meio", 'living'), assignments.cantico_meio);
+    
+    schedule.living?.forEach((part, idx) => {
+        const parts = parseRichText(part.title, 'living');
+        const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
+        
+        if (isBibleStudy) {
+             const s = assignments[`vida_${idx}_1`] || assignments[`vida_${idx}`];
+             const a = assignments[`vida_${idx}_2`];
+             drawRow('', parts, [s, a]);
+        } else {
+             drawRow('', parts, assignments[`vida_${idx}`] || assignments[`vida_${idx}_1`]);
+        }
+    });
+
+    // Finish
+    drawRow('20:50', parseRichText(schedule.finalComments || 'Comentários Finais', 'normal'), assignments.comentarios_finais);
+    
+    const finalParts = parseRichText(`${schedule.finalSong}    Oração --->`, 'normal');
+    if (finalParts[0]) finalParts[0] = { ...finalParts[0], color: colors.blue, font: "bold" };
+    drawRow('21:00', finalParts, assignments.oracao_final);
+
+    doc.save(`Designacoes_${weekText}.pdf`);
   };
 
   const handleOpenEmailModal = () => {
@@ -577,6 +959,20 @@ export function LifeMinistryTab() {
         </div>
       )}
 
+      {/* MODAL MÓVEL DE VISUALIZAÇÃO/EDIÇÃO */}
+      <MobileDesignationModal 
+         isOpen={isMobileModalOpen}
+         onClose={() => setIsMobileModalOpen(false)}
+         schedule={schedules[currentIndex]}
+         assignments={assignmentsList[currentIndex]}
+         weekDescription={weekDescriptions[currentIndex]}
+         publicadores={publicadores}
+         onAssignmentChange={handleAssignmentChange}
+         onSave={handleSaveCurrent}
+         isSaving={isSaving}
+         onPrint={handleGeneratePDF}
+      />
+
       {/* MODAL DE HISTÓRICO (MOBILE) */}
       <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
         <SheetContent side="left" className="p-0 w-72">
@@ -654,13 +1050,16 @@ export function LifeMinistryTab() {
                       <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
                           <div className="flex items-center gap-2 w-full sm:w-auto"><Calendar size={16} className="text-gray-400" /><span className="text-sm font-medium text-gray-600">Data da Reunião:</span></div>
                           <div className="flex items-center gap-2 w-full sm:w-auto flex-1 justify-end">
-                             <input type="text" value={weekDescriptions[currentIndex] || ''} onChange={(e) => handleDescriptionChange(e.target.value)} className="bg-gray-50 border border-gray-200 rounded px-3 py-1.5 text-sm text-gray-900 w-full sm:w-64 text-center font-bold uppercase focus:border-purple-500 focus:ring-0 outline-none transition-all" />
+                             <div onClick={() => window.innerWidth < 768 && setIsMobileModalOpen(true)} className="w-full sm:w-auto cursor-pointer hover:opacity-80 transition-opacity" title="Clique para abrir as designações">
+                               <input type="text" value={weekDescriptions[currentIndex] || ''} onChange={(e) => handleDescriptionChange(e.target.value)} className="bg-gray-50 border border-gray-200 rounded px-3 py-1.5 text-sm text-gray-900 w-full sm:w-64 text-center font-bold uppercase focus:border-purple-500 focus:ring-0 outline-none transition-all" />
+                             </div>
                               <button onClick={() => handleDescriptionChange(weekDescriptions[currentIndex])} className="p-2 bg-gray-100 hover:bg-gray-200 rounded text-gray-600" title="Recarregar"><RefreshCw size={14}/></button>
                           </div>
                       </div>
 
-                      {/* TABELA */}
-                      <div className="bg-white shadow-sm border border-gray-200 rounded-lg flex flex-col">
+                      {/* TABELA (ESCONDIDA NO MOBILE SE MODAL FECHADO, VISIBILIDADE CONTROLADA NO CSS) */}
+                      {/* O usuário pediu para "sumir" essa parte em telas pequenas. */}
+                      <div className="hidden md:flex bg-white shadow-sm border border-gray-200 rounded-lg flex-col">
                           <div className="overflow-auto max-h-[75vh] w-full rounded-lg md:overflow-visible md:max-h-none">
                              <div className="min-w-[900px] md:min-w-0">
                                 <TabelaDesignacoes 
@@ -678,8 +1077,8 @@ export function LifeMinistryTab() {
                          <div className="flex gap-3 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
                             <Button variant="outline" onClick={handleShareWhatsApp} className="bg-green-500 border-green-600 text-white hover:bg-green-600 hover:text-white flex-1 sm:flex-none min-w-[120px]"><MessageCircle className="w-4 h-4 mr-2"/> WhatsApp</Button>
                             <Button variant="outline" onClick={handleOpenEmailModal} className="bg-white border-purple-200 text-purple-700 hover:bg-purple-50 flex-1 sm:flex-none min-w-[100px]"><Mail className="w-4 h-4 mr-2"/> Email</Button>
-                            <Button variant="outline" onClick={handlePrintAll} className=" bg-blue-600 flex-1 sm:flex-none border-gray-300 text-white  hover:bg-blue-500 min-w-[100px]"><Printer className="w-4 h-4 mr-2"/> Imprimir</Button>
-                            <Button onClick={handleSaveCurrent} disabled={isSaving} className="bg-green-600 hover:bg-green-700 flex-1 sm:flex-none text-white min-w-[100px]">{isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Save className="w-4 h-4 mr-2"/>} Salvar</Button>
+                            <Button variant="outline" onClick={handleGeneratePDF} className=" bg-blue-600 flex-1 sm:flex-none border-gray-300 text-white  hover:bg-blue-500 min-w-[100px]"><Printer className="w-4 h-4 mr-2"/> Imprimir</Button>
+                            <Button onClick={handleSaveCurrent} disabled={isSaving} className="hidden md:flex bg-green-600 hover:bg-green-700 flex-1 sm:flex-none text-white min-w-[100px]">{isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Save className="w-4 h-4 mr-2"/>} Salvar</Button>
                          </div>
                       </div>
                   </div>
