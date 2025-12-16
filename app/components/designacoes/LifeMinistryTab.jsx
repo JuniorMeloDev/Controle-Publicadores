@@ -374,9 +374,8 @@ export function LifeMinistryTab() {
       setMeetingDates(newDates);
       setCurrentIndex(0);
       
-      if (window.innerWidth < 768) {
-        setIsMobileModalOpen(true);
-      }
+      // Always open modal on import
+      setIsMobileModalOpen(true);
 
     } catch (err) {
       setError(`Falha: ${err.message}`);
@@ -911,8 +910,16 @@ export function LifeMinistryTab() {
   );  
   const hasData = schedules.length > 0;
 
+  // --- HANDLERS (UPDATED) ---
+  
+  // ensure modal opens on file load
+  // (In handleFilesParse -> handleFileChange)
+  // I need to locate handleFileChange. It wasn't fully shown in the last view tools but it was around line 324.
+
+  // Let's replace the whole JSX first.
+
   return (
-    <>
+    <div className="p-6 max-w-5xl mx-auto w-full">
       <StatusToast message={toastData.message} type={toastData.type} onClose={() => setToastData({ message: '', type: '' })} />
 
       {/* MODAL DE EMAIL */}
@@ -959,7 +966,7 @@ export function LifeMinistryTab() {
         </div>
       )}
 
-      {/* MODAL MÓVEL DE VISUALIZAÇÃO/EDIÇÃO */}
+      {/* MODAL DE EDIÇÃO (ÚNIO) */}
       <MobileDesignationModal 
          isOpen={isMobileModalOpen}
          onClose={() => setIsMobileModalOpen(false)}
@@ -973,122 +980,101 @@ export function LifeMinistryTab() {
          onPrint={handleGeneratePDF}
       />
 
-      {/* MODAL DE HISTÓRICO (MOBILE) */}
-      <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
-        <SheetContent side="left" className="p-0 w-72">
-             <SheetTitle className="hidden">Histórico de Designações</SheetTitle>
-             <HistorySidebar 
-                items={sidebarItems}
-                month={month}
-                setMonth={setMonth}
-                year={year}
-                setYear={setYear}
-                onSelect={(item) => { 
-                    handleLoadSavedMeeting({dataSQL: item.id, descricao: item.label}); 
-                    setIsSidebarOpen(false); 
-                }}
-             />
-        </SheetContent>
-      </Sheet>
-
-      <div className="flex bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-[calc(100vh-220px)]">
-        {/* SIDEBAR DESKTOP */}
-        <div className="hidden md:block">
-            <HistorySidebar 
-                items={sidebarItems}
-                month={month}
-                setMonth={setMonth}
-                year={year}
-                setYear={setYear}
-                onSelect={(item) => handleLoadSavedMeeting({dataSQL: item.id, descricao: item.label})}
-                selectedId={meetingDates[currentIndex]}
-            />
-        </div>
-
-        {/* ÁREA PRINCIPAL */}
-        <div className="flex-1 flex flex-col bg-white overflow-hidden relative no-print min-w-0">
-            <div className="p-4 border-b border-gray-200 flex flex-wrap justify-between items-center bg-white z-10 gap-2">
-                <div className="flex items-center gap-2 shrink-0">
-                   <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-md">
-                      <Menu size={20} />
-                   </button>
-                   <FileText size={20} className="text-purple-600" />
-                   <h2 className="font-bold text-gray-900 text-base">Editor</h2>
-                </div>
-
-                <div className="flex items-center gap-2 ml-auto shrink-0">
-                    {hasData && (
-                      <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 mr-2 shrink-0">
-                         <button onClick={() => { setCurrentIndex(c => Math.max(0, c - 1)); }} disabled={currentIndex === 0} className="p-1.5 hover:bg-white rounded-md disabled:opacity-30"><ChevronLeft size={16}/></button>
-                         <span className="text-xs font-medium px-2 w-20 text-center text-gray-600">Semana {currentIndex + 1}</span>
-                         <button onClick={() => { setCurrentIndex(c => Math.min(schedules.length - 1, c + 1)); }} disabled={currentIndex === schedules.length - 1} className="p-1.5 hover:bg-white rounded-md disabled:opacity-30"><ChevronRight size={16}/></button>
-                      </div>
-                    )}
-                    <label className="flex items-center gap-2 py-2 px-3 rounded-md text-sm bg-purple-600 hover:bg-purple-700 text-white cursor-pointer transition font-medium shadow-sm shrink-0">
-                        <UploadCloud size={16} /> 
-                        <span className="hidden sm:inline">{hasData ? 'Importar' : 'Importar'}</span>
-                        <span className="sm:hidden">{hasData ? 'Trocar' : 'RTF'}</span>
-                        <input type="file" multiple accept=".rtf, .txt" className="hidden" onChange={handleFilesParse} />
-                    </label>
-                </div>
+      <div className="flex flex-col gap-8">
+        
+        {/* CABEÇALHO + IMPORTAR */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div>
+                <h1 className="text-2xl font-bold text-gray-900">Gerenciamento de Designações</h1>
+                <p className="text-gray-500 text-sm mt-1">Importe o arquivo RTF para começar ou selecione uma semana do histórico.</p>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50/30 scroll-smooth">
-                {isParsing ? (
-                  <div className="flex flex-col items-center justify-center h-full gap-4 animate-in fade-in duration-300">
-                     <div className="bg-white p-6 rounded-full shadow-lg border border-gray-100"><Loader2 className="animate-spin text-purple-600 w-10 h-10" /></div>
-                     <p className="text-sm font-medium text-gray-500">Processando arquivo...</p>
-                  </div>
-                ) : !hasData ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center p-8 border-2 border-dashed border-gray-200 rounded-lg m-4">
-                    <div className="w-16 h-16 bg-purple-50 rounded-full flex items-center justify-center mb-4 text-purple-300"><UploadCloud size={32} /></div>
-                    <p className="text-gray-900 font-medium">Nenhuma reunião carregada</p>
-                  </div>
+            <label className="flex items-center gap-3 py-3 px-6 rounded-lg bg-purple-600 hover:bg-purple-700 text-white cursor-pointer transition font-bold shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0">
+                <UploadCloud size={20} /> 
+                IMPORTAR PROGRAMAÇÃO (RTF)
+                <input type="file" multiple accept=".rtf, .txt" className="hidden" onChange={handleFilesParse} />
+            </label>
+        </div>
+
+        {/* HISTÓRICO DE REUNIÕES */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden min-h-[500px]">
+            <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                 <h2 className="font-bold text-gray-800 flex items-center gap-2">
+                    <History size={20} className="text-gray-500" />
+                    Histórico de Reuniões
+                 </h2>
+
+                 <div className="flex items-center gap-3">
+                    <select 
+                        value={month} 
+                        onChange={(e) => setMonth(e.target.value)} 
+                        className="text-sm border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-purple-500 outline-none text-gray-700"
+                    >
+                        <option value="">Todos os Meses</option>
+                        {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((m, i) => <option key={i} value={String(i+1).padStart(2, '0')}>{m}</option>)}
+                    </select>
+                    
+                    <select 
+                        value={year} 
+                        onChange={(e) => setYear(e.target.value)} 
+                        className="text-sm border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-purple-500 outline-none text-gray-700"
+                    >
+                        <option value="">Todos os Anos</option>
+                        {/* Compute years from sidebarItems just for display options if needed, or static list */}
+                        {Array.from(new Set(sidebarItems.map(i => i.date?.split('-')[0]).filter(Boolean))).sort().reverse().map(y => (
+                             <option key={y} value={y}>{y}</option>
+                        ))}
+                    </select>
+
+                    {(month || year) && (
+                        <button onClick={() => { setMonth(''); setYear(''); }} className="text-sm text-red-600 hover:text-red-700 hover:underline px-2">
+                            Limpar Filtros
+                        </button>
+                    )}
+                 </div>
+            </div>
+
+            <div className="flex-1 overflow-auto">
+                {sidebarItems.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                        <History size={48} className="mb-4 opacity-20" />
+                        <p>Nenhuma reunião encontrada no histórico.</p>
+                    </div>
                 ) : (
-                  <div className="max-w-5xl mx-auto space-y-6 pb-10">
-                      {error && (<div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">{error}</div>)}
-                      <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-                          <div className="flex items-center gap-2 w-full sm:w-auto"><Calendar size={16} className="text-gray-400" /><span className="text-sm font-medium text-gray-600">Data da Reunião:</span></div>
-                          <div className="flex items-center gap-2 w-full sm:w-auto flex-1 justify-end">
-                             <div onClick={() => window.innerWidth < 768 && setIsMobileModalOpen(true)} className="w-full sm:w-auto cursor-pointer hover:opacity-80 transition-opacity" title="Clique para abrir as designações">
-                               <input type="text" value={weekDescriptions[currentIndex] || ''} onChange={(e) => handleDescriptionChange(e.target.value)} className="bg-gray-50 border border-gray-200 rounded px-3 py-1.5 text-sm text-gray-900 w-full sm:w-64 text-center font-bold uppercase focus:border-purple-500 focus:ring-0 outline-none transition-all" />
-                             </div>
-                              <button onClick={() => handleDescriptionChange(weekDescriptions[currentIndex])} className="p-2 bg-gray-100 hover:bg-gray-200 rounded text-gray-600" title="Recarregar"><RefreshCw size={14}/></button>
-                          </div>
-                      </div>
-
-                      {/* TABELA (ESCONDIDA NO MOBILE SE MODAL FECHADO, VISIBILIDADE CONTROLADA NO CSS) */}
-                      {/* O usuário pediu para "sumir" essa parte em telas pequenas. */}
-                      <div className="hidden md:flex bg-white shadow-sm border border-gray-200 rounded-lg flex-col">
-                          <div className="overflow-auto max-h-[75vh] w-full rounded-lg md:overflow-visible md:max-h-none">
-                             <div className="min-w-[900px] md:min-w-0">
-                                <TabelaDesignacoes 
-                                    schedule={schedules[currentIndex]}
-                                    assignments={assignmentsList[currentIndex]}
-                                    weekText={weekDescriptions[currentIndex]}
-                                    publicadores={publicadores}
-                                    onAssignmentChange={handleAssignmentChange}
-                                />
-                             </div>
-                          </div>
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
-                         <div className="flex gap-3 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
-                            <Button variant="outline" onClick={handleShareWhatsApp} className="bg-green-500 border-green-600 text-white hover:bg-green-600 hover:text-white flex-1 sm:flex-none min-w-[120px]"><MessageCircle className="w-4 h-4 mr-2"/> WhatsApp</Button>
-                            <Button variant="outline" onClick={handleOpenEmailModal} className="bg-white border-purple-200 text-purple-700 hover:bg-purple-50 flex-1 sm:flex-none min-w-[100px]"><Mail className="w-4 h-4 mr-2"/> Email</Button>
-                            <Button variant="outline" onClick={handleGeneratePDF} className=" bg-blue-600 flex-1 sm:flex-none border-gray-300 text-white  hover:bg-blue-500 min-w-[100px]"><Printer className="w-4 h-4 mr-2"/> Imprimir</Button>
-                            <Button onClick={handleSaveCurrent} disabled={isSaving} className="hidden md:flex bg-green-600 hover:bg-green-700 flex-1 sm:flex-none text-white min-w-[100px]">{isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Save className="w-4 h-4 mr-2"/>} Salvar</Button>
-                         </div>
-                      </div>
-                  </div>
+                    <div className="divide-y divide-gray-100">
+                        {sidebarItems.map((item) => (
+                            <div 
+                                key={item.id} 
+                                onClick={() => {
+                                    handleLoadSavedMeeting({dataSQL: item.id, descricao: item.label});
+                                    setIsMobileModalOpen(true);
+                                }}
+                                className="p-4 hover:bg-purple-50 cursor-pointer flex items-center justify-between group transition-colors"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-sm">
+                                        {item.date?.split('-')[2]}
+                                    </div>
+                                    <div>
+                                        <h3 className="font-medium text-gray-900 group-hover:text-purple-700">{item.label}</h3>
+                                        <p className="text-xs text-gray-500 capitalize">{new Date(item.date).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long' })}</p>
+                                    </div>
+                                </div>
+                                <div className="text-gray-400 group-hover:text-purple-500">
+                                    <ChevronRight size={20} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
         </div>
+
       </div>
+
       <div className="designacoes-print-wrapper printable-content">
         {schedules.map((schedule, idx) => (<div key={idx} className="print-page-break"><TabelaDesignacoes schedule={schedule} assignments={assignmentsList[idx]} weekText={weekDescriptions[idx]} publicadores={publicadores} isPrintView={true} /></div>))}
       </div>
-    </>
+    </div>
   );
 }

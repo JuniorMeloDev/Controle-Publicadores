@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/app/components/ui/card';
-import { FileText, BarChart, Calendar, ArrowRight, Lock, Users } from 'lucide-react';
+import { FileText, BarChart, Calendar, ArrowRight, Lock, Users, LayoutList, Brush } from 'lucide-react';
 import Link from 'next/link';
 
 export default function RelatoriosHubPage() {
@@ -68,6 +68,26 @@ export default function RelatoriosHubPage() {
       bgColor: "bg-purple-50",
       hoverRing: "group-hover:ring-purple-100",
       active: true
+    },
+    {
+       title: "Discursos Públicos",
+       description: "Filtrar por data, orador e tema. Exportar lista.",
+       href: "/admin/relatorios/discursos",
+       icon: LayoutList,
+       color: "text-orange-600",
+       bgColor: "bg-orange-50",
+       hoverRing: "group-hover:ring-orange-100",
+       active: true
+    },
+    {
+       title: "Programação de Limpeza",
+       description: "Escala semanal de limpeza e manutenção do Salão.",
+       href: "/admin/relatorios/limpeza",
+       icon: Brush,
+       color: "text-teal-600",
+       bgColor: "bg-teal-50",
+       hoverRing: "group-hover:ring-teal-100",
+       active: true
     }
   ];
 

@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/ta
 import { LifeMinistryTab } from '@/app/components/designacoes/LifeMinistryTab';
 import { PublicSpeechTab } from '@/app/components/designacoes/PublicSpeechTab';
 import { MechanicalPrivilegesTab } from '@/app/components/designacoes/MechanicalPrivilegesTab';
+import { CleaningTab } from '@/app/components/designacoes/CleaningTab';
 import { PublisherSummaryModal } from '@/app/components/designacoes/PublisherSummaryModal';
 import { Loader2 } from 'lucide-react';
 
@@ -39,10 +40,11 @@ function DesignacoesContent() {
          </div>
 
          <Tabs defaultValue="vida-ministerio" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 md:grid-cols-3 h-auto max-w-lg mb-4 gap-2">
+            <TabsList className="grid w-full grid-cols-1 md:grid-cols-4 h-auto max-w-4xl mb-4 gap-2">
               <TabsTrigger value="vida-ministerio">Vida e Ministério</TabsTrigger>
               <TabsTrigger value="discursos-publicos">Discursos Públicos</TabsTrigger>
               <TabsTrigger value="privilegios-mecanicos">Privilégios Mecânicos</TabsTrigger>
+              <TabsTrigger value="limpeza-semanal">Limpeza Semanal</TabsTrigger>
             </TabsList>
             
             <TabsContent value="vida-ministerio">
@@ -55,6 +57,10 @@ function DesignacoesContent() {
             
             <TabsContent value="privilegios-mecanicos">
                <MechanicalPrivilegesTab />
+            </TabsContent>
+            
+            <TabsContent value="limpeza-semanal">
+                <CleaningTab />
             </TabsContent>
          </Tabs>
 

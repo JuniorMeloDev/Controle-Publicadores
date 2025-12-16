@@ -54,7 +54,9 @@ export async function GET(request) {
   const client = await pool.connect();
   try {
     // 1. Ensure Table and Columns
+    // 1. Ensure Tables
     try {
+        // Main Meeting Table
          await client.query(`
             CREATE TABLE IF NOT EXISTS reunioes_registro (
                 id SERIAL PRIMARY KEY,
@@ -65,6 +67,77 @@ export async function GET(request) {
             );
          `);
          await ensureColumns(client);
+
+         // Dynamic Privileges Tables
+         await client.query(`
+            CREATE TABLE IF NOT EXISTS privilegios_tipos (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(100) NOT NULL,
+                ativo BOOLEAN DEFAULT TRUE,
+                ordem INTEGER DEFAULT 0
+            );
+         `);
+         
+         await client.query(`
+            CREATE TABLE IF NOT EXISTS reunioes_privilegios (
+                id SERIAL PRIMARY KEY,
+                reuniao_id INTEGER REFERENCES reunioes_registro(id) ON DELETE CASCADE,
+                privilegio_tipo_id INTEGER REFERENCES privilegios_tipos(id) ON DELETE CASCADE,
+                publicador_id INTEGER REFERENCES publicadores(id) ON DELETE SET NULL,
+                UNIQUE(reuniao_id, privilegio_tipo_id)
+            );
+         `);
+
+         // Seed default types if empty
+         const typesCheck = await client.query('SELECT COUNT(*) FROM privilegios_tipos');
+         if (parseInt(typesCheck.rows[0].count) === 0) {
+             const defaults = [
+                 'Leitor de A Sentinela', 
+                 'Indicador Interno', 
+                 'Ind. Externo / Volante',
+                 'Indicador Externo', 
+                 'Volante', 
+                 'Ancião de Apoio'
+             ];
+             for (let i = 0; i < defaults.length; i++) {
+                 await client.query('INSERT INTO privilegios_tipos (nome, ordem) VALUES ($1, $2)', [defaults[i], i]);
+             }
+         }
+
+         // Migration: If assignments empty but meetings exist, copy from columns
+         const assignCheck = await client.query('SELECT COUNT(*) FROM reunioes_privilegios');
+         if (parseInt(assignCheck.rows[0].count) === 0) {
+             const meetingsRes = await client.query('SELECT * FROM reunioes_registro');
+             if (meetingsRes.rows.length > 0) {
+                 const typesRes = await client.query('SELECT id, nome FROM privilegios_tipos');
+                 const typesMap = {}; // nome -> id
+                 typesRes.rows.forEach(t => typesMap[t.nome] = t.id);
+
+                 const colMap = {
+                     'leitor_id': 'Leitor de A Sentinela',
+                     'indicador_interno_id': 'Indicador Interno',
+                     'indicador_externo_volante_id': 'Ind. Externo / Volante',
+                     'indicador_externo_id': 'Indicador Externo',
+                     'volante_id': 'Volante',
+                     'anciao_apoio_id': 'Ancião de Apoio'
+                 };
+
+                 for (const m of meetingsRes.rows) {
+                     for (const [col, typeName] of Object.entries(colMap)) {
+                         if (m[col] && typesMap[typeName]) {
+                             // Check for duplicates just in case
+                             await client.query(`
+                                INSERT INTO reunioes_privilegios (reuniao_id, privilegio_tipo_id, publicador_id)
+                                VALUES ($1, $2, $3)
+                                ON CONFLICT DO NOTHING
+                             `, [m.id, typesMap[typeName], m[col]]);
+                         }
+                     }
+                 }
+                 console.log(`Migrated privileges for ${meetingsRes.rows.length} meetings.`);
+             }
+         }
+
     } catch (e) { console.error("Migration error:", e); }
 
     // 2. Query

@@ -16,57 +16,56 @@ export async function GET(request) {
   const client = await pool.connect();
 
   try {
-    let query = `
-      SELECT 
-        r.id,
-        r.data,
-        r.tipo,
-        
-        p_leitor.nome_completo as leitor_nome,
-        p_leitor.nome_chamado as leitor_chamado,
-        
-        p_ind_int.nome_completo as ind_int_nome,
-        p_ind_int.nome_chamado as ind_int_chamado,
-        
-        p_ind_ext_vol.nome_completo as ind_ext_vol_nome,
-        p_ind_ext_vol.nome_chamado as ind_ext_vol_chamado,
-        
-        p_ind_ext.nome_completo as ind_ext_nome,
-        p_ind_ext.nome_chamado as ind_ext_chamado,
-        
-        p_volante.nome_completo as volante_nome,
-        p_volante.nome_chamado as volante_chamado,
-        
-        p_apoio.nome_completo as apoio_nome,
-        p_apoio.nome_chamado as apoio_chamado
-
-      FROM reunioes_registro r
-      LEFT JOIN publicadores p_leitor ON r.leitor_id = p_leitor.id
-      LEFT JOIN publicadores p_ind_int ON r.indicador_interno_id = p_ind_int.id
-      LEFT JOIN publicadores p_ind_ext_vol ON r.indicador_externo_volante_id = p_ind_ext_vol.id
-      LEFT JOIN publicadores p_ind_ext ON r.indicador_externo_id = p_ind_ext.id
-      LEFT JOIN publicadores p_volante ON r.volante_id = p_volante.id
-      LEFT JOIN publicadores p_apoio ON r.anciao_apoio_id = p_apoio.id
-      
-      WHERE r.data >= $1
-    `;
-
+    // 1. Fetch Meetings
     const params = [start];
+    let query = `SELECT id, data, tipo FROM reunioes_registro WHERE data >= $1`;
     
     if (end) {
-        query += ` AND r.data <= $2`;
+        query += ` AND data <= $2`;
         params.push(end);
     }
-
-    query += ` ORDER BY r.data ASC LIMIT $${params.length + 1}`;
+    query += ` ORDER BY data ASC LIMIT $${params.length + 1}`;
     params.push(limit);
 
-    const res = await client.query(query, params);
-    
-    return NextResponse.json(res.rows, { status: 200 });
+    const meetingsRes = await client.query(query, params);
+    const meetings = meetingsRes.rows;
+
+    if (meetings.length === 0) {
+        return NextResponse.json({ meetings: [], types: [], assignments: {} });
+    }
+
+    const meetingIds = meetings.map(m => m.id);
+
+    // 2. Fetch Active Types
+    const typesRes = await client.query('SELECT id, nome FROM privilegios_tipos WHERE ativo = true ORDER BY ordem ASC');
+    const types = typesRes.rows;
+
+    // 3. Fetch Assignments for these meetings
+    const assignmentsRes = await client.query(`
+        SELECT 
+            rp.reuniao_id,
+            rp.privilegio_tipo_id,
+            p.nome_completo,
+            p.nome_chamado
+        FROM reunioes_privilegios rp
+        JOIN publicadores p ON rp.publicador_id = p.id
+        WHERE rp.reuniao_id = ANY($1)
+    `, [meetingIds]);
+
+    // 4. Map Assignments: { meetingId: { typeId: { nome_completo, nome_chamado } } }
+    const assignments = {};
+    assignmentsRes.rows.forEach(row => {
+        if (!assignments[row.reuniao_id]) assignments[row.reuniao_id] = {};
+        assignments[row.reuniao_id][row.privilegio_tipo_id] = {
+            nome: row.nome_completo,
+            chamado: row.nome_chamado
+        };
+    });
+
+    return NextResponse.json({ meetings, types, assignments }, { status: 200 });
 
   } catch (err) {
-    console.error('Erro ao buscar privilégios:', err);
+    console.error('Erro ao buscar relatorio:', err);
     return NextResponse.json({ message: 'Erro interno.' }, { status: 500 });
   } finally {
     client.release();
