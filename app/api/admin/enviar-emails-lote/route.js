@@ -125,12 +125,12 @@ function generateMeetingHtml(weekText, schedule, assignments, nameMap) {
   // 5. Encerramento
   rows += `
     <tr>
-      <td style="${sTime}">20:50</td>
+      <td style="${sTime}">21:05</td>
       <td style="${sPart}"><strong>${schedule.finalComments || 'Comentários Finais'}</strong></td>
       <td style="${sName}">${formatName(assignments['comentarios_finais'], nameMap)}</td>
     </tr>
     <tr>
-      <td style="${sTime}">21:00</td>
+      <td style="${sTime}">21:10</td>
       <td style="${sPart}"><span style="color: #1e40af; font-weight: bold;">${schedule.finalSong}</span> <span style="float: right;">Oração Final &rarr;</span></td>
       <td style="${sName}">${formatName(assignments['oracao_final'], nameMap)}</td>
     </tr>

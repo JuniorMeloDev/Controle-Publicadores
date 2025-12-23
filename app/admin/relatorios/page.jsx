@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/app/components/ui/card';
-import { FileText, BarChart, Calendar, ArrowRight, Lock, Users, LayoutList, Brush } from 'lucide-react';
+import { FileText, BarChart, Calendar, ArrowRight, Lock, Users, LayoutList, Brush, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 
 export default function RelatoriosHubPage() {
@@ -88,6 +88,16 @@ export default function RelatoriosHubPage() {
       color: "text-teal-600",
       bgColor: "bg-teal-50",
       hoverRing: "group-hover:ring-teal-100",
+      active: true
+    },
+    {
+      title: "Vida e Ministério - Designações",
+      description: "Exportar designações em lote (PDF/Excel) ou individualmente.",
+      href: "/admin/relatorios/vida-e-ministerio",
+      icon: BookOpen,
+      color: "text-indigo-600",
+      bgColor: "bg-indigo-50",
+      hoverRing: "group-hover:ring-indigo-100",
       active: true
     }
   ];

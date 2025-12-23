@@ -204,6 +204,7 @@ export function LifeMinistryTab() {
   const [emailsList, setEmailsList] = useState([]);
   const [newEmailInput, setNewEmailInput] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [importQueue, setImportQueue] = useState([]);
 
   const [toastData, setToastData] = useState({ message: '', type: '' });
 
@@ -321,8 +322,21 @@ export function LifeMinistryTab() {
   };
 
   const handleFilesParse = async (event) => {
+    const readFileAsText = (file) => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    };
+
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
+
+    // Reset input
+    event.target.value = '';
+
     files.sort((a, b) => a.name.localeCompare(b.name));
 
     setIsParsing(true); setError('');
@@ -335,13 +349,32 @@ export function LifeMinistryTab() {
     try {
       for (const file of files) {
         const textContent = await readFileAsText(file);
-        const response = await fetch('/api/admin/parse-rtf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ textContent })
-        });
-        if (!response.ok) throw new Error(`Erro em ${file.name}`);
+
+        // Timeout handling for fetch
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout to avoid AbortError on heavy loads
+
+        let response;
+        try {
+          response = await fetch('/api/admin/parse-rtf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ textContent }),
+            signal: controller.signal
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (!response.ok) throw new Error(`Erro ao processar ${file.name}`);
         const parsedData = await response.json();
+
+        // Validate Data
+        if (!parsedData || !parsedData.weekDate) {
+          console.warn(`Dados inválidos em ${file.name}`, parsedData);
+          setToastData({ message: `Aviso: Dados inválidos em ${file.name}. Ignorado.`, type: 'error' });
+          continue;
+        }
 
         newSchedules.push(parsedData);
 
@@ -362,23 +395,39 @@ export function LifeMinistryTab() {
                 retrievedAssignments = mapSavedToAssignments(savedRows, parsedData);
               }
             }
-          } catch (e) { console.error(e); }
+          } catch (e) { console.error("Erro ao recuperar designações:", e); }
         }
         newAssignments.push(retrievedAssignments);
+      }
+
+      if (newSchedules.length === 0) {
+        throw new Error("Nenhuma programação válida encontrada.");
       }
 
       setSchedules(newSchedules);
       setAssignmentsList(newAssignments);
       setWeekDescriptions(newDescriptions);
       setMeetingDates(newDates);
-      setMeetingDates(newDates);
       setCurrentIndex(0);
 
-      // Always open modal on import
-      setIsMobileModalOpen(true);
+      // Setup Queue for Sequential Opening
+      if (newSchedules.length > 1) {
+        // Add indices 1..N to queue
+        const queueIndices = newSchedules.map((_, i) => i).slice(1);
+        setImportQueue(queueIndices);
+      } else {
+        setImportQueue([]);
+      }
+
+      // Always open modal on import (if data exists)
+      if (newSchedules.length > 0) {
+        setIsMobileModalOpen(true);
+      }
 
     } catch (err) {
+      console.error(err);
       setError(`Falha: ${err.message}`);
+      setToastData({ message: `Erro: ${err.message}`, type: 'error' });
     } finally {
       setIsParsing(false);
     }
@@ -688,7 +737,7 @@ export function LifeMinistryTab() {
     const colPartW = contentWidth - colTimeW - colNameW;
     const minH = 12; // Altura mínima maior para encher a folha
 
-    const drawRow = (time, richParts, nameVal, type) => {
+    const drawRow = (time, richParts, nameVal, type, secondaryLabel = null) => {
       // Handle "Oração --->" right alignment special case
       let oracaoLabel = "";
       let finalRichParts = richParts;
@@ -706,15 +755,12 @@ export function LifeMinistryTab() {
       if (type !== 'header') {
         textH = measureAndRender(finalRichParts, 0, 0, colPartW - 4, 6, true); // lineHeight 6
       }
+
       let h = Math.max(minH, textH + 5);
 
       // Header Row
       if (type === 'header') {
         drawRect(margin, currentY, contentWidth, 9, sectionBgFn(richParts.color), richParts.color);
-
-        // Icon logic removed
-
-
         doc.setTextColor(255, 255, 255); doc.setFontSize(12); doc.setFont("helvetica", "bold");
         doc.text(richParts.text, margin + contentWidth / 2, currentY + 6, { align: "center" });
         currentY += 9;
@@ -727,7 +773,7 @@ export function LifeMinistryTab() {
       doc.setFontSize(10); doc.setTextColor(...colors.black); doc.setFont("helvetica", "bold");
       if (time) doc.text(time, margin + colTimeW / 2, currentY + h / 2 + 1, { align: "center", baseline: "middle" });
 
-      // Column 2: Part (Rich Text) - REMOVED Highlight for President here
+      // Column 2: Part (Rich Text)
       drawRect(margin + colTimeW, currentY, colPartW, h);
       const textYStart = currentY + (h - textH) / 2 - 2;
       measureAndRender(finalRichParts, margin + colTimeW + 2, textYStart, colPartW - 4, 6, false);
@@ -739,45 +785,141 @@ export function LifeMinistryTab() {
       }
 
       // Column 3: Name
-      // Only highlight specific cell if President
+      const colNameX = margin + colTimeW + colPartW;
+
       if (Array.isArray(nameVal)) { // Split Cell
         const halfH = h / 2;
         const isPres0 = (assignments.presidente && nameVal[0] === assignments.presidente);
         const isPres1 = (assignments.presidente && nameVal[1] === assignments.presidente);
 
-        // Custom Fills before Outline
-        if (isPres0) { highlightBgFn(); doc.rect(margin + colTimeW + colPartW, currentY, colNameW, halfH, 'F'); }
-        if (isPres1) { highlightBgFn(); doc.rect(margin + colTimeW + colPartW, currentY + halfH, colNameW, halfH, 'F'); }
+        // Custom Fills
+        if (isPres0) { highlightBgFn(); doc.rect(colNameX, currentY, colNameW, halfH, 'F'); }
+        if (isPres1) { highlightBgFn(); doc.rect(colNameX, currentY + halfH, colNameW, halfH, 'F'); }
 
         // Draw Outer Outline
-        drawRect(margin + colTimeW + colPartW, currentY, colNameW, h);
+        drawRect(colNameX, currentY, colNameW, h);
 
-        drawTextCentered(getName(nameVal[0]) || "---", margin + colTimeW + colPartW, currentY, colNameW, halfH, 12);
-        drawTextCentered(getName(nameVal[1]) || "---", margin + colTimeW + colPartW, currentY + halfH, colNameW, halfH, 12);
+        // Top Name (Standard)
+        drawTextCentered(getName(nameVal[0]) || "---", colNameX, currentY, colNameW, halfH, 12);
+
+        // Bottom Name (Styled)
+        const bottomName = getName(nameVal[1]) || "---";
+        const centerY = currentY + halfH + (halfH / 2); // Vertically centered in bottom half
+
+        if (secondaryLabel) {
+
+          // 1. Configs (New)
+          const finalLabel = secondaryLabel.toLowerCase() === 'ajudante' ? 'Ajud.' : secondaryLabel;
+          const labelStr = finalLabel;
+          const nameStr = bottomName;
+
+          // 2. Measure
+          doc.setFontSize(9); doc.setFont("helvetica", "normal");
+          const labelW = doc.getTextWidth(labelStr);
+
+          doc.setFontSize(12); doc.setFont("helvetica", "normal");
+          const nameW = doc.getTextWidth(nameStr);
+
+          // Spacing
+          const arrowW = 5.5; // Wider for new icon
+          const gapArrowLabel = 3;
+          const gapLabelName = 2;
+          const totalW = arrowW + gapArrowLabel + labelW + gapLabelName + nameW;
+
+          // 3. Start X (Centered Group)
+          let currentX = colNameX + (colNameW - totalW) / 2;
+
+          // 4. Draw Arrow (Down-Right "Enter" style ↳)
+          const iconLeft = currentX + 0.5;
+
+          doc.setDrawColor(100, 100, 100); // Gray
+          doc.setFillColor(100, 100, 100); // Gray Fill
+          doc.setLineWidth(0.6); // Medium thick
+
+          // Coords
+          const kneeX = iconLeft + 1;
+          const kneeY = centerY + 1.2;
+          const topY = centerY - 2;
+          const shaftEndX = kneeX + 2.5;
+
+          // L-Shape Shaft (Continuous line for clean corner)
+          doc.lines([[0, kneeY - topY], [shaftEndX - kneeX, 0]], kneeX, topY);
+
+          // Solid Arrowhead (Filled Triangle)
+          const tipX = shaftEndX + 1.2;
+          const headW = 0.9;
+          doc.triangle(
+            shaftEndX, kneeY - headW, // Top Base
+            shaftEndX, kneeY + headW, // Bottom Base
+            tipX, kneeY,             // Tip
+            'F'                      // Fill
+          );
+
+          currentX += arrowW + gapArrowLabel;
+
+          // 5. Draw Label
+          doc.setTextColor(115, 115, 115); // Distinct Gray
+          doc.setFontSize(9); doc.setFont("helvetica", "normal");
+          doc.text(labelStr, currentX, centerY, { baseline: 'middle' });
+          currentX += labelW + gapLabelName;
+
+          // 6. Draw Name
+          doc.setTextColor(0, 0, 0);
+          doc.setFontSize(12); doc.setFont("helvetica", "normal");
+          doc.text(nameStr, currentX, centerY, { baseline: 'middle' });
+
+        } else {
+          drawTextCentered(bottomName, colNameX, currentY + halfH, colNameW, halfH, 12);
+        }
+
       } else {
         const isPres = (assignments.presidente && nameVal === assignments.presidente);
-        drawRect(margin + colTimeW + colPartW, currentY, colNameW, h, isPres ? highlightBgFn : null);
-        drawTextCentered(getName(nameVal) || "", margin + colTimeW + colPartW, currentY, colNameW, h, 12);
+        drawRect(colNameX, currentY, colNameW, h, isPres ? highlightBgFn : null);
+        drawTextCentered(getName(nameVal) || "", colNameX, currentY, colNameW, h, 12);
       }
 
       currentY += h;
     };
 
+    // --- TIME CALCULATION HELPERS ---
+    let currentMinutes = 19 * 60 + 30; // Início 19:30
+
+    const formatTime = (minutes) => {
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      return `${h}:${m.toString().padStart(2, '0')}`;
+    };
+
+    const getDuration = (text) => {
+      if (!text) return 0;
+      const match = text.match(/\((\d+)\s*min\)/i);
+      if (match) return parseInt(match[1], 10);
+      return 0;
+    };
+
     // 1. Initial
     const initParts = parseRichText(`${schedule.initialSong}    Oração --->`, 'normal');
     if (initParts[0]) initParts[0] = { ...initParts[0], color: colors.blue, font: "bold" };
-    drawRow('19:30', initParts, assignments.oracao_inicial);
+    drawRow(formatTime(currentMinutes), initParts, assignments.oracao_inicial);
+    currentMinutes += 5; // Cântico + Oração (5 min)
 
-    drawRow('19:35', parseRichText(schedule.openingComments || 'Comentários Iniciais', 'normal'), assignments.comentarios_iniciais);
+    // Comentários Iniciais
+    const commentsText = schedule.openingComments || 'Comentários Iniciais (1 min)';
+    const commentsDuration = getDuration(commentsText) || 1;
+    drawRow(formatTime(currentMinutes), parseRichText(commentsText, 'normal'), assignments.comentarios_iniciais);
+    currentMinutes += commentsDuration;
 
     // 2. Treasures
     drawRow('', { text: 'TESOUROS DA PALAVRA DE DEUS', color: colors.blue }, '', 'header');
     schedule.treasures?.forEach((part, idx) => {
-      drawRow('', parseRichText(part.title, 'treasures'), assignments[`tesouro_${idx}`]);
+      drawRow(formatTime(currentMinutes), parseRichText(part.title, 'treasures'), assignments[`tesouro_${idx}`]);
+      currentMinutes += getDuration(part.title) + 1; // +1 min transition
     });
 
     if (assignments.leitura_biblia) {
-      drawRow('', parseRichText('Leitura da Bíblia (4 min)', 'treasures'), assignments.leitura_biblia);
+      const bibleText = 'Leitura da Bíblia (4 min)';
+      drawRow(formatTime(currentMinutes), parseRichText(bibleText, 'treasures'), assignments.leitura_biblia);
+      currentMinutes += getDuration(bibleText) + 1; // +1 min transition
     }
 
     // 3. Ministry
@@ -786,38 +928,56 @@ export function LifeMinistryTab() {
       const parts = parseRichText(part.title, 'ministry');
       const isDiscurso = part.title.toLowerCase().includes('discurso');
 
+      let assignVal;
+      let label = null;
       if (isDiscurso) {
-        drawRow('', parts, assignments[`ministerio_${idx}`] || assignments[`ministerio_${idx}_1`]);
+        assignVal = assignments[`ministerio_${idx}`] || assignments[`ministerio_${idx}_1`];
       } else {
         const s = assignments[`ministerio_${idx}_1`] || assignments[`ministerio_${idx}`];
         const a = assignments[`ministerio_${idx}_2`];
-        drawRow('', parts, [s, a]);
+        assignVal = [s, a];
+        label = "Ajudante";
       }
+
+      drawRow(formatTime(currentMinutes), parts, assignVal, null, label);
+      currentMinutes += getDuration(part.title) + 1; // +1 min transition
     });
 
     // 4. Living
     drawRow('', { text: 'NOSSA VIDA CRISTÃ', color: colors.red }, '', 'header');
-    drawRow('', parseRichText(schedule.middleSong || "Cântico do Meio", 'living'), assignments.cantico_meio);
+
+    // Middle Song (Now 3 min)
+    drawRow(formatTime(currentMinutes), parseRichText(schedule.middleSong || "Cântico do Meio", 'living'), assignments.cantico_meio);
+    currentMinutes += 3;
 
     schedule.living?.forEach((part, idx) => {
       const parts = parseRichText(part.title, 'living');
       const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
 
+      let assignVal;
+      let label = null;
       if (isBibleStudy) {
         const s = assignments[`vida_${idx}_1`] || assignments[`vida_${idx}`];
         const a = assignments[`vida_${idx}_2`];
-        drawRow('', parts, [s, a]);
+        assignVal = [s, a];
+        label = "Leitor";
       } else {
-        drawRow('', parts, assignments[`vida_${idx}`] || assignments[`vida_${idx}_1`]);
+        assignVal = assignments[`vida_${idx}`] || assignments[`vida_${idx}_1`];
       }
+
+      drawRow(formatTime(currentMinutes), parts, assignVal, null, label);
+      currentMinutes += getDuration(part.title);
     });
 
     // Finish
-    drawRow('20:50', parseRichText(schedule.finalComments || 'Comentários Finais', 'normal'), assignments.comentarios_finais);
+    const finalCommentsText = schedule.finalComments || 'Comentários Finais (3 min)';
+    const finalCommentsDuration = getDuration(finalCommentsText) || 3;
+    drawRow(formatTime(currentMinutes), parseRichText(finalCommentsText, 'normal'), assignments.comentarios_finais);
+    currentMinutes += finalCommentsDuration;
 
     const finalParts = parseRichText(`${schedule.finalSong}    Oração --->`, 'normal');
     if (finalParts[0]) finalParts[0] = { ...finalParts[0], color: colors.blue, font: "bold" };
-    drawRow('21:00', finalParts, assignments.oracao_final);
+    drawRow(formatTime(currentMinutes), finalParts, assignments.oracao_final);
 
     doc.save(`Designacoes_${weekText}.pdf`);
   };
@@ -918,6 +1078,19 @@ export function LifeMinistryTab() {
 
   // Let's replace the whole JSX first.
 
+  // --- HANDLERS (UPDATED) ---
+  const handleCloseMobileModal = () => {
+    if (importQueue.length > 0) {
+      // Open next in queue
+      const nextIndex = importQueue[0];
+      setImportQueue(prev => prev.slice(1));
+      setCurrentIndex(nextIndex);
+      setIsMobileModalOpen(true); // Keep open, just switch data
+    } else {
+      setIsMobileModalOpen(false);
+    }
+  };
+
   return (
     <div className="p-6 max-w-5xl mx-auto w-full">
       <StatusToast message={toastData.message} type={toastData.type} onClose={() => setToastData({ message: '', type: '' })} />
@@ -969,7 +1142,7 @@ export function LifeMinistryTab() {
       {/* MODAL DE EDIÇÃO (ÚNIO) */}
       <MobileDesignationModal
         isOpen={isMobileModalOpen}
-        onClose={() => setIsMobileModalOpen(false)}
+        onClose={handleCloseMobileModal}
         schedule={schedules[currentIndex]}
         assignments={assignmentsList[currentIndex]}
         weekDescription={weekDescriptions[currentIndex]}
@@ -986,13 +1159,13 @@ export function LifeMinistryTab() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Gerenciamento de Designações</h1>
-            <p className="text-gray-500 text-sm mt-1">Importe o arquivo RTF para começar ou selecione uma semana do histórico.</p>
+            <p className="text-gray-500 text-sm mt-1">Importe um ou vários arquivos RTF para começar ou selecione uma semana do histórico.</p>
           </div>
 
-          <label className="flex items-center gap-3 py-3 px-6 rounded-lg bg-purple-600 hover:bg-purple-700 text-white cursor-pointer transition font-bold shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0">
-            <UploadCloud size={20} />
-            IMPORTAR PROGRAMAÇÃO (RTF)
-            <input type="file" multiple accept=".rtf, .txt" className="hidden" onChange={handleFilesParse} />
+          <label className={`flex items-center gap-3 py-3 px-6 rounded-lg text-white transition font-bold shadow-md hover:shadow-lg transform active:translate-y-0 ${isParsing ? 'bg-purple-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 hover:-translate-y-0.5 cursor-pointer'}`}>
+            {isParsing ? <Loader2 className="w-5 h-5 animate-spin" /> : <UploadCloud size={20} />}
+            {isParsing ? 'IMPORTANDO...' : 'IMPORTAR PROGRAMAÇÃO (RTF)'}
+            <input type="file" multiple accept=".rtf, .txt" className="hidden" onChange={handleFilesParse} disabled={isParsing} />
           </label>
         </div>
 
