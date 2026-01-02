@@ -168,7 +168,12 @@ export default function AssistenciaPage() {
 
     // --- Chart Configuration Helper ---
     const getChartConfig = (type, data, isStacked = false) => {
-        const labels = data ? data.map(d => new Date(d.fullDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })) : [];
+        const labels = data ? data.map(d => {
+            if (!d.fullDate) return '';
+            const parts = d.fullDate.substring(0, 10).split('-');
+            // parts[0]=YYYY, parts[1]=MM, parts[2]=DD
+            return `${parts[2]}/${parts[1]}`;
+        }) : [];
         const commonDatasets = [
             { label: 'Presencial', data: data.map(d => d.presencial), color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.2)' },
             { label: 'Zoom', data: data.map(d => d.zoom), color: '#A855F7', bg: 'rgba(168, 85, 247, 0.2)' },
@@ -651,9 +656,11 @@ export default function AssistenciaPage() {
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
         return data.filter(item => {
-            const itemDate = new Date(item.fullDate);
-            const itemMonth = itemDate.getMonth();
-            const itemYear = itemDate.getFullYear();
+            if (!item.fullDate) return false;
+            // Parse Date manually to avoid Timezone issues (YYYY-MM-DD)
+            const parts = item.fullDate.substring(0, 10).split('-');
+            const itemYear = parseInt(parts[0], 10);
+            const itemMonth = parseInt(parts[1], 10) - 1; // 0-indexed
             if (itemYear !== currentYear) return false;
             switch (period) {
                 case 'mes': return itemMonth === currentMonth;
