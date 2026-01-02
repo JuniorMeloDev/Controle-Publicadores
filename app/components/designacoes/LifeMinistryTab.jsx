@@ -1079,6 +1079,23 @@ export function LifeMinistryTab() {
   // Let's replace the whole JSX first.
 
   // --- HANDLERS (UPDATED) ---
+  const handleSchedulePartUpdate = (section, partIndex, newTitle) => {
+    setSchedules(prev => {
+      const newSchedules = [...prev];
+      const currentSchedule = { ...newSchedules[currentIndex] };
+
+      if (currentSchedule[section]) {
+        const newSection = [...currentSchedule[section]];
+        if (newSection[partIndex]) {
+          newSection[partIndex] = { ...newSection[partIndex], title: newTitle };
+          currentSchedule[section] = newSection;
+          newSchedules[currentIndex] = currentSchedule;
+        }
+      }
+      return newSchedules;
+    });
+  };
+
   const handleCloseMobileModal = () => {
     if (importQueue.length > 0) {
       // Open next in queue
@@ -1151,6 +1168,7 @@ export function LifeMinistryTab() {
         onSave={handleSaveCurrent}
         isSaving={isSaving}
         onPrint={handleGeneratePDF}
+        onScheduleUpdate={handleSchedulePartUpdate}
       />
 
       <div className="flex flex-col gap-8">
