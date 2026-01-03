@@ -14,21 +14,21 @@ const getCurrentServiceYear = () => {
   return data.getMonth() >= 8 ? data.getFullYear() + 1 : data.getFullYear();
 };
 
-export default function AtividadesTeocraticas({ 
-  publicadorId, 
-  publicadorNome, 
-  relatorios: relatoriosInicial, 
-  publicador, 
+export default function AtividadesTeocraticas({
+  publicadorId,
+  publicadorNome,
+  relatorios: relatoriosInicial,
+  publicador,
   onRefreshData
 }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const [selectedYear, setSelectedYear] = useState(null); 
+  const [selectedYear, setSelectedYear] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoadingSave, setIsLoadingSave] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
-  
+
   const { reportsByYear, availableYears } = useMemo(() => {
     const grouped = (relatoriosInicial || []).reduce((acc, rel) => {
       const year = rel.ano_servico;
@@ -36,7 +36,7 @@ export default function AtividadesTeocraticas({
       acc[year].push(rel);
       return acc;
     }, {});
-    
+
     const years = Object.keys(grouped).map(Number).sort((a, b) => b - a);
     const currentYear = getCurrentServiceYear();
     if (years.length === 0 || !years.includes(currentYear)) {
@@ -47,12 +47,17 @@ export default function AtividadesTeocraticas({
 
   useEffect(() => {
     if (!selectedYear && availableYears.length > 0) {
-      setSelectedYear(availableYears[0]); 
+      const current = getCurrentServiceYear();
+      if (availableYears.includes(current)) {
+        setSelectedYear(current);
+      } else {
+        setSelectedYear(availableYears[0]);
+      }
     }
   }, [availableYears, selectedYear]);
 
   const [editableRelatorios, setEditableRelatorios] = useState([]);
-  
+
   useEffect(() => {
     if (!selectedYear) {
       setEditableRelatorios([]);
@@ -94,7 +99,7 @@ export default function AtividadesTeocraticas({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           publicadorId: publicadorId,
-          relatorios: editableRelatorios 
+          relatorios: editableRelatorios
         })
       });
 
@@ -102,8 +107,8 @@ export default function AtividadesTeocraticas({
       if (!response.ok) throw new Error(data.message || 'Erro ao salvar');
 
       setMessage({ text: data.message, type: 'success' });
-      setIsEditing(false); 
-      if (onRefreshData) onRefreshData(); 
+      setIsEditing(false);
+      if (onRefreshData) onRefreshData();
     } catch (err) {
       setMessage({ text: err.message, type: 'error' });
     } finally {
@@ -120,14 +125,13 @@ export default function AtividadesTeocraticas({
 
   return (
     <div className="mt-6">
-      
+
       {/* Mensagens */}
       {message.text && (
-        <div className={`flex items-center gap-2 p-3 rounded-md mb-4 text-sm ${
-          message.type === 'error'
+        <div className={`flex items-center gap-2 p-3 rounded-md mb-4 text-sm ${message.type === 'error'
             ? 'bg-red-50 text-red-700 border border-red-200'
             : 'bg-green-50 text-green-700 border border-green-200'
-        }`}>
+          }`}>
           <AlertCircle size={16} />
           {message.text}
         </div>
@@ -151,49 +155,49 @@ export default function AtividadesTeocraticas({
           ))}
         </select>
         {/* BOTÕES DE AÇÃO */}
-          <div className="flex flex-wrap gap-3">
-            <Button
-              onClick={isEditing ? handleSave : () => { setIsEditing(true); setMessage({text:'', type:''}); }}
-              disabled={isLoadingSave}
-              className={`
+        <div className="flex flex-wrap gap-3">
+          <Button
+            onClick={isEditing ? handleSave : () => { setIsEditing(true); setMessage({ text: '', type: '' }); }}
+            disabled={isLoadingSave}
+            className={`
                  ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}
                  text-white shadow-md transition-all
               `}
-            >
-              {isEditing ? (
-                isLoadingSave ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />
-              ) : (
-                <Edit className="w-4 h-4 mr-2" />
-              )}
-              {isLoadingSave ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Editar Relatório')}
-            </Button>
-          </div>
+          >
+            {isEditing ? (
+              isLoadingSave ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />
+            ) : (
+              <Edit className="w-4 h-4 mr-2" />
+            )}
+            {isLoadingSave ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Editar Relatório')}
+          </Button>
+        </div>
       </div>
-      
+
 
       {/* CONTEÚDO DO ANO SELECIONADO */}
       {selectedYear && (
         <div className="space-y-6 animate-in fade-in duration-300">
-          
+
           {/* VISUALIZAÇÃO DA TABELA (CARD) */}
           <div className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${isEditing ? 'ring-2 ring-purple-500 ring-offset-2' : ''}`}>
             <div className="p-1 overflow-x-auto">
-               {/* Reutilizamos o componente de impressão para visualização na tela também.
+              {/* Reutilizamos o componente de impressão para visualização na tela também.
                    Ele renderiza a tabela formatada.
                */}
-               <div className="min-w-[700px] p-4">
-                  <RelatorioImprimivel 
-                    publicador={publicador || { nome_completo: publicadorNome }}
-                    relatorios={editableRelatorios} 
-                    anoServico={selectedYear} 
-                    isEditing={isEditing}
-                    onRelatorioChange={handleRelatorioChange}
-                  />
-               </div>
+              <div className="min-w-[700px] p-4">
+                <RelatorioImprimivel
+                  publicador={publicador || { nome_completo: publicadorNome }}
+                  relatorios={editableRelatorios}
+                  anoServico={selectedYear}
+                  isEditing={isEditing}
+                  onRelatorioChange={handleRelatorioChange}
+                />
+              </div>
             </div>
           </div>
 
-          
+
 
           {/* --- ÁREA ESPECÍFICA DE IMPRESSÃO DESTE COMPONENTE --- */}
           {/* O CSS global oculta tudo com .no-print e mostra .print-block.
@@ -201,12 +205,12 @@ export default function AtividadesTeocraticas({
              o que o usuário vê (o ano selecionado) é o que sai no papel.
           */}
           <div className="hidden print:block print:absolute print:top-0 print:left-0 print:w-full print:bg-white print:z-50">
-             <RelatorioImprimivel 
-                publicador={publicador || { nome_completo: publicadorNome }}
-                relatorios={editableRelatorios} 
-                anoServico={selectedYear} 
-                isEditing={false}
-             />
+            <RelatorioImprimivel
+              publicador={publicador || { nome_completo: publicadorNome }}
+              relatorios={editableRelatorios}
+              anoServico={selectedYear}
+              isEditing={false}
+            />
           </div>
 
         </div>
