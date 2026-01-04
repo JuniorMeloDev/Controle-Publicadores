@@ -299,6 +299,7 @@ export default function AnaliseCampoPage() {
                                             {(tipoPioneiro !== 'publicador' && tipoPioneiro !== 'regular') && (
                                                 <th className="px-6 py-3 font-medium text-center">Auxiliar</th>
                                             )}
+                                            <th className="px-6 py-3 font-medium">Observações</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -326,6 +327,9 @@ export default function AnaliseCampoPage() {
                                                         ) : <span className="text-gray-300">-</span>}
                                                     </td>
                                                 )}
+                                                <td className="px-6 py-4 text-gray-500 text-xs italic max-w-[200px] truncate" title={row.observacoes}>
+                                                    {row.observacoes || '-'}
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
