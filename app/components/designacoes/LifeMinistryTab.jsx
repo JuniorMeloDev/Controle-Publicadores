@@ -181,6 +181,7 @@ import { MobileDesignationModal } from './MobileDesignationModal';
 export function LifeMinistryTab() {
   const [publicadores, setPublicadores] = useState([]);
   const [savedMeetingsList, setSavedMeetingsList] = useState([]);
+  const [historyData, setHistoryData] = useState([]); // New state for history
   const [isLoading, setIsLoading] = useState(true);
 
   const [schedules, setSchedules] = useState([]);
@@ -211,9 +212,10 @@ export function LifeMinistryTab() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [pubRes, meetingsRes] = await Promise.all([
+        const [pubRes, meetingsRes, historyRes] = await Promise.all([
           fetch('/api/admin/get-publicadores'),
-          fetch('/api/admin/get-reunioes')
+          fetch('/api/admin/get-reunioes'),
+          fetch('/api/admin/get-historico-designacoes')
         ]);
 
         if (!pubRes.ok) throw new Error('Falha ao buscar publicadores');
@@ -227,6 +229,10 @@ export function LifeMinistryTab() {
 
         if (meetingsRes.ok) {
           setSavedMeetingsList(await meetingsRes.json());
+        }
+
+        if (historyRes.ok) {
+          setHistoryData(await historyRes.json());
         }
       } catch (err) {
         setError(err.message);
@@ -437,12 +443,26 @@ export function LifeMinistryTab() {
     setAssignmentsList(prevList => {
       const newList = [...prevList];
       const currentAssignments = { ...newList[currentIndex] };
-      currentAssignments[partId] = name;
 
-      if (partId === 'presidente') {
-        currentAssignments['comentarios_iniciais'] = name;
-        currentAssignments['comentarios_finais'] = name;
-        currentAssignments['cantico_meio'] = name;
+      if (typeof partId === 'object' && partId !== null) {
+        // Bulk Update
+        Object.assign(currentAssignments, partId);
+
+        // Special logic for President in bulk update if present
+        if (partId.presidente) {
+          currentAssignments['comentarios_iniciais'] = partId.presidente;
+          currentAssignments['comentarios_finais'] = partId.presidente;
+          currentAssignments['cantico_meio'] = partId.presidente;
+        }
+      } else {
+        // Single Update
+        currentAssignments[partId] = name;
+
+        if (partId === 'presidente') {
+          currentAssignments['comentarios_iniciais'] = name;
+          currentAssignments['comentarios_finais'] = name;
+          currentAssignments['cantico_meio'] = name;
+        }
       }
 
       newList[currentIndex] = currentAssignments;
@@ -1164,6 +1184,7 @@ export function LifeMinistryTab() {
         assignments={assignmentsList[currentIndex]}
         weekDescription={weekDescriptions[currentIndex]}
         publicadores={publicadores}
+        historyData={historyData}
         onAssignmentChange={handleAssignmentChange}
         onSave={handleSaveCurrent}
         isSaving={isSaving}

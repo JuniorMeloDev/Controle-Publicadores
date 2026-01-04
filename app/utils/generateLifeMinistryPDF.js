@@ -34,7 +34,23 @@ export const generateLifeMinistryPDF = (schedule, assignments, weekText, existin
     const parseRichText = (text, type) => {
       const parts = [];
       if (!text) return parts;
-      const normalized = text.replace(/(\d+)\s*MIN/g, '$1 min').replace(/(\d+)\s*Min/g, '$1 min');
+      
+      // 1. Normalize "MIN" / "Min"
+      let normalized = text.replace(/(\d+)\s*MIN/g, '$1 min').replace(/(\d+)\s*Min/g, '$1 min');
+
+      // Helper: Truncate only for Living section
+      const truncate = (t) => {
+          if (t.toLowerCase().includes('cântico')) return t;
+          const m = t.match(/^(.*?)(\(\d+\s*min\))/i);
+          if (m) {
+             const base = m[1] + m[2];
+             const after = t.substring(m.index + m[0].length);
+             let suf = "";
+             if (after.match(/^[:\s]*Consideração/i)) suf = ": Consideração";
+             return base + suf;
+          }
+          return t;
+      };
 
       if (type === 'treasures') {
         const match = normalized.match(/^(.*?)(\(\d+\s*min\))(.*)$/i);
@@ -62,17 +78,19 @@ export const generateLifeMinistryPDF = (schedule, assignments, weekText, existin
           parts.push({ text: match[1].toUpperCase(), color: colors.orange, font: "bold" }); // Título
           parts.push({ text: " " + match[2] + match[3], color: colors.black, font: "bold" }); // Tempo
 
-          // Source parsing para parenteses em outra cor
+          // Source parsing
           const source = match[4];
-          const sourceParts = source.split(/(\([^)]+\))/g);
-          sourceParts.forEach(sp => {
-            if (sp.startsWith('(') && sp.endsWith(')')) {
-              if (sp.includes('min')) parts.push({ text: " " + sp, color: colors.black, font: "bold" });
-              else parts.push({ text: " " + sp, color: colors.cyan, font: "normal" });
-            } else if (sp.trim()) {
-              parts.push({ text: " " + sp, color: colors.black, font: "bold" });
-            }
-          });
+          if (source) {
+              const sourceParts = source.split(/(\([^)]+\))/g);
+              sourceParts.forEach(sp => {
+                if (sp.startsWith('(') && sp.endsWith(')')) {
+                  if (sp.includes('min')) parts.push({ text: " " + sp, color: colors.black, font: "bold" });
+                  else parts.push({ text: " " + sp, color: colors.cyan, font: "normal" });
+                } else if (sp.trim()) {
+                  parts.push({ text: " " + sp, color: colors.black, font: "bold" });
+                }
+              });
+          }
         } else {
           parts.push({ text: normalized.toUpperCase(), color: colors.orange, font: "bold" });
         }
@@ -82,14 +100,17 @@ export const generateLifeMinistryPDF = (schedule, assignments, weekText, existin
           parts.push({ text: normalized, color: colors.blue, font: "bold" });
           return parts;
         }
-        const match = normalized.match(/^(.*?)(\(\d+\s*min\))(:?)\s*(.*)$/i);
+        
+        // Apply Truncation ONLY here
+        const truncatedText = truncate(normalized);
+        const match = truncatedText.match(/^(.*?)(\(\d+\s*min\))(.*)$/i);
+        
         if (match) {
-          // Part title Red
-          parts.push({ text: match[1], color: colors.red, font: "bold" });
-          parts.push({ text: " " + match[2] + match[3], color: colors.black, font: "bold" });
-          if (match[4]) parts.push({ text: " " + match[4], color: colors.black, font: "bold" });
+           parts.push({ text: match[1], color: colors.red, font: "bold" });
+           parts.push({ text: " " + match[2], color: colors.black, font: "bold" });
+           if (match[3]) parts.push({ text: match[3], color: colors.black, font: "bold" });
         } else {
-          parts.push({ text: normalized, color: colors.red, font: "bold" });
+           parts.push({ text: truncatedText, color: colors.red, font: "bold" });
         }
       } else {
         // Default / Normal

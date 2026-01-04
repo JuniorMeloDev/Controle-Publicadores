@@ -1,7 +1,7 @@
 'use client';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
-import { User, BookOpen, Music, Mic, Users, Save, Loader2, Printer, Edit2, Check, X, ChevronDown, Search } from "lucide-react";
+import { User, BookOpen, Music, Mic, Users, Save, Loader2, Printer, Edit2, Check, X, ChevronDown, Search, Wand2, Sparkles, History } from "lucide-react";
 import { useState, useEffect, useRef } from 'react';
 
 // Internal SearchableSelect Component
@@ -91,11 +91,35 @@ const SearchableSelect = ({ value, options, onChange, placeholder }) => {
    );
 };
 
+// HELPER: Truncate Title for Display
+const formatPartTitle = (title) => {
+   if (!title) return "";
+   if (title.toLowerCase().includes('cântico')) return title;
 
-export function MobileDesignationModal({ isOpen, onClose, schedule, assignments, weekDescription, publicadores, onAssignmentChange, onSave, isSaving, onPrint, onScheduleUpdate }) {
+   // Strict truncation: Stop exactly at "(XX min)"
+   const match = title.match(/^(.*?)(\(\d+\s*min\))/i);
+   if (match) {
+      const base = match[1] + match[2];
+
+      // Check if there is "Consideração" immediately following
+      const afterTime = title.substring(match.index + match[0].length);
+      let suffix = "";
+      if (afterTime.match(/^[:\s]*Consideração/i)) {
+         suffix = ": Consideração";
+      }
+      return base + suffix;
+   }
+   return title;
+};
+
+export function MobileDesignationModal({ isOpen, onClose, schedule, assignments, weekDescription, publicadores, historyData = [], onAssignmentChange, onSave, isSaving, onPrint, onScheduleUpdate }) {
    // State for Editing Title
    const [editingPartIndex, setEditingPartIndex] = useState(null); // { section: 'living', index: 0 }
    const [editingTitleValue, setEditingTitleValue] = useState('');
+
+   // State for History Modal
+   const [historyModalOpen, setHistoryModalOpen] = useState(false);
+   const [selectedPubHistory, setSelectedPubHistory] = useState(null);
 
    if (!schedule || !assignments) return null;
 
@@ -104,6 +128,106 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
       value: p.nome_completo,
       label: p.nome_curto || p.nome_completo
    })) || [];
+
+   // -- SMART AUTO FILL LOGIC (RANDOM + UNIQUE) --
+   const handleAutoFill = () => {
+      const newAssigns = {};
+      const usedNames = new Set(); // Track used publishers for this generation
+
+      // Helper to pick random unique
+      const pickUnique = (pool) => {
+         if (!pool || pool.length === 0) return '';
+
+         // Filter out already used names
+         const available = pool.filter(p => !usedNames.has(p.nome_completo));
+
+         if (available.length === 0) return ''; // No one left available
+
+         const idx = Math.floor(Math.random() * available.length);
+         const chosen = available[idx].nome_completo;
+
+         usedNames.add(chosen);
+         return chosen;
+      };
+
+      // 1. Define Pools
+      const elders = publicadores.filter(p => p.privilegios?.includes('anciao'));
+      const eldersAndMSUnique = publicadores.filter(p => p.privilegios?.includes('anciao') || p.privilegios?.includes('servo_ministerial'));
+
+      const males = publicadores.filter(p => p.sexo === 'Masculino');
+      const females = publicadores.filter(p => p.sexo === 'Feminino');
+
+      const malesNotElder = males.filter(p => !p.privilegios?.includes('anciao'));
+      const malesForBibleReading = males.filter(p => !p.privilegios?.includes('anciao') && !p.privilegios?.includes('servo_ministerial'));
+
+      // 2. Assign Roles
+
+      // Presidente (Exception: assigned to multiple parts)
+      // Pick president first to ensure availability
+      const presName = pickUnique(elders);
+      if (presName) {
+         newAssigns['presidente'] = presName;
+         newAssigns['comentarios_iniciais'] = presName;
+         newAssigns['comentarios_finais'] = presName;
+         newAssigns['cantico_meio'] = presName;
+         // Note: presName is already added to usedNames by pickUnique
+      }
+
+      // Orações
+      newAssigns['oracao_inicial'] = pickUnique(males);
+      newAssigns['oracao_final'] = pickUnique(males);
+
+      // Tesouros
+      schedule.treasures?.forEach((part, idx) => {
+         const isBibleReading = part.title.toLowerCase().includes('leitura');
+         if (isBibleReading) {
+            newAssigns[`tesouro_${idx}`] = pickUnique(malesForBibleReading);
+         } else {
+            newAssigns[`tesouro_${idx}`] = pickUnique(eldersAndMSUnique);
+         }
+      });
+
+      // Faça Seu Melhor
+      schedule.ministry?.forEach((part, idx) => {
+         const isDiscurso = part.title.toLowerCase().includes('discurso');
+         if (isDiscurso) {
+            newAssigns[`ministerio_${idx}`] = pickUnique(malesNotElder);
+         } else {
+            newAssigns[`ministerio_${idx}_1`] = pickUnique(females);
+            newAssigns[`ministerio_${idx}_2`] = pickUnique(females);
+         }
+      });
+
+      // Nossa Vida Cristã
+      schedule.living?.forEach((part, idx) => {
+         const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
+         if (isBibleStudy) {
+            newAssigns[`vida_${idx}_1`] = pickUnique(elders);
+            newAssigns[`vida_${idx}_2`] = pickUnique(malesNotElder);
+         } else {
+            newAssigns[`vida_${idx}`] = pickUnique(elders);
+         }
+      });
+
+      if (onAssignmentChange) {
+         onAssignmentChange(newAssigns);
+      }
+   };
+
+   // -- MANUAL SELECTION INTERCEPT --
+   const handleManualChange = (key, val) => {
+      // 1. Update the assignment immediately
+      if (onAssignmentChange) {
+         onAssignmentChange(key, val);
+      }
+
+      // 2. Show history modal if a value was selected
+      if (val) {
+         const hist = historyData.filter(h => h.nome_completo === val);
+         setSelectedPubHistory({ name: val, history: hist });
+         setHistoryModalOpen(true);
+      }
+   };
 
    const handleStartEditing = (section, idx, title) => {
       setEditingPartIndex({ section, index: idx });
@@ -130,12 +254,15 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
    );
 
    const renderEditableItem = (label, partKey, value, subLabel = null, subPartKey = null, subValue = null, editConfig = null) => {
+      // Truncate label if it's too long (Modal View)
+      const displayLabel = formatPartTitle(label);
+
       // Helper to render searchable select
       const renderSelect = (key, currentVal) => (
          <SearchableSelect
             value={currentVal || ''}
             options={pubOptions}
-            onChange={(val) => onAssignmentChange && onAssignmentChange(key, val)}
+            onChange={(val) => handleManualChange(key, val)}
          />
       );
 
@@ -157,8 +284,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                   </div>
                ) : (
                   <div className="text-xs font-semibold text-gray-500 uppercase flex items-center gap-2 group">
-                     {/* Strip time for simpler reading in edit mode check if desired, else just label */}
-                     {label}
+                     {displayLabel}
                      {editConfig && editConfig.allowEdit && (
                         <button
                            onClick={() => handleStartEditing(editConfig.section, editConfig.idx, label)}
@@ -187,6 +313,42 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
    return (
       <Dialog open={isOpen} onOpenChange={onClose}>
          <DialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] z-50 w-full max-w-md max-h-[90vh] p-0 gap-0 overflow-hidden rounded-xl bg-white flex flex-col border shadow-lg outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:rounded-xl">
+
+            {/* --- HISTORY MODAL (NESTED ABSOLUTE OVERLAY) --- */}
+            {historyModalOpen && selectedPubHistory && (
+               <div className="absolute inset-x-0 bottom-0 z-[60] bg-white border-t-2 border-purple-500 shadow-2xl p-4 animate-in slide-in-from-bottom-10 fade-in duration-300 rounded-b-xl flex flex-col max-h-[50%]">
+                  <div className="flex justify-between items-center mb-2">
+                     <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                        <History size={16} className="text-purple-600" />
+                        Histórico (3 Meses): {selectedPubHistory.name}
+                     </h3>
+                     <button onClick={() => setHistoryModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                     {selectedPubHistory.history.length === 0 ? (
+                        <p className="text-xs text-gray-500 italic">Nenhuma designação recente.</p>
+                     ) : (
+                        selectedPubHistory.history
+                           .filter(h => {
+                              const part = h.nome_parte.toLowerCase();
+                              return !part.includes('comentários') && !part.includes('cântico');
+                           })
+                           .map((h, i) => (
+                              <div key={i} className="text-xs flex justify-between items-center bg-gray-50 p-2 rounded border border-gray-100">
+                                 <span className="font-medium text-gray-700">{h.nome_parte}</span>
+                                 <span className="text-gray-500">{new Date(h.data_reuniao).toLocaleDateString('pt-BR')}</span>
+                              </div>
+                           ))
+                     )}
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-gray-100">
+                     <button onClick={() => setHistoryModalOpen(false)} className="w-full py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-md text-xs font-bold uppercase tracking-wide">
+                        OK, Confirmar
+                     </button>
+                  </div>
+               </div>
+            )}
+
             <DialogHeader className="p-4 border-b border-gray-100 bg-gray-50/50">
                <DialogTitle className="text-lg font-bold text-gray-900 leading-tight">
                   Designações da Semana
@@ -206,7 +368,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                      <SearchableSelect
                         value={assignments.presidente || ''}
                         options={pubOptions}
-                        onChange={(val) => onAssignmentChange('presidente', val)}
+                        onChange={(val) => handleManualChange('presidente', val)}
                      />
                   </div>
                   <div>
@@ -214,7 +376,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                      <SearchableSelect
                         value={assignments.ajudante || ''}
                         options={pubOptions}
-                        onChange={(val) => onAssignmentChange('ajudante', val)}
+                        onChange={(val) => handleManualChange('ajudante', val)}
                      />
                   </div>
                </div>
@@ -262,7 +424,6 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                   const mainVal = assignments[mainKey];
                   const readerVal = assignments[readerKey];
 
-                  // Config for editing
                   const editConfig = isLocalNeeds ? { allowEdit: true, section: 'living', idx } : null;
 
                   return (
@@ -280,6 +441,11 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
             </div>
 
             <div className="p-3 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+               {/* AUTO INSERT BUTTON */}
+               <button onClick={handleAutoFill} className="px-3 py-2 bg-white border border-purple-200 text-purple-700 hover:bg-purple-50 rounded-md text-sm font-medium shadow-sm flex items-center gap-2 transition-colors mr-auto">
+                  <Sparkles size={16} /> Inserir Automático
+               </button>
+
                <button onClick={onPrint} className="px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md text-sm font-medium shadow-sm flex items-center gap-2">
                   <Printer size={16} /> PDF
                </button>
