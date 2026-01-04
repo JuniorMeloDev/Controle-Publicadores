@@ -55,19 +55,19 @@ function EventoDesignacao({ evento }) {
   return (
     <>
       <div>
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 ring-8 ring-neutral-900">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 ring-8 ring-white">
           <Calendar className="h-5 w-5 text-white" aria-hidden="true" />
         </span>
       </div>
       <div className="min-w-0 flex-1 justify-between space-x-4 pt-1.5">
         <div>
-          <p className="text-sm text-neutral-400">
+          <p className="text-sm text-gray-500">
             Designação de Reunião em <time dateTime={evento.data_evento}>{formatarData(evento.data_evento)}</time>
           </p>
-          <p className="mt-0.5 text-sm text-neutral-100 font-medium">
+          <p className="mt-0.5 text-sm text-gray-900 font-bold">
             {evento.nome_parte}
           </p>
-          <p className="text-xs text-neutral-500">{evento.descricao_semana}</p>
+          <p className="text-xs text-gray-600 font-medium">{evento.descricao_semana}</p>
         </div>
       </div>
     </>
@@ -84,13 +84,13 @@ function EventoPessoal({ evento }) {
   // Pega os valores brutos
   let valorAntigo = evento.valor_antigo || 'vazio';
   let valorNovo = evento.valor_novo || 'vazio';
-  
+
   // Formata datas
   if (evento.campo_alterado === 'data_nascimento' || evento.campo_alterado === 'data_batismo') {
     valorAntigo = formatarData(evento.valor_antigo) || 'vazio';
     valorNovo = formatarData(evento.valor_novo) || 'vazio';
   }
-  
+
   // --- 2. LÓGICA DO TÍTULO ATUALIZADA ---
   switch (evento.campo_alterado) {
     case 'privilegios':
@@ -112,7 +112,7 @@ function EventoPessoal({ evento }) {
     case 'telefone':
     case 'email':
       Icon = User;
-      // Deixa o 'default' cuidar do título
+    // Deixa o 'default' cuidar do título
     default:
       // Usa o dicionário para pegar o nome amigável
       const nomeAmigavel = NOME_CAMPOS[evento.campo_alterado] || evento.campo_alterado;
@@ -123,22 +123,22 @@ function EventoPessoal({ evento }) {
   return (
     <>
       <div>
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-600 ring-8 ring-neutral-900">
-          <Icon className="h-5 w-5 text-neutral-100" aria-hidden="true" />
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-500 ring-8 ring-white">
+          <Icon className="h-5 w-5 text-white" aria-hidden="true" />
         </span>
       </div>
       <div className="min-w-0 flex-1 justify-between space-x-4 pt-1.5">
         <div>
-          <p className="text-sm text-neutral-400">
+          <p className="text-sm text-gray-500">
             Atualização de Perfil em <time dateTime={evento.data_evento}>{formatarData(evento.data_evento)}</time>
           </p>
-          <p className="mt-0.5 text-sm font-medium text-neutral-100">{titulo}</p>
-          
+          <p className="mt-0.5 text-sm font-medium text-gray-900">{titulo}</p>
+
           {evento.campo_alterado !== 'senha' && (
-            <div className="mt-1 flex items-center gap-2 text-xs text-neutral-400">
+            <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
               <span className="line-through">{valorAntigo}</span>
-              <ArrowRight size={12} className="text-green-400" />
-              <span className="font-semibold text-neutral-200">{valorNovo}</span>
+              <ArrowRight size={12} className="text-green-600" />
+              <span className="font-semibold text-gray-700">{valorNovo}</span>
             </div>
           )}
         </div>
@@ -212,7 +212,7 @@ export default function HistoricoPublicador({ publicadorId }) {
                 {eventoIdx !== historico.length - 1 ? (
                   <span className="absolute left-4 top-4 -ml-px h-full w-0.5 bg-neutral-700" aria-hidden="true" />
                 ) : null}
-                
+
                 <div className="relative flex space-x-3">
                   {evento.tipo_evento === 'designacao' ? (
                     <EventoDesignacao evento={evento} />

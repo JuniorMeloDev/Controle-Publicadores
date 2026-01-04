@@ -5,10 +5,13 @@ import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { Button } from '@/app/components/ui/button';
 import { StatusToast } from '@/app/components/ui/status-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
-import { Loader2, ArrowLeft, Calendar, BarChart3, Users, Clock, BookOpen, Printer, Download } from 'lucide-react';
+
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from "@/app/components/ui/sheet";
+import DetalhesPublicador from '@/app/componentes/DetalhesPublicador/DetalhesPublicador';
+import { Loader2, ArrowLeft, Calendar, BarChart3, Users, Clock, BookOpen, Printer, Download, X } from 'lucide-react';
 
 const meses = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -43,6 +46,29 @@ export default function AnaliseCampoPage() {
 
     // List Modal
     const [listModal, setListModal] = useState({ open: false, title: '', items: [] });
+
+    // Details Sheet
+    const [selectedPubId, setSelectedPubId] = useState(null);
+    const [detailsOpen, setDetailsOpen] = useState(false);
+
+    const handlePubClick = (id) => {
+        setSelectedPubId(id);
+        setDetailsOpen(true);
+    };
+
+    const handleCloseDetails = () => {
+        setDetailsOpen(false);
+        setSelectedPubId(null);
+    };
+
+    const handleSaveDetails = ({ message, isError, keepOpen }) => {
+        if (message) {
+            setToast({ show: true, message, type: isError ? 'error' : 'success' });
+        }
+        if (!keepOpen) handleCloseDetails();
+        // Refresh data if needed (optional, effectively refetch stats)
+        fetchStats();
+    };
 
     useEffect(() => {
         fetchStats();
@@ -304,7 +330,11 @@ export default function AnaliseCampoPage() {
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
                                         {data.details.map((row) => (
-                                            <tr key={row.id} className="hover:bg-gray-50 transition-colors">
+                                            <tr
+                                                key={row.id}
+                                                className="hover:bg-gray-50 transition-colors cursor-pointer"
+                                                onClick={() => handlePubClick(row.id)}
+                                            >
                                                 <td className="px-6 py-4 font-medium text-gray-900">{row.nome_completo}</td>
                                                 <td className="px-6 py-4 text-gray-500">{row.nome_grupo || '-'}</td>
                                                 <td className="px-6 py-4 text-center font-medium text-purple-700">{row.horas || 0}</td>
@@ -359,6 +389,35 @@ export default function AnaliseCampoPage() {
                         </div>
                     </DialogContent>
                 </Dialog>
+
+                <Sheet open={detailsOpen} onOpenChange={(open) => !open && handleCloseDetails()}>
+                    <SheetContent side="right" className="w-full sm:max-w-lg md:max-w-xl lg:max-w-3xl p-0 border-l border-gray-200 bg-white focus:outline-none">
+                        <SheetHeader className="sr-only">
+                            <SheetTitle>Detalhes do Publicador</SheetTitle>
+                            <SheetDescription>Edição de registros e atividades.</SheetDescription>
+                        </SheetHeader>
+
+                        <SheetClose
+                            className="absolute right-4 top-4 rounded-sm opacity-100 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-neutral-950 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary z-50"
+                            asChild
+                        >
+                            <button onClick={handleCloseDetails} aria-label="Fechar">
+                                <X className="h-6 w-6 text-black" />
+                            </button>
+                        </SheetClose>
+
+                        <div className="h-full w-full bg-white flex flex-col">
+                            {selectedPubId && (
+                                <DetalhesPublicador
+                                    publicadorId={selectedPubId}
+                                    onSaveSuccess={handleSaveDetails}
+                                    onClose={handleCloseDetails}
+                                    initialTab="atividades"
+                                />
+                            )}
+                        </div>
+                    </SheetContent>
+                </Sheet>
             </div>
         </DashboardLayout>
     );
