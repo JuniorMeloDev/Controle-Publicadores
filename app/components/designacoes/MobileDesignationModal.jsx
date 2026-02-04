@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
 import { User, BookOpen, Music, Mic, Users, Save, Loader2, Printer, Edit2, Check, X, ChevronDown, Search, Wand2, Sparkles, History } from "lucide-react";
@@ -94,18 +94,18 @@ const SearchableSelect = ({ value, options, onChange, placeholder }) => {
 // HELPER: Truncate Title for Display
 const formatPartTitle = (title) => {
    if (!title) return "";
-   if (title.toLowerCase().includes('cântico')) return title;
+   if (title.toLowerCase().includes('cÃ¢ntico')) return title;
 
    // Strict truncation: Stop exactly at "(XX min)"
    const match = title.match(/^(.*?)(\(\d+\s*min\))/i);
    if (match) {
       const base = match[1] + match[2];
 
-      // Check if there is "Consideração" immediately following
+      // Check if there is "ConsideraÃ§Ã£o" immediately following
       const afterTime = title.substring(match.index + match[0].length);
       let suffix = "";
-      if (afterTime.match(/^[:\s]*Consideração/i)) {
-         suffix = ": Consideração";
+      if (afterTime.match(/^[:\s]*ConsideraÃ§Ã£o/i)) {
+         suffix = ": ConsideraÃ§Ã£o";
       }
       return base + suffix;
    }
@@ -173,7 +173,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
          // Note: presName is already added to usedNames by pickUnique
       }
 
-      // Orações
+      // OraÃ§Ãµes
       newAssigns['oracao_inicial'] = pickUnique(males);
       newAssigns['oracao_final'] = pickUnique(males);
 
@@ -187,7 +187,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
          }
       });
 
-      // Faça Seu Melhor
+      // FaÃ§a Seu Melhor
       schedule.ministry?.forEach((part, idx) => {
          const isDiscurso = part.title.toLowerCase().includes('discurso');
          if (isDiscurso) {
@@ -198,9 +198,9 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
          }
       });
 
-      // Nossa Vida Cristã
+      // Nossa Vida CristÃ£
       schedule.living?.forEach((part, idx) => {
-         const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
+         const isBibleStudy = part.title.toLowerCase().includes('estudo bÃ­blico');
          if (isBibleStudy) {
             newAssigns[`vida_${idx}_1`] = pickUnique(elders);
             newAssigns[`vida_${idx}_2`] = pickUnique(malesNotElder);
@@ -230,7 +230,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
    };
 
    const handleStartEditing = (section, idx, title) => {
-      setEditingPartIndex({ section, index: idx });
+      setEditingPartIndex({ section, index: idx ?? null });
       setEditingTitleValue(title);
    };
 
@@ -241,7 +241,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
 
    const handleSaveEditing = (section, idx) => {
       if (onScheduleUpdate) {
-         onScheduleUpdate(section, idx, editingTitleValue);
+         onScheduleUpdate(section, idx ?? null, editingTitleValue);
       }
       handleCancelEditing();
    };
@@ -266,7 +266,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
          />
       );
 
-      const isEditingThisContext = editConfig && editingPartIndex?.section === editConfig.section && editingPartIndex?.index === editConfig.idx;
+      const isEditingThisContext = editConfig && editingPartIndex?.section === editConfig.section && editingPartIndex?.index === (editConfig.idx ?? null);
 
       return (
          <div className="mb-3 last:mb-0">
@@ -289,7 +289,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                         <button
                            onClick={() => handleStartEditing(editConfig.section, editConfig.idx, label)}
                            className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-purple-600 p-1"
-                           title="Editar Título"
+                           title="Editar TÃ­tulo"
                         >
                            <Edit2 size={12} />
                         </button>
@@ -320,18 +320,18 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                   <div className="flex justify-between items-center mb-2">
                      <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                         <History size={16} className="text-purple-600" />
-                        Histórico (3 Meses): {selectedPubHistory.name}
+                        HistÃ³rico (3 Meses): {selectedPubHistory.name}
                      </h3>
                      <button onClick={() => setHistoryModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-2 pr-2">
                      {selectedPubHistory.history.length === 0 ? (
-                        <p className="text-xs text-gray-500 italic">Nenhuma designação recente.</p>
+                        <p className="text-xs text-gray-500 italic">Nenhuma designaÃ§Ã£o recente.</p>
                      ) : (
                         selectedPubHistory.history
                            .filter(h => {
                               const part = h.nome_parte.toLowerCase();
-                              return !part.includes('comentários') && !part.includes('cântico');
+                              return !part.includes('comentÃ¡rios') && !part.includes('cÃ¢ntico');
                            })
                            .map((h, i) => (
                               <div key={i} className="text-xs flex justify-between items-center bg-gray-50 p-2 rounded border border-gray-100">
@@ -382,19 +382,35 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                </div>
                <div className="space-y-2">
                   {renderEditableItem("Oração Inicial", "oracao_inicial", assignments.oracao_inicial)}
-                  {renderEditableItem(schedule.openingComments || "Comentários Iniciais", "comentarios_iniciais", assignments.comentarios_iniciais)}
+                  {renderEditableItem(
+                     schedule.openingComments || "ComentÃ¡rios Iniciais",
+                     "comentarios_iniciais",
+                     assignments.comentarios_iniciais,
+                     null,
+                     null,
+                     null,
+                     { allowEdit: true, section: 'openingComments', idx: null }
+                  )}
                </div>
 
                {/* TESOUROS */}
-               {renderSectionHeader(<BookOpen className="w-5 h-5" />, "Tesouros da Palavra", "text-blue-700 border-blue-200")}
+               {renderSectionHeader(<BookOpen className="w-5 h-5" />, "Tesouros da Palavra de Deus", "text-blue-700 border-blue-200")}
                {schedule.treasures?.map((part, idx) => (
                   <div key={`tesouro-${idx}`}>
-                     {renderEditableItem(part.title, `tesouro_${idx}`, assignments[`tesouro_${idx}`])}
+                     {renderEditableItem(
+                        part.title,
+                        `tesouro_${idx}`,
+                        assignments[`tesouro_${idx}`],
+                        null,
+                        null,
+                        null,
+                        { allowEdit: true, section: 'treasures', idx }
+                     )}
                   </div>
                ))}
 
                {/* FAÇA SEU MELHOR */}
-               {renderSectionHeader(<Users className="w-5 h-5" />, "Faça Seu Melhor", "text-orange-600 border-orange-100")}
+               {renderSectionHeader(<Users className="w-5 h-5" />, "Faça Seu Melhor no Ministério", "text-orange-600 border-orange-100")}
                {schedule.ministry?.map((part, idx) => {
                   const isDiscurso = part.title.toLowerCase().includes('discurso');
                   const studentKey = isDiscurso ? `ministerio_${idx}` : `ministerio_${idx}_1`;
@@ -405,18 +421,33 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
 
                   return (
                      <div key={`min-${idx}`}>
-                        {renderEditableItem(part.title, studentKey, studentVal, "Ajudante", assistantKey, assistantVal)}
+                        {renderEditableItem(
+                           part.title,
+                           studentKey,
+                           studentVal,
+                           "Ajudante",
+                           assistantKey,
+                           assistantVal,
+                           { allowEdit: true, section: 'ministry', idx }
+                        )}
                      </div>
                   );
                })}
 
                {/* NOSSA VIDA CRISTÃ */}
                {renderSectionHeader(<Music className="w-5 h-5" />, "Nossa Vida Cristã", "text-red-600 border-red-100")}
-               {renderEditableItem(schedule.middleSong || "Cântico do Meio", "cantico_meio", assignments.cantico_meio)}
+               {renderEditableItem(
+                  schedule.middleSong || "CÃ¢ntico do Meio",
+                  "cantico_meio",
+                  assignments.cantico_meio,
+                  null,
+                  null,
+                  null,
+                  { allowEdit: true, section: 'middleSong', idx: null }
+               )}
 
                {schedule.living?.map((part, idx) => {
-                  const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
-                  const isLocalNeeds = part.title.toLowerCase().includes('necessidades locais') || part.title.toLowerCase().includes('necessidades da congregação');
+                  const isBibleStudy = part.title.toLowerCase().includes('estudo bÃ­blico');
 
                   const mainKey = isBibleStudy ? `vida_${idx}_1` : `vida_${idx}`;
                   const readerKey = isBibleStudy ? `vida_${idx}_2` : null;
@@ -424,17 +455,31 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                   const mainVal = assignments[mainKey];
                   const readerVal = assignments[readerKey];
 
-                  const editConfig = isLocalNeeds ? { allowEdit: true, section: 'living', idx } : null;
-
                   return (
                      <div key={`vida-${idx}`}>
-                        {renderEditableItem(part.title, mainKey, mainVal, "Leitor", readerKey, readerVal, editConfig)}
+                        {renderEditableItem(
+                           part.title,
+                           mainKey,
+                           mainVal,
+                           "Leitor",
+                           readerKey,
+                           readerVal,
+                           { allowEdit: true, section: 'living', idx }
+                        )}
                      </div>
                   )
                })}
 
                <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
-                  {renderEditableItem(schedule.finalComments || "Comentários Finais", "comentarios_finais", assignments.comentarios_finais)}
+                  {renderEditableItem(
+                     schedule.finalComments || "ComentÃ¡rios Finais",
+                     "comentarios_finais",
+                     assignments.comentarios_finais,
+                     null,
+                     null,
+                     null,
+                     { allowEdit: true, section: 'finalComments', idx: null }
+                  )}
                   {renderEditableItem("Oração Final", "oracao_final", assignments.oracao_final)}
                </div>
 
@@ -458,3 +503,4 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
       </Dialog>
    );
 }
+

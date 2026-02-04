@@ -1104,13 +1104,17 @@ export function LifeMinistryTab() {
       const newSchedules = [...prev];
       const currentSchedule = { ...newSchedules[currentIndex] };
 
-      if (currentSchedule[section]) {
-        const newSection = [...currentSchedule[section]];
-        if (newSection[partIndex]) {
-          newSection[partIndex] = { ...newSection[partIndex], title: newTitle };
-          currentSchedule[section] = newSection;
-          newSchedules[currentIndex] = currentSchedule;
+      if (section in currentSchedule) {
+        if (typeof partIndex === 'number') {
+          const newSection = [...currentSchedule[section]];
+          if (newSection[partIndex]) {
+            newSection[partIndex] = { ...newSection[partIndex], title: newTitle };
+            currentSchedule[section] = newSection;
+          }
+        } else {
+          currentSchedule[section] = newTitle;
         }
+        newSchedules[currentIndex] = currentSchedule;
       }
       return newSchedules;
     });
