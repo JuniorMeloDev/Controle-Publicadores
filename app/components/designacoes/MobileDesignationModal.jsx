@@ -112,6 +112,15 @@ const formatPartTitle = (title) => {
    return title;
 };
 
+const normalizeText = (text) => {
+   if (!text) return '';
+   return text
+      .toString()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+};
+
 export function MobileDesignationModal({ isOpen, onClose, schedule, assignments, weekDescription, publicadores, historyData = [], onAssignmentChange, onSave, isSaving, onPrint, onScheduleUpdate }) {
    // State for Editing Title
    const [editingPartIndex, setEditingPartIndex] = useState(null); // { section: 'living', index: 0 }
@@ -200,7 +209,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
 
       // Nossa Vida CristÃ£
       schedule.living?.forEach((part, idx) => {
-         const isBibleStudy = part.title.toLowerCase().includes('estudo bÃ­blico');
+         const isBibleStudy = normalizeText(part.title).includes('estudo biblico');
          if (isBibleStudy) {
             newAssigns[`vida_${idx}_1`] = pickUnique(elders);
             newAssigns[`vida_${idx}_2`] = pickUnique(malesNotElder);
@@ -320,7 +329,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                   <div className="flex justify-between items-center mb-2">
                      <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                         <History size={16} className="text-purple-600" />
-                        HistÃ³rico (3 Meses): {selectedPubHistory.name}
+                        Histórico (3 Meses): {selectedPubHistory.name}
                      </h3>
                      <button onClick={() => setHistoryModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
                   </div>
@@ -447,7 +456,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                )}
 
                {schedule.living?.map((part, idx) => {
-                  const isBibleStudy = part.title.toLowerCase().includes('estudo bÃ­blico');
+                  const isBibleStudy = normalizeText(part.title).includes('estudo biblico');
 
                   const mainKey = isBibleStudy ? `vida_${idx}_1` : `vida_${idx}`;
                   const readerKey = isBibleStudy ? `vida_${idx}_2` : null;
