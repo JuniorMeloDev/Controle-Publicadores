@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
-import { User, BookOpen, Music, Mic, Users, Save, Loader2, Printer, Edit2, Check, X, ChevronDown, Search, Wand2, Sparkles, History } from "lucide-react";
+import { User, BookOpen, Music, Mic, Users, Save, Loader2, Printer, Edit2, Check, X, ChevronDown, Search, Wand2, Sparkles, History, Mail } from "lucide-react";
 import { useState, useEffect, useRef } from 'react';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
@@ -123,7 +123,7 @@ const normalizeText = (text) => {
       .replace(/[\u0300-\u036f]/g, '');
 };
 
-export function MobileDesignationModal({ isOpen, onClose, schedule, assignments, weekDescription, publicadores, historyData = [], onAssignmentChange, onSave, isSaving, onPrint, onScheduleUpdate }) {
+export function MobileDesignationModal({ isOpen, onClose, schedule, assignments, weekDescription, publicadores, historyData = [], onAssignmentChange, onSave, isSaving, onPrint, onScheduleUpdate, onOpenEmail }) {
    const { permissions } = usePermissions();
    const canSave = isAllowed(permissions, 'designacoes_salvar', 'actions');
    const canPdf = isAllowed(permissions, 'designacoes_pdf', 'actions');
@@ -505,6 +505,11 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                   <Sparkles size={16} /> Inserir Automático
                </button>
 
+               {onOpenEmail && (
+                  <button onClick={onOpenEmail} className="px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md text-sm font-medium shadow-sm flex items-center gap-2">
+                     <Mail size={16} /> E-mail
+                  </button>
+               )}
                <button onClick={onPrint} disabled={!canPdf} className="px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md text-sm font-medium shadow-sm flex items-center gap-2 disabled:opacity-50">
                   <Printer size={16} /> PDF
                </button>

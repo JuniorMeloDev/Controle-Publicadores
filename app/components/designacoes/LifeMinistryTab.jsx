@@ -1169,7 +1169,18 @@ export function LifeMinistryTab() {
                   {emailsList.map((email, idx) => (
                     <div key={idx} className="bg-white border border-gray-300 rounded-full px-3 py-1 text-sm flex items-center gap-2 shadow-sm">
                       <span className="text-gray-700 truncate max-w-[200px]">{email}</span>
-                      <button type="button" onClick={() => handleRemoveEmail(email)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={14} /></button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRemoveEmail(email);
+                        }}
+                        className="text-gray-400 hover:text-red-500 transition-colors pointer-events-auto"
+                        aria-label={`Remover ${email}`}
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -1203,6 +1214,7 @@ export function LifeMinistryTab() {
         isSaving={isSaving}
         onPrint={handleGeneratePDF}
         onScheduleUpdate={handleSchedulePartUpdate}
+        onOpenEmail={handleOpenEmailModal}
       />
 
       <div className="flex flex-col gap-8">

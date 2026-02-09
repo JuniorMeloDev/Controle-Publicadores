@@ -1,9 +1,15 @@
-import { Pool } from '@neondatabase/serverless';
+﻿import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
 import { isAllowed } from '@/app/lib/access-control';
 import { registerAuditLog } from '@/app/lib/audit-log';
 import nodemailer from 'nodemailer';
+import {
+  generateMeetingHtml,
+  getFriendlyTitleWithSection,
+  normalizeText,
+  formatName
+} from '@/app/lib/meeting-email-template';
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
@@ -17,171 +23,6 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// --- HELPER: Formata nome ---
-function formatName(fullName, nameMap) {
-  if (!fullName || fullName === '---') return '';
-  if (nameMap.has(fullName)) return nameMap.get(fullName);
-  const parts = fullName.split(' ').filter(Boolean);
-  if (parts.length <= 1) return fullName;
-  return `${parts[0]} ${parts[parts.length - 1]}`;
-}
-
-// --- HELPER: Gera a Tabela HTML ---
-function generateMeetingHtml(weekText, schedule, assignments, nameMap) {
-  // Estilos
-  const sTable = 'width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 14px; border: 2px solid #000;';
-  const sHeaderTitle = 'background-color: #f3f4f6; padding: 10px; text-align: center; border-right: 2px solid #000; width: 65%;';
-  const sHeaderRoles = 'width: 35%; padding: 0; vertical-align: top;';
-  const sHeaderRolesTitle = 'background-color: #e5e7eb; padding: 5px; font-weight: bold; text-align: center; border-bottom: 1px solid #000; font-size: 12px;';
-  
-  // ALTERAÇÃO: Fonte maior e negrito para os nomes no cabeçalho
-  const sHeaderRoleLabel = 'padding: 4px 8px; font-size: 13px; font-weight: bold; width: 80px;';
-  const sHeaderRoleValue = 'padding: 4px 8px; font-size: 13px; font-weight: bold;';
-  
-  const sSection = 'background-color: #1e3a8a; color: white; font-weight: bold; padding: 5px 10px; text-transform: uppercase; border: 1px solid #000; text-align: center;';
-  const sTime = 'width: 60px; padding: 8px; border: 1px solid #000; background-color: #e5e7eb; text-align: center; font-weight: bold; color: #000;';
-  const sPart = 'padding: 8px; border: 1px solid #000; color: #000;';
-  const sName = 'width: 30%; padding: 8px; border: 1px solid #000; font-weight: bold; text-align: center; color: #000; vertical-align: middle;';
-
-  const headerHtml = `
-    <table style="width: 100%; border: 2px solid #000; border-bottom: none; border-collapse: collapse; font-family: Arial, sans-serif;">
-      <tr>
-        <td style="${sHeaderTitle}">
-           <h2 style="margin:0; color:#1e3a8a; text-transform: uppercase;">${weekText}</h2>
-           <p style="margin:5px 0 0; font-size: 16px;">Nossa Vida e Ministério Cristão</p>
-        </td>
-        <td style="${sHeaderRoles}">
-           <div style="${sHeaderRolesTitle}">Salão Principal</div>
-           <table style="width: 100%; border-collapse: collapse;">
-             <tr>
-               <td style="${sHeaderRoleLabel}">Presidente:</td>
-               <td style="${sHeaderRoleValue}">${formatName(assignments['presidente'], nameMap)}</td>
-             </tr>
-             <tr>
-               <td style="${sHeaderRoleLabel}">Ajudante:</td>
-               <td style="${sHeaderRoleValue}">${formatName(assignments['ajudante'], nameMap)}</td>
-             </tr>
-           </table>
-        </td>
-      </tr>
-    </table>
-  `;
-
-  let rows = '';
-
-  // 1. Abertura
-  rows += `
-    <tr>
-      <td style="${sTime}">19:30</td>
-      <td style="${sPart}"><span style="color: #1e40af; font-weight: bold;">${schedule.initialSong}</span> <span style="float: right;">Oração Inicial &rarr;</span></td>
-      <td style="${sName}">${formatName(assignments['oracao_inicial'], nameMap)}</td>
-    </tr>
-    <tr>
-      <td style="${sTime}">19:35</td>
-      <td style="${sPart}"><strong>${schedule.openingComments || 'Comentários Iniciais'}</strong></td>
-      <td style="${sName}">${formatName(assignments['comentarios_iniciais'], nameMap)}</td>
-    </tr>
-  `;
-
-  // 2. Tesouros
-  rows += `<tr><td colspan="3" style="${sSection}">TESOUROS DA PALAVRA DE DEUS</td></tr>`;
-  schedule.treasures?.forEach((part, idx) => {
-    rows += `<tr><td style="${sTime}"></td><td style="${sPart}">${part.title}</td><td style="${sName}">${formatName(assignments[`tesouro_${idx}`], nameMap)}</td></tr>`;
-  });
-
-  // 3. Ministério
-  rows += `<tr><td colspan="3" style="${sSection}">FAÇA SEU MELHOR NO MINISTÉRIO</td></tr>`;
-  schedule.ministry?.forEach((part, idx) => {
-    const isDiscurso = part.title.toLowerCase().includes('discurso');
-    let assignedHtml = '';
-    if (isDiscurso) {
-      assignedHtml = formatName(assignments[`ministerio_${idx}`], nameMap);
-    } else {
-      const est = formatName(assignments[`ministerio_${idx}_1`], nameMap);
-      const aju = formatName(assignments[`ministerio_${idx}_2`], nameMap);
-      if (aju && aju !== '---' && aju !== '') {
-          assignedHtml = `<div>${est}</div><div style="border-top: 1px dashed #9ca3af; margin-top: 4px; padding-top: 4px;">${aju}</div>`;
-      } else {
-          assignedHtml = est;
-      }
-    }
-    rows += `<tr><td style="${sTime}"></td><td style="${sPart}">${part.title}</td><td style="${sName}">${assignedHtml}</td></tr>`;
-  });
-
-  // 4. Vida Cristã
-  rows += `<tr><td colspan="3" style="${sSection}">NOSSA VIDA CRISTÃ</td></tr>`;
-  rows += `<tr><td style="${sTime}"></td><td style="${sPart}"><span style="color: #1e40af; font-weight: bold;">${schedule.middleSong || 'Cântico'}</span></td><td style="${sName}">${formatName(assignments['cantico_meio'], nameMap)}</td></tr>`;
-
-  schedule.living?.forEach((part, idx) => {
-    const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
-    let assignedHtml = '';
-    if (isBibleStudy) {
-      const dirig = formatName(assignments[`vida_${idx}_1`], nameMap);
-      const leitor = formatName(assignments[`vida_${idx}_2`], nameMap);
-      assignedHtml = `<div>${dirig}</div><div style="border-top: 1px dashed #9ca3af; margin-top: 4px; padding-top: 4px;">${leitor}</div>`;
-    } else {
-      assignedHtml = formatName(assignments[`vida_${idx}`], nameMap);
-    }
-    rows += `<tr><td style="${sTime}"></td><td style="${sPart}">${part.title}</td><td style="${sName}">${assignedHtml}</td></tr>`;
-  });
-
-  // 5. Encerramento
-  rows += `
-    <tr>
-      <td style="${sTime}">21:05</td>
-      <td style="${sPart}"><strong>${schedule.finalComments || 'Comentários Finais'}</strong></td>
-      <td style="${sName}">${formatName(assignments['comentarios_finais'], nameMap)}</td>
-    </tr>
-    <tr>
-      <td style="${sTime}">21:10</td>
-      <td style="${sPart}"><span style="color: #1e40af; font-weight: bold;">${schedule.finalSong}</span> <span style="float: right;">Oração Final &rarr;</span></td>
-      <td style="${sName}">${formatName(assignments['oracao_final'], nameMap)}</td>
-    </tr>
-  `;
-
-  return `
-    ${headerHtml}
-    <table style="${sTable}">
-      <tbody>${rows}</tbody>
-    </table>
-  `;
-}
-
-function getFriendlyTitleWithSection(key, schedule) {
-  if (key === 'presidente') return 'Presidente';
-  if (key === 'ajudante') return 'Ajudante';
-  if (key === 'oracao_inicial') return 'REUNIÃO - Oração Inicial';
-  if (key === 'oracao_final') return 'REUNIÃO - Oração Final';
-  if (key === 'comentarios_iniciais') return 'REUNIÃO - Comentários Iniciais';
-  if (key === 'comentarios_finais') return 'REUNIÃO - Comentários Finais';
-  if (key === 'cantico_meio') return 'NOSSA VIDA CRISTÃ - Cântico do Meio';
-
-  if (key.startsWith('tesouro_')) {
-    const idx = parseInt(key.split('_')[1]);
-    const title = schedule.treasures[idx]?.title || 'Parte';
-    return `TESOUROS DA PALAVRA DE DEUS - ${title}`;
-  }
-  if (key.startsWith('ministerio_')) {
-    const parts = key.split('_');
-    const idx = parseInt(parts[1]);
-    const suffix = parts[2];
-    const baseTitle = schedule.ministry[idx]?.title || 'Parte';
-    const role = suffix === '1' ? ' (Estudante)' : (suffix === '2' ? ' (Ajudante)' : '');
-    return `FAÇA SEU MELHOR NO MINISTÉRIO - ${baseTitle}${role}`;
-  }
-  if (key.startsWith('vida_')) {
-    const parts = key.split('_');
-    const idx = parseInt(parts[1]);
-    const suffix = parts[2];
-    const baseTitle = schedule.living[idx]?.title || 'Parte';
-    if (baseTitle.toLowerCase().includes('estudo bíblico')) {
-        const role = suffix === '1' ? ' (Dirigente)' : ' (Leitor)';
-        return `NOSSA VIDA CRISTÃ - ${baseTitle}${role}`;
-    }
-    return `NOSSA VIDA CRISTÃ - ${baseTitle}`;
-  }
-  return key;
-}
 
 export async function POST(request) {
   const body = await request.json();
@@ -317,3 +158,4 @@ export async function POST(request) {
     client.release();
   }
 }
+
