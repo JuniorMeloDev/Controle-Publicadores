@@ -3,15 +3,15 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-const Tabs = React.forwardRef(({ className, children, defaultValue, ...props }, ref) => {
-  const [value, setValue] = React.useState(defaultValue); // Internal state for uncontrolled usage
+const Tabs = React.forwardRef(({ className, children, defaultValue, value, onValueChange, ...props }, ref) => {
+  const [internalValue, setInternalValue] = React.useState(defaultValue); // Internal state for uncontrolled usage
   
   // Also support controlled if needed, but for now simple uncontrolled is fine for this use case.
   // Actually, standard is usually controlled or using Context.
   // Let's implement a simple Context based Tabs for flexibility.
   
   return (
-    <TabsContext.Provider value={{ value: props.value || value, onValueChange: props.onValueChange || setValue }}>
+    <TabsContext.Provider value={{ value: value || internalValue, onValueChange: onValueChange || setInternalValue }}>
       <div ref={ref} className={cn("w-full", className)} {...props}>
         {children}
       </div>

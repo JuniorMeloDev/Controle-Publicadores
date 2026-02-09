@@ -1,5 +1,8 @@
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
+import { isAllowed } from '@/app/lib/access-control';
+import { registerAuditLog } from '@/app/lib/audit-log';
 import bcrypt from 'bcryptjs';
 
 const pool = new Pool({
@@ -37,6 +40,11 @@ export async function POST(req) {
   const client = await pool.connect();
 
   try {
+    const userId = getUserIdFromRequest(req);
+    const perms = await getUserPermissions(client, userId);
+    if (!isAllowed(perms, 'publicadores_editar', 'actions')) {
+      return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+    }
     let hashSenha = null;
     if (senha && senha.trim() !== '') {
       const salt = await bcrypt.genSalt(10);
@@ -54,7 +62,7 @@ export async function POST(req) {
     }
 
     // --- QUERY ATUALIZADA PARA INSERIR TUDO ---
-    await client.query(
+    const createdRes = await client.query(
       `INSERT INTO publicadores (
          nome_completo, data_nascimento, data_batismo, grupo_id, senha, privilegios, designacoes,
          telefone, email, cep, logradouro, numero, complemento, bairro, cidade, estado,
@@ -68,6 +76,12 @@ export async function POST(req) {
         sexo, esperanca || null // <-- ADICIONADO
       ]
     );
+    await registerAuditLog(client, {
+      userId,
+      action: 'publicador_criado',
+      entity: 'publicador',
+      details: { nome_completo, email }
+    });
 
     return NextResponse.json({ message: 'Publicador cadastrado com sucesso!' }, { status: 201 });
 

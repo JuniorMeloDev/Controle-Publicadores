@@ -1,5 +1,8 @@
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
+import { isAllowed } from '@/app/lib/access-control';
+import { registerAuditLog } from '@/app/lib/audit-log';
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
@@ -54,6 +57,12 @@ export async function POST(request) {
   const client = await pool.connect();
 
   try {
+    const userId = getUserIdFromRequest(request);
+    const perms = await getUserPermissions(client, userId);
+    if (!isAllowed(perms, 'designacoes_salvar', 'actions')) {
+      return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+    }
+
     await client.query('BEGIN');
 
     // 1. Salva o Programa
@@ -97,6 +106,13 @@ export async function POST(request) {
     }
 
     await client.query('COMMIT');
+    await registerAuditLog(client, {
+      userId,
+      action: 'designacoes_salvas',
+      entity: 'reuniao',
+      entityId: meetingDate,
+      details: { descricao: scheduleData.weekDate }
+    });
     return NextResponse.json({ message: 'Salvo com sucesso!' }, { status: 201 });
 
   } catch (err) {

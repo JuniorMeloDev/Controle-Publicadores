@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { usePermissions } from '@/app/components/PermissionsContext';
+import { isAllowed } from '@/app/lib/access-control';
 import { jsPDF } from "jspdf";
 import { Loader2, Printer, UploadCloud, Save, ChevronLeft, ChevronRight, Calendar, RefreshCw, History, FileText, X, Mail, MessageCircle, Plus, CheckCircle, AlertTriangle, Menu } from 'lucide-react';
 import TabelaDesignacoes from '@/app/componentes/TabelaDesignacoes';
@@ -179,6 +181,9 @@ import { MobileDesignationModal } from './MobileDesignationModal';
 // ... (imports remain)
 
 export function LifeMinistryTab() {
+  const { permissions } = usePermissions();
+  const canImport = isAllowed(permissions, 'designacoes_importar', 'actions');
+  const canEmail = isAllowed(permissions, 'designacoes_email', 'actions');
   const [publicadores, setPublicadores] = useState([]);
   const [savedMeetingsList, setSavedMeetingsList] = useState([]);
   const [historyData, setHistoryData] = useState([]); // New state for history
@@ -1003,6 +1008,10 @@ export function LifeMinistryTab() {
   };
 
   const handleOpenEmailModal = () => {
+    if (!canEmail) {
+      setToastData({ message: 'Você não tem permissão para enviar e-mails.', type: 'error' });
+      return;
+    }
     const currentAssignments = assignmentsList[currentIndex];
     if (!currentAssignments) {
       setIsEmailModalOpen(true);
@@ -1205,10 +1214,10 @@ export function LifeMinistryTab() {
             <p className="text-gray-500 text-sm mt-1">Importe um ou vários arquivos RTF para começar ou selecione uma semana do histórico.</p>
           </div>
 
-          <label className={`flex items-center gap-3 py-3 px-6 rounded-lg text-white transition font-bold shadow-md hover:shadow-lg transform active:translate-y-0 ${isParsing ? 'bg-purple-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 hover:-translate-y-0.5 cursor-pointer'}`}>
+          <label className={`flex items-center gap-3 py-3 px-6 rounded-lg text-white transition font-bold shadow-md hover:shadow-lg transform active:translate-y-0 ${isParsing || !canImport ? 'bg-purple-400 cursor-not-allowed opacity-70' : 'bg-purple-600 hover:bg-purple-700 hover:-translate-y-0.5 cursor-pointer'}`}>
             {isParsing ? <Loader2 className="w-5 h-5 animate-spin" /> : <UploadCloud size={20} />}
             {isParsing ? 'IMPORTANDO...' : 'IMPORTAR PROGRAMAÇÃO (RTF)'}
-            <input type="file" multiple accept=".rtf, .txt" className="hidden" onChange={handleFilesParse} disabled={isParsing} />
+            <input type="file" multiple accept=".rtf, .txt" className="hidden" onChange={handleFilesParse} disabled={isParsing || !canImport} />
           </label>
         </div>
 

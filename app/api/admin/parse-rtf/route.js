@@ -1,4 +1,12 @@
 import { NextResponse } from 'next/server';
+import { Pool } from '@neondatabase/serverless';
+import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
+import { isAllowed } from '@/app/lib/access-control';
+import { registerAuditLog } from '@/app/lib/audit-log';
+
+const pool = new Pool({
+  connectionString: process.env.POSTGRES_URL,
+});
 
 // Esta é a função que chama a API do Gemini.
 async function callGeminiToParse(text) {
@@ -109,7 +117,14 @@ async function callGeminiToParse(text) {
 
 // Rota POST
 export async function POST(req) {
+  const client = await pool.connect();
   try {
+    const userId = getUserIdFromRequest(req);
+    const perms = await getUserPermissions(client, userId);
+    if (!isAllowed(perms, 'designacoes_importar', 'actions')) {
+      return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+    }
+
     const { textContent } = await req.json();
 
     if (!textContent) {
@@ -117,11 +132,19 @@ export async function POST(req) {
     }
 
     const parsedData = await callGeminiToParse(textContent);
+    await registerAuditLog(client, {
+      userId,
+      action: 'rtf_importado',
+      entity: 'designacoes',
+      details: { weekDate: parsedData?.weekDate || null }
+    });
 
     return NextResponse.json(parsedData, { status: 200 });
 
   } catch (error) {
     console.error('Erro na API /api/admin/parse-rtf:', error);
     return NextResponse.json({ message: error.message || 'Falha ao processar o arquivo no servidor.' }, { status: 500 });
+  } finally {
+    client.release();
   }
 }

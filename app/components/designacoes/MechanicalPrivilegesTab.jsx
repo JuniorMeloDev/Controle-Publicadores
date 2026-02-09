@@ -6,6 +6,8 @@ import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
 import { PublisherCombobox } from '@/app/components/reunioes/PublisherCombobox';
 import { PrivilegeTypesModal } from '@/app/components/designacoes/PrivilegeTypesModal';
+import { usePermissions } from '@/app/components/PermissionsContext';
+import { isAllowed } from '@/app/lib/access-control';
 
 // Helper to format date
 const formatDate = (dateStr) => {
@@ -17,6 +19,8 @@ const formatDate = (dateStr) => {
 };
 
 export function MechanicalPrivilegesTab() {
+  const { permissions } = usePermissions();
+  const canEdit = isAllowed(permissions, 'privilegios_mecanicos_editar', 'actions');
   const [meetings, setMeetings] = useState([]);
   const [publishers, setPublishers] = useState([]);
   const [privilegeTypes, setPrivilegeTypes] = useState([]);
@@ -112,6 +116,7 @@ export function MechanicalPrivilegesTab() {
   };
 
   const handleSave = async (meeting) => {
+      if (!canEdit) return;
       setSavingId(meeting.id);
       try {
           // Construct Payload
@@ -151,12 +156,19 @@ export function MechanicalPrivilegesTab() {
             <Button 
                 variant="outline"
                 onClick={() => setIsTypesModalOpen(true)}
-                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
+                disabled={!canEdit}
+                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
                 <Settings className="w-4 h-4" />
                 Gerenciar Tipos de Privilégios
             </Button>
        </div>
+
+       {!canEdit && (
+          <div className="text-xs text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-md">
+            Você não tem permissão para editar privilégios mecânicos.
+          </div>
+       )}
 
        <PrivilegeTypesModal 
             open={isTypesModalOpen} 
@@ -217,7 +229,7 @@ export function MechanicalPrivilegesTab() {
                                      <Button 
                                         size="sm"
                                         onClick={() => handleSave(meeting)}
-                                        disabled={savingId === meeting.id}
+                                        disabled={savingId === meeting.id || !canEdit}
                                         className={`h-8 transition-colors ${
                                             savingId === meeting.id 
                                             ? 'bg-purple-100 text-purple-700' 
@@ -228,7 +240,7 @@ export function MechanicalPrivilegesTab() {
                                         {savingId === meeting.id ? 'Salvando' : 'Salvar'}
                                      </Button>
                                 </CardHeader>
-                                <CardContent className="pt-4 space-y-3">
+                                <CardContent className={`pt-4 space-y-3 ${!canEdit ? 'pointer-events-none opacity-60' : ''}`}>
                                     {privilegeTypes.length === 0 && <p className="text-sm text-gray-400 italic">Nenhum privilégio cadastrado.</p>}
                                     {privilegeTypes.map(type => (
                                         <PublisherCombobox 

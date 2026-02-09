@@ -9,8 +9,12 @@ import { Textarea } from '@/app/components/ui/textarea';
 import { Plus, Trash2, Calendar as CalendarIcon, Loader2, Pencil, X, Search, Users, Edit } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
+import { usePermissions } from '@/app/components/PermissionsContext';
+import { isAllowed } from '@/app/lib/access-control';
 
 export function CleaningTab() {
+  const { permissions } = usePermissions();
+  const canEdit = isAllowed(permissions, 'limpeza_semanal_editar', 'actions');
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -74,6 +78,7 @@ export function CleaningTab() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!canEdit) return;
     if (!date || !tasks || !group) return;
 
     try {
@@ -97,6 +102,7 @@ export function CleaningTab() {
   };
 
   const openNewModal = () => {
+      if (!canEdit) return;
       setEditId(null);
       setDate('');
       setTasks('');
@@ -106,6 +112,7 @@ export function CleaningTab() {
   };
 
   const openEditModal = (item) => {
+      if (!canEdit) return;
       setEditId(item.id);
       setDate(new Date(item.data).toISOString().split('T')[0]);
       setTasks(item.tarefas);
@@ -124,6 +131,7 @@ export function CleaningTab() {
   };
 
   const handleDelete = async (id) => {
+    if (!canEdit) return;
     if (!confirm('Tem certeza que deseja excluir?')) return;
     try {
       await fetch(`/api/admin/limpeza?id=${id}`, { method: 'DELETE' });
@@ -166,10 +174,16 @@ export function CleaningTab() {
              </div>
           </div>
           
-          <Button onClick={openNewModal} className="bg-green-600 hover:bg-green-700 text-white gap-2 shrink-0">
+          <Button onClick={openNewModal} disabled={!canEdit} className="bg-green-600 hover:bg-green-700 text-white gap-2 shrink-0 disabled:opacity-50">
               <Plus className="w-4 h-4" /> Nova Designação
           </Button>
       </div>
+
+      {!canEdit && (
+        <div className="text-xs text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-md">
+          Você não tem permissão para editar a limpeza semanal.
+        </div>
+      )}
 
       <div className="bg-white rounded-xl flex flex-col min-h-[500px]">
         {loading ? (
@@ -194,8 +208,8 @@ export function CleaningTab() {
                                 </CardTitle>
                             </div>
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => openEditModal(item)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600 transition-colors" title="Editar"><Edit size={16} /></button>
-                                <button onClick={() => handleDelete(item.id)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-red-600 transition-colors" title="Excluir"><Trash2 size={16} /></button>
+                                <button disabled={!canEdit} onClick={() => openEditModal(item)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Editar"><Edit size={16} /></button>
+                                <button disabled={!canEdit} onClick={() => handleDelete(item.id)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Excluir"><Trash2 size={16} /></button>
                             </div>
                         </div>
                     </CardHeader>
@@ -268,7 +282,7 @@ export function CleaningTab() {
 
                 <DialogFooter>
                     <Button type="button" variant="ghost" onClick={closeModal}>Cancelar</Button>
-                    <Button type="submit" className={editId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}>
+                    <Button type="submit" disabled={!canEdit} className={`${editId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50`}>
                         {editId ? 'Salvar Alterações' : 'Adicionar Designação'}
                     </Button>
                 </DialogFooter>

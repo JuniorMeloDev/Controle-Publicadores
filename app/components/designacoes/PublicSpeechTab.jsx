@@ -7,6 +7,8 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/app/components/ui/sheet';
+import { usePermissions } from '@/app/components/PermissionsContext';
+import { isAllowed } from '@/app/lib/access-control';
 import {
     Dialog,
     DialogContent,
@@ -27,6 +29,8 @@ const formatDate = (dateStr) => {
 };
 
 export function PublicSpeechTab() {
+    const { permissions } = usePermissions();
+    const canEdit = isAllowed(permissions, 'discursos_publicos_editar', 'actions');
     const [talks, setTalks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [publishers, setPublishers] = useState([]);
@@ -105,6 +109,7 @@ export function PublicSpeechTab() {
     };
 
     const handleSave = async () => {
+        if (!canEdit) return;
         if (!formData.data) return;
         setSaving(true);
         try {
@@ -125,6 +130,7 @@ export function PublicSpeechTab() {
     };
 
     const handleDelete = async (id) => {
+        if (!canEdit) return;
         if (!confirm('Tem certeza?')) return;
         try {
             await fetch(`/api/admin/discursos?id=${id}`, { method: 'DELETE' });
@@ -155,12 +161,18 @@ export function PublicSpeechTab() {
                     <p className="text-gray-500 text-sm mt-1">Gerencie oradores, temas e designações de fim de semana.</p>
                 </div>
 
+                {!canEdit && (
+                    <div className="text-xs text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-md">
+                        Você não tem permissão para editar discursos públicos.
+                    </div>
+                )}
+
                 <Dialog open={isDialogOpen} onOpenChange={(open) => {
                     setIsDialogOpen(open);
                     if (!open) setFormData({ id: null, data: '', orador: '', tema: '', cantico: '', congregacao: '', presidente_id: null });
                 }}>
                     <DialogTrigger asChild>
-                        <button className="flex items-center gap-3 py-3 px-6 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition font-bold shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0">
+                        <button disabled={!canEdit} className="flex items-center gap-3 py-3 px-6 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition font-bold shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed">
                             <Plus size={20} />
                             NOVO DISCURSO
                         </button>
@@ -208,7 +220,7 @@ export function PublicSpeechTab() {
                         </div>
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="border-gray-300 text-gray-700 font-medium hover:bg-gray-50 hover:text-gray-900">Cancelar</Button>
-                            <Button onClick={handleSave} disabled={saving} className="bg-purple-600 hover:bg-purple-700 text-white">
+                            <Button onClick={handleSave} disabled={saving || !canEdit} className="bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50">
                                 {saving ? <Loader2 className="animate-spin w-4 h-4" /> : 'Salvar'}
                             </Button>
                         </DialogFooter>
@@ -276,8 +288,8 @@ export function PublicSpeechTab() {
                                                 <CardTitle className="text-base font-bold text-gray-900">{formatDate(talk.data)}</CardTitle>
                                             </div>
                                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => handleEdit(talk)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600 transition-colors" title="Editar"><Edit size={16} /></button>
-                                                <button onClick={() => handleDelete(talk.id)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-red-600 transition-colors" title="Excluir"><Trash2 size={16} /></button>
+                                                <button disabled={!canEdit} onClick={() => handleEdit(talk)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Editar"><Edit size={16} /></button>
+                                                <button disabled={!canEdit} onClick={() => handleDelete(talk.id)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Excluir"><Trash2 size={16} /></button>
                                             </div>
                                         </div>
                                         <CardDescription className="flex items-center gap-1.5 mt-2 text-gray-500 font-medium bg-gray-50 py-1 px-2 rounded w-fit">

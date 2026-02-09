@@ -3,6 +3,8 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
 import { User, BookOpen, Music, Mic, Users, Save, Loader2, Printer, Edit2, Check, X, ChevronDown, Search, Wand2, Sparkles, History } from "lucide-react";
 import { useState, useEffect, useRef } from 'react';
+import { usePermissions } from '@/app/components/PermissionsContext';
+import { isAllowed } from '@/app/lib/access-control';
 
 // Internal SearchableSelect Component
 const SearchableSelect = ({ value, options, onChange, placeholder }) => {
@@ -122,6 +124,9 @@ const normalizeText = (text) => {
 };
 
 export function MobileDesignationModal({ isOpen, onClose, schedule, assignments, weekDescription, publicadores, historyData = [], onAssignmentChange, onSave, isSaving, onPrint, onScheduleUpdate }) {
+   const { permissions } = usePermissions();
+   const canSave = isAllowed(permissions, 'designacoes_salvar', 'actions');
+   const canPdf = isAllowed(permissions, 'designacoes_pdf', 'actions');
    // State for Editing Title
    const [editingPartIndex, setEditingPartIndex] = useState(null); // { section: 'living', index: 0 }
    const [editingTitleValue, setEditingTitleValue] = useState('');
@@ -500,10 +505,10 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                   <Sparkles size={16} /> Inserir Automático
                </button>
 
-               <button onClick={onPrint} className="px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md text-sm font-medium shadow-sm flex items-center gap-2">
+               <button onClick={onPrint} disabled={!canPdf} className="px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md text-sm font-medium shadow-sm flex items-center gap-2 disabled:opacity-50">
                   <Printer size={16} /> PDF
                </button>
-               <button onClick={() => { onSave && onSave(); onClose(); }} disabled={isSaving} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium shadow-sm flex items-center gap-2 disabled:opacity-50">
+               <button onClick={() => { onSave && onSave(); onClose(); }} disabled={isSaving || !canSave} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium shadow-sm flex items-center gap-2 disabled:opacity-50">
                   {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Salvar
                </button>
             </div>

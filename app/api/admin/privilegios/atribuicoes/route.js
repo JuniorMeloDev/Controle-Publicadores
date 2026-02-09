@@ -1,6 +1,9 @@
 
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
+import { isAllowed } from '@/app/lib/access-control';
+import { registerAuditLog } from '@/app/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,8 +41,13 @@ export async function GET(request) {
 
 // POST: Save Assignments (Batch)
 export async function POST(request) {
-    const client = await pool.connect();
-    try {
+  const client = await pool.connect();
+  try {
+    const userId = getUserIdFromRequest(request);
+    const perms = await getUserPermissions(client, userId);
+    if (!isAllowed(perms, 'privilegios_mecanicos_editar', 'actions')) {
+      return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+    }
         const { reuniao_id, assignments } = await request.json(); // assignments: [{ tipo_id, publicador_id }]
 
         if (!reuniao_id) return NextResponse.json({ message: 'ID Reunião missing' }, { status: 400 });
@@ -67,6 +75,13 @@ export async function POST(request) {
         }
 
         await client.query('COMMIT');
+        await registerAuditLog(client, {
+            userId,
+            action: 'privilegios_atribuidos',
+            entity: 'reuniao',
+            entityId: reuniao_id,
+            details: { total: assignments?.length || 0 }
+        });
         return NextResponse.json({ message: 'Salvo com sucesso' });
     } catch (err) {
         await client.query('ROLLBACK');

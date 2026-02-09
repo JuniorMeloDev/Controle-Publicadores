@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
+import { isAllowed } from '@/app/lib/access-control';
+import { registerAuditLog } from '@/app/lib/audit-log';
 import { Pool } from 'pg';
 
 const pool = new Pool({
@@ -44,6 +47,11 @@ export async function GET(request) {
 export async function POST(request) {
   const client = await pool.connect();
   try {
+    const userId = getUserIdFromRequest(request);
+    const perms = await getUserPermissions(client, userId);
+    if (!isAllowed(perms, 'limpeza_semanal_editar', 'actions')) {
+      return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+    }
     const body = await request.json();
     const { data, tarefas, grupo, responsaveis } = body;
 
@@ -55,6 +63,13 @@ export async function POST(request) {
     const values = [data, tarefas, grupo, responsaveis];
 
     const res = await client.query(query, values);
+    await registerAuditLog(client, {
+      userId,
+      action: 'limpeza_criada',
+      entity: 'limpeza',
+      entityId: res.rows[0]?.id,
+      details: { data, grupo }
+    });
     return NextResponse.json(res.rows[0]);
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -66,6 +81,11 @@ export async function POST(request) {
 export async function PUT(request) {
   const client = await pool.connect();
   try {
+    const userId = getUserIdFromRequest(request);
+    const perms = await getUserPermissions(client, userId);
+    if (!isAllowed(perms, 'limpeza_semanal_editar', 'actions')) {
+      return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+    }
     const body = await request.json();
     const { id, data, tarefas, grupo, responsaveis } = body;
 
@@ -78,6 +98,13 @@ export async function PUT(request) {
     const values = [data, tarefas, grupo, responsaveis, id];
 
     const res = await client.query(query, values);
+    await registerAuditLog(client, {
+      userId,
+      action: 'limpeza_atualizada',
+      entity: 'limpeza',
+      entityId: id,
+      details: { data, grupo }
+    });
     return NextResponse.json(res.rows[0]);
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -92,7 +119,18 @@ export async function DELETE(request) {
 
   const client = await pool.connect();
   try {
+    const userId = getUserIdFromRequest(request);
+    const perms = await getUserPermissions(client, userId);
+    if (!isAllowed(perms, 'limpeza_semanal_editar', 'actions')) {
+      return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+    }
     await client.query('DELETE FROM limpeza_semanal WHERE id = $1', [id]);
+    await registerAuditLog(client, {
+      userId,
+      action: 'limpeza_excluida',
+      entity: 'limpeza',
+      entityId: id
+    });
     return NextResponse.json({ message: 'Deleted' });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

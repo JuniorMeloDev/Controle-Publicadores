@@ -1,6 +1,9 @@
-
+﻿
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
+import { isAllowed } from '@/app/lib/access-control';
+import { registerAuditLog } from '@/app/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,9 +29,14 @@ export async function GET() {
 export async function POST(request) {
   const client = await pool.connect();
   try {
+    const userId = getUserIdFromRequest(request);
+    const perms = await getUserPermissions(client, userId);
+    if (!isAllowed(perms, 'privilegios_mecanicos_editar', 'actions')) {
+      return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+    }
     const { id, nome, ativo } = await request.json();
     
-    if (!nome) return NextResponse.json({ message: 'Nome obrigatório' }, { status: 400 });
+    if (!nome) return NextResponse.json({ message: 'Nome obrigatÃ³rio' }, { status: 400 });
 
     if (id) {
         // Update
@@ -36,6 +44,13 @@ export async function POST(request) {
             'UPDATE privilegios_tipos SET nome = $1, ativo = $2 WHERE id = $3',
             [nome, ativo !== undefined ? ativo : true, id]
         );
+        await registerAuditLog(client, {
+          userId,
+          action: 'privilegio_tipo_atualizado',
+          entity: 'privilegio_tipo',
+          entityId: id,
+          details: { nome, ativo: ativo !== undefined ? ativo : true }
+        });
         return NextResponse.json({ message: 'Atualizado com sucesso' });
     } else {
         // Create - Find max order
@@ -46,6 +61,13 @@ export async function POST(request) {
             'INSERT INTO privilegios_tipos (nome, ativo, ordem) VALUES ($1, $2, $3) RETURNING *',
             [nome, true, nextOrder]
         );
+        await registerAuditLog(client, {
+          userId,
+          action: 'privilegio_tipo_criado',
+          entity: 'privilegio_tipo',
+          entityId: res.rows[0]?.id,
+          details: { nome, ativo: true }
+        });
         return NextResponse.json(res.rows[0], { status: 201 });
     }
   } catch (err) {
@@ -58,14 +80,25 @@ export async function POST(request) {
 
 // DELETE: Remove a type
 export async function DELETE(request) {
-    const client = await pool.connect();
-    try {
+  const client = await pool.connect();
+  try {
+    const userId = getUserIdFromRequest(request);
+    const perms = await getUserPermissions(client, userId);
+    if (!isAllowed(perms, 'privilegios_mecanicos_editar', 'actions')) {
+      return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+    }
         const url = new URL(request.url);
         const id = url.searchParams.get('id');
         if(!id) return NextResponse.json({ message: 'ID missing' }, { status: 400 });
 
         await client.query('DELETE FROM privilegios_tipos WHERE id = $1', [id]);
-        return NextResponse.json({ message: 'Excluído' });
+        await registerAuditLog(client, {
+            userId,
+            action: 'privilegio_tipo_excluido',
+            entity: 'privilegio_tipo',
+            entityId: id
+        });
+        return NextResponse.json({ message: 'ExcluÃ­do' });
     } catch(err) {
         return NextResponse.json({ message: 'Erro ao excluir' }, { status: 500 });
     } finally {

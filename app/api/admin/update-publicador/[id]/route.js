@@ -1,5 +1,8 @@
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
+import { isAllowed } from '@/app/lib/access-control';
+import { registerAuditLog } from '@/app/lib/audit-log';
 import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
@@ -84,6 +87,11 @@ export async function PUT(request, context) {
   const client = await pool.connect();
 
   try {
+    const userId = getUserIdFromRequest(request);
+    const perms = await getUserPermissions(client, userId);
+    if (!isAllowed(perms, 'publicadores_editar', 'actions')) {
+      return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+    }
     await client.query('BEGIN');
 
     const grupoRes = await client.query('SELECT id FROM grupos WHERE nome_grupo = $1', [nome_grupo]);
@@ -183,6 +191,13 @@ export async function PUT(request, context) {
     );
     
     await client.query('COMMIT');
+    await registerAuditLog(client, {
+      userId,
+      action: 'publicador_editado',
+      entity: 'publicador',
+      entityId: id,
+      details: { nome_completo, email }
+    });
     
     return NextResponse.json({ message: 'Publicador atualizado com sucesso!' }, { status: 200 });
   

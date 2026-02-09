@@ -1,6 +1,9 @@
 
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
+import { isAllowed } from '@/app/lib/access-control';
+import { registerAuditLog } from '@/app/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,6 +70,11 @@ export async function GET(request) {
 export async function POST(request) {
   const client = await pool.connect();
   try {
+    const userId = getUserIdFromRequest(request);
+    const perms = await getUserPermissions(client, userId);
+    if (!isAllowed(perms, 'discursos_publicos_editar', 'actions')) {
+      return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+    }
     const body = await request.json();
     const { id, data, orador, tema, cantico, congregacao, presidente_id } = body;
     
@@ -85,6 +93,13 @@ export async function POST(request) {
             WHERE id=$7
             RETURNING *
         `, [data, orador, tema, cantico, congregacao, presidente_id, id]);
+        await registerAuditLog(client, {
+          userId,
+          action: 'discurso_atualizado',
+          entity: 'discurso',
+          entityId: id,
+          details: { data, orador, tema, cantico, congregacao }
+        });
     } else {
         // Create
         res = await client.query(`
@@ -92,6 +107,13 @@ export async function POST(request) {
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING *
         `, [data, orador, tema, cantico, congregacao, presidente_id]);
+        await registerAuditLog(client, {
+          userId,
+          action: 'discurso_criado',
+          entity: 'discurso',
+          entityId: res.rows[0]?.id,
+          details: { data, orador, tema, cantico, congregacao }
+        });
     }
 
     return NextResponse.json(res.rows[0], { status: 201 });
@@ -104,14 +126,25 @@ export async function POST(request) {
 }
 
 export async function DELETE(request) {
-    const client = await pool.connect();
-    try {
+  const client = await pool.connect();
+  try {
+    const userId = getUserIdFromRequest(request);
+    const perms = await getUserPermissions(client, userId);
+    if (!isAllowed(perms, 'discursos_publicos_editar', 'actions')) {
+      return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+    }
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
 
         if (!id) return NextResponse.json({ message: 'ID required' }, { status: 400 });
 
         await client.query('DELETE FROM discursos_publicos WHERE id = $1', [id]);
+        await registerAuditLog(client, {
+          userId,
+          action: 'discurso_excluido',
+          entity: 'discurso',
+          entityId: id
+        });
         return NextResponse.json({ message: 'Deletado' }, { status: 200 });
     } catch (err) {
         console.error(err);

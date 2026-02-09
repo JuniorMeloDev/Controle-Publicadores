@@ -1,5 +1,8 @@
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
+import { isAllowed } from '@/app/lib/access-control';
+import { registerAuditLog } from '@/app/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +64,12 @@ export async function GET(request) {
 export async function POST(request) {
     const client = await pool.connect();
     try {
+        const userId = getUserIdFromRequest(request);
+        const perms = await getUserPermissions(client, userId);
+        if (!isAllowed(perms, 'configuracoes_editar', 'actions')) {
+            return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+        }
+
         const body = await request.json();
         const { action } = body; // 'save_weekdays' or 'add_event' or 'delete_event'
 
@@ -77,6 +86,13 @@ export async function POST(request) {
                     dia_fim_semana = EXCLUDED.dia_fim_semana
             `, [ano, dia_meio_semana, dia_fim_semana]);
             
+            await registerAuditLog(client, {
+                userId,
+                action: 'configuracoes_dias_salvos',
+                entity: 'configuracoes',
+                entityId: ano,
+                details: { dia_meio_semana, dia_fim_semana }
+            });
             return NextResponse.json({ message: 'Dias salvos com sucesso' });
         }
 
@@ -87,12 +103,25 @@ export async function POST(request) {
                 VALUES ($1, $2, $3, $4)
                 RETURNING *
             `, [data, nome, tipo, ano]);
+            await registerAuditLog(client, {
+                userId,
+                action: 'configuracoes_evento_criado',
+                entity: 'evento',
+                entityId: res.rows[0]?.id,
+                details: { data, nome, tipo, ano }
+            });
             return NextResponse.json(res.rows[0]);
         }
 
         if (action === 'delete_event') {
             const { id } = body;
             await client.query('DELETE FROM eventos_especiais WHERE id = $1', [id]);
+            await registerAuditLog(client, {
+                userId,
+                action: 'configuracoes_evento_excluido',
+                entity: 'evento',
+                entityId: id
+            });
             return NextResponse.json({ message: 'Evento removido' });
         }
 

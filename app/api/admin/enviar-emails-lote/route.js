@@ -1,5 +1,8 @@
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
+import { isAllowed } from '@/app/lib/access-control';
+import { registerAuditLog } from '@/app/lib/audit-log';
 import nodemailer from 'nodemailer';
 
 const pool = new Pool({
@@ -191,6 +194,11 @@ export async function POST(request) {
   const client = await pool.connect();
 
   try {
+    const userId = getUserIdFromRequest(request);
+    const perms = await getUserPermissions(client, userId);
+    if (!isAllowed(perms, 'designacoes_email', 'actions')) {
+      return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
+    }
     const pubRes = await client.query('SELECT nome_completo, nome_chamado, email FROM publicadores');
     const emailToPubMap = new Map();
     const nameFormattingMap = new Map();
@@ -292,6 +300,13 @@ export async function POST(request) {
     });
 
     await Promise.allSettled(emailPromises);
+
+    await registerAuditLog(client, {
+      userId,
+      action: 'emails_designacoes_enviados',
+      entity: 'designacoes',
+      details: { total: recipientsList.length, weekText }
+    });
 
     return NextResponse.json({ message: 'Envio concluído.' }, { status: 200 });
 

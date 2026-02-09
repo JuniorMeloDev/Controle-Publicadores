@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs'; // Para comparar senhas
 import jwt from 'jsonwebtoken'; // Para criar o token de sessão
 import { serialize } from 'cookie'; // Para criar o cookie
+import { normalizePermissions } from '@/app/lib/access-control';
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
@@ -14,6 +15,16 @@ const pool = new Pool({
 // Uma "chave secreta" para assinar nosso token.
 // Guarde isso no seu .env.local
 const JWT_SECRET = process.env.JWT_SECRET || 'chave-secreta-de-teste-mude-depois';
+
+async function ensureAccessTable(client) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS acessos_app (
+      publicador_id INTEGER PRIMARY KEY REFERENCES publicadores(id) ON DELETE CASCADE,
+      permissoes JSONB NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+}
 
 export async function POST(req) {
   const body = await req.json();
@@ -39,7 +50,18 @@ export async function POST(req) {
     const isAdmin = user.privilegios?.includes('anciao') || user.privilegios?.includes('servo_ministerial');
     
     if (!isAdmin) {
-        return NextResponse.json({ message: 'Você não tem permissão para acessar esta área.' }, { status: 403 }); // 403 Forbidden
+        await ensureAccessTable(client);
+        const accessRes = await client.query(
+          'SELECT permissoes FROM acessos_app WHERE publicador_id = $1',
+          [user.id]
+        );
+        const storedPerms = accessRes.rows[0]?.permissoes || null;
+        const perms = normalizePermissions(storedPerms);
+
+        const hasAnyPageAccess = Object.values(perms.pages || {}).some(Boolean);
+        if (!hasAnyPageAccess) {
+          return NextResponse.json({ message: 'Você não tem permissão para acessar esta área.' }, { status: 403 });
+        }
     }
 
     // 4. Comparar a senha digitada com o "hash" salvo no banco

@@ -12,6 +12,8 @@ import {
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { GlobalSearch } from '@/app/components/GlobalSearch';
+import { PermissionsProvider } from '@/app/components/PermissionsContext';
+import { getPageKeyForPath, isAllowed } from '@/app/lib/access-control';
 
 // Definição dos menus do sistema
 const navigation = [
@@ -47,6 +49,8 @@ export function DashboardLayout({ children }) {
     isAnciao: false,
     isServo: false 
   });
+  const [permissions, setPermissions] = useState(null);
+  const [isPermsLoading, setIsPermsLoading] = useState(true);
 
   const nomeCongregacao = process.env.NEXT_PUBLIC_NOME_CONGREGACAO || 'Minha Congregação';
 
@@ -57,9 +61,12 @@ export function DashboardLayout({ children }) {
         if (res.ok) {
           const data = await res.json();
           setUsuario(data);
+          setPermissions(data.permissions || null);
         }
       } catch (error) {
         console.error("Erro ao carregar usuário", error);
+      } finally {
+        setIsPermsLoading(false);
       }
     };
     fetchUsuario();
@@ -92,6 +99,15 @@ export function DashboardLayout({ children }) {
     if (!nome) return 'U';
     return nome.charAt(0).toUpperCase();
   };
+
+  const pageKey = getPageKeyForPath(pathname);
+  const canAccessPage = !pageKey || isAllowed(permissions, pageKey, 'pages');
+
+  const filteredNavigation = isPermsLoading
+    ? []
+    : (permissions
+        ? navigation.filter(item => isAllowed(permissions, getPageKeyForPath(item.href), 'pages'))
+        : navigation);
 
   const handleLogout = async () => {
     try {
@@ -242,7 +258,7 @@ export function DashboardLayout({ children }) {
 
           <div className="flex-1 overflow-y-auto p-4">
             <nav className="space-y-1">
-              {navigation.map((item) => {
+              {filteredNavigation.map((item) => {
                 const isActive = pathname === item.href;
                 return (
                   <Link
@@ -339,6 +355,17 @@ export function DashboardLayout({ children }) {
                         <User className="w-4 h-4" />
                         Meus Dados
                       </Link>
+
+                      {usuario.isAnciao && (
+                        <Link
+                          href="/admin/gestao-acessos"
+                          onClick={() => setIsUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 rounded-md transition-colors"
+                        >
+                          <Settings className="w-4 h-4" />
+                          Gestão de Acessos
+                        </Link>
+                      )}
                       
                       {/* Botão que abre o MODAL de senha */}
                       <button
@@ -369,7 +396,18 @@ export function DashboardLayout({ children }) {
         </header>
 
         <main className="flex-1 overflow-y-auto bg-gray-50 p-2 md:p-2 print:p-0 print:overflow-visible print:bg-white">
-            {children}
+            <PermissionsProvider permissions={permissions} isLoading={isPermsLoading}>
+              {!isPermsLoading && permissions && !canAccessPage ? (
+                <div className="max-w-xl mx-auto mt-10 bg-white border border-gray-200 rounded-xl p-6 text-center shadow-sm">
+                  <h2 className="text-lg font-bold text-gray-900">Acesso restrito</h2>
+                  <p className="text-sm text-gray-600 mt-2">
+                    Você não tem permissão para acessar esta tela.
+                  </p>
+                </div>
+              ) : (
+                children
+              )}
+            </PermissionsProvider>
         </main>
       </div>
     </div>

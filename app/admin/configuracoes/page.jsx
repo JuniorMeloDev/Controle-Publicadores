@@ -2,6 +2,8 @@
 
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { useState, useEffect } from 'react';
+import { usePermissions } from '@/app/components/PermissionsContext';
+import { isAllowed } from '@/app/lib/access-control';
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card";
@@ -31,6 +33,8 @@ const EVENT_TYPES = [
 ];
 
 export default function ConfiguracoesPage() {
+    const { permissions } = usePermissions();
+    const canEditConfig = isAllowed(permissions, 'configuracoes_editar', 'actions');
     const [year, setYear] = useState(new Date().getFullYear());
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -77,6 +81,10 @@ export default function ConfiguracoesPage() {
     };
 
     const handleSaveWeekdays = async () => {
+        if (!canEditConfig) {
+            setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
+            return;
+        }
         setSaving(true);
         try {
             await fetch('/api/admin/configuracoes', {
@@ -101,6 +109,10 @@ export default function ConfiguracoesPage() {
 
     const handleAddEvent = async () => {
         if (!newEvent.date || !newEvent.name) return;
+        if (!canEditConfig) {
+            setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
+            return;
+        }
         try {
             const res = await fetch('/api/admin/configuracoes', {
                 method: 'POST',
@@ -126,6 +138,10 @@ export default function ConfiguracoesPage() {
     };
 
     const handleDeleteEvent = async (id) => {
+        if (!canEditConfig) {
+            setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
+            return;
+        }
         if(!confirm('Tem certeza que deseja excluir este evento?')) return;
         try {
              await fetch('/api/admin/configuracoes', {
@@ -141,6 +157,10 @@ export default function ConfiguracoesPage() {
 
     // GENERATION LOGIC
     const handlePreview = async () => {
+        if (!canEditConfig) {
+            setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
+            return;
+        }
         setGenLoading(true);
         try {
             const res = await fetch('/api/admin/reunioes/gerar', {
@@ -170,6 +190,10 @@ export default function ConfiguracoesPage() {
     };
 
     const handleConfirmGeneration = async () => {
+        if (!canEditConfig) {
+            setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
+            return;
+        }
         setGenLoading(true);
         const toCreate = previewData.meetings.filter(m => !m.exists);
         
@@ -300,7 +324,7 @@ export default function ConfiguracoesPage() {
                                     </div>
                                 </div>
                                 <div className="space-y-3 pt-2">
-                                    <Button onClick={handleSaveWeekdays} disabled={saving} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                                    <Button onClick={handleSaveWeekdays} disabled={saving || !canEditConfig} className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50">
                                         {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                                         Salvar Dias
                                     </Button>
@@ -308,7 +332,7 @@ export default function ConfiguracoesPage() {
                                     {/* create meetings button */}
                                     <Dialog open={genOpen} onOpenChange={(open) => { if(!open) setGenStep(1); setGenOpen(open); }}>
                                         <DialogTrigger asChild>
-                                            <Button variant="outline" className="w-full border-purple-200 text-purple-700 hover:bg-purple-50">
+                                            <Button variant="outline" disabled={!canEditConfig} className="w-full border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50">
                                                 <Sparkles className="w-4 h-4 mr-2" /> Criar Reuniões Automaticamente
                                             </Button>
                                         </DialogTrigger>
