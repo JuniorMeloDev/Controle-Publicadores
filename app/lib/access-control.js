@@ -27,7 +27,6 @@ export const buildAllPermissions = () => ({
 });
 
 export const normalizePermissions = (input) => {
-  const base = buildAllPermissions();
   if (!input || typeof input !== 'object') {
     return { pages: {}, actions: {} };
   }
@@ -35,10 +34,15 @@ export const normalizePermissions = (input) => {
   const actions = {};
 
   PAGE_PERMISSIONS.forEach(({ key }) => {
+    // Pages: ausente = false (acesso a páginas deve ser explicitamente concedido)
     pages[key] = Boolean(input.pages?.[key]);
   });
   ACTION_PERMISSIONS.forEach(({ key }) => {
-    actions[key] = Boolean(input.actions?.[key]);
+    // Actions: se a chave NÃO existe no registro salvo, assume true.
+    // Isso garante compatibilidade retroativa: novas actions adicionadas ao sistema
+    // não bloqueiam usuários com registros antigos que não tinham essa chave.
+    const storedValue = input.actions?.[key];
+    actions[key] = storedValue === undefined ? true : Boolean(storedValue);
   });
 
   return { pages, actions };

@@ -27,8 +27,10 @@ const SearchableSelect = ({ value, options, onChange, placeholder }) => {
    const selectedOption = options?.find(o => o.value === value);
    const displayValue = selectedOption ? selectedOption.label : '';
 
+   // Normalize for accent-insensitive search
+   const normalize = (str) => str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() : '';
    const filteredOptions = options?.filter(o =>
-      o.label.toLowerCase().includes(searchTerm.toLowerCase())
+      normalize(o.label).includes(normalize(searchTerm))
    );
 
    const handleSelect = (val) => {
@@ -43,8 +45,7 @@ const SearchableSelect = ({ value, options, onChange, placeholder }) => {
             className="w-full text-sm p-2 border border-gray-300 rounded-md bg-white text-gray-900 focus-within:border-purple-500 focus-within:ring-1 focus-within:ring-purple-500 cursor-pointer flex justify-between items-center"
             onClick={() => {
                setIsOpen(!isOpen);
-               if (!isOpen && displayValue) setSearchTerm(''); // Clear on open usually, or prefill
-               // To be more user friendly let's focus input
+               if (!isOpen && displayValue) setSearchTerm('');
             }}
          >
             <span className={!value ? "text-gray-400" : ""}>{value ? displayValue : (placeholder || "Selecione...")}</span>
@@ -96,18 +97,18 @@ const SearchableSelect = ({ value, options, onChange, placeholder }) => {
 // HELPER: Truncate Title for Display
 const formatPartTitle = (title) => {
    if (!title) return "";
-   if (title.toLowerCase().includes('cÃ¢ntico')) return title;
+   if (title.toLowerCase().includes('cântico')) return title;
 
    // Strict truncation: Stop exactly at "(XX min)"
    const match = title.match(/^(.*?)(\(\d+\s*min\))/i);
    if (match) {
       const base = match[1] + match[2];
 
-      // Check if there is "ConsideraÃ§Ã£o" immediately following
+      // Check if there is "Consideração" immediately following
       const afterTime = title.substring(match.index + match[0].length);
       let suffix = "";
-      if (afterTime.match(/^[:\s]*ConsideraÃ§Ã£o/i)) {
-         suffix = ": ConsideraÃ§Ã£o";
+      if (afterTime.match(/^[:\s]*Consideração/i)) {
+         suffix = ": Consideração";
       }
       return base + suffix;
    }
@@ -128,7 +129,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
    const canSave = isAllowed(permissions, 'designacoes_salvar', 'actions');
    const canPdf = isAllowed(permissions, 'designacoes_pdf', 'actions');
    // State for Editing Title
-   const [editingPartIndex, setEditingPartIndex] = useState(null); // { section: 'living', index: 0 }
+   const [editingPartIndex, setEditingPartIndex] = useState(null);
    const [editingTitleValue, setEditingTitleValue] = useState('');
 
    // State for History Modal
@@ -146,20 +147,14 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
    // -- SMART AUTO FILL LOGIC (RANDOM + UNIQUE) --
    const handleAutoFill = () => {
       const newAssigns = {};
-      const usedNames = new Set(); // Track used publishers for this generation
+      const usedNames = new Set();
 
-      // Helper to pick random unique
       const pickUnique = (pool) => {
          if (!pool || pool.length === 0) return '';
-
-         // Filter out already used names
          const available = pool.filter(p => !usedNames.has(p.nome_completo));
-
-         if (available.length === 0) return ''; // No one left available
-
+         if (available.length === 0) return '';
          const idx = Math.floor(Math.random() * available.length);
          const chosen = available[idx].nome_completo;
-
          usedNames.add(chosen);
          return chosen;
       };
@@ -167,27 +162,21 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
       // 1. Define Pools
       const elders = publicadores.filter(p => p.privilegios?.includes('anciao'));
       const eldersAndMSUnique = publicadores.filter(p => p.privilegios?.includes('anciao') || p.privilegios?.includes('servo_ministerial'));
-
       const males = publicadores.filter(p => p.sexo === 'Masculino');
       const females = publicadores.filter(p => p.sexo === 'Feminino');
-
       const malesNotElder = males.filter(p => !p.privilegios?.includes('anciao'));
       const malesForBibleReading = males.filter(p => !p.privilegios?.includes('anciao') && !p.privilegios?.includes('servo_ministerial'));
 
       // 2. Assign Roles
-
-      // Presidente (Exception: assigned to multiple parts)
-      // Pick president first to ensure availability
       const presName = pickUnique(elders);
       if (presName) {
          newAssigns['presidente'] = presName;
          newAssigns['comentarios_iniciais'] = presName;
          newAssigns['comentarios_finais'] = presName;
          newAssigns['cantico_meio'] = presName;
-         // Note: presName is already added to usedNames by pickUnique
       }
 
-      // OraÃ§Ãµes
+      // Orações
       newAssigns['oracao_inicial'] = pickUnique(males);
       newAssigns['oracao_final'] = pickUnique(males);
 
@@ -201,7 +190,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
          }
       });
 
-      // FaÃ§a Seu Melhor
+      // Faça Seu Melhor
       schedule.ministry?.forEach((part, idx) => {
          const isDiscurso = part.title.toLowerCase().includes('discurso');
          if (isDiscurso) {
@@ -212,7 +201,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
          }
       });
 
-      // Nossa Vida CristÃ£
+      // Nossa Vida Cristã
       schedule.living?.forEach((part, idx) => {
          const isBibleStudy = normalizeText(part.title).includes('estudo biblico');
          if (isBibleStudy) {
@@ -230,12 +219,10 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
 
    // -- MANUAL SELECTION INTERCEPT --
    const handleManualChange = (key, val) => {
-      // 1. Update the assignment immediately
       if (onAssignmentChange) {
          onAssignmentChange(key, val);
       }
 
-      // 2. Show history modal if a value was selected
       if (val) {
          const hist = historyData.filter(h => h.nome_completo === val);
          setSelectedPubHistory({ name: val, history: hist });
@@ -268,10 +255,8 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
    );
 
    const renderEditableItem = (label, partKey, value, subLabel = null, subPartKey = null, subValue = null, editConfig = null) => {
-      // Truncate label if it's too long (Modal View)
       const displayLabel = formatPartTitle(label);
 
-      // Helper to render searchable select
       const renderSelect = (key, currentVal) => (
          <SearchableSelect
             value={currentVal || ''}
@@ -303,7 +288,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                         <button
                            onClick={() => handleStartEditing(editConfig.section, editConfig.idx, label)}
                            className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-purple-600 p-1"
-                           title="Editar TÃ­tulo"
+                           title="Editar Título"
                         >
                            <Edit2 size={12} />
                         </button>
@@ -340,12 +325,12 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-2 pr-2">
                      {selectedPubHistory.history.length === 0 ? (
-                        <p className="text-xs text-gray-500 italic">Nenhuma designaÃ§Ã£o recente.</p>
+                        <p className="text-xs text-gray-500 italic">Nenhuma designação recente.</p>
                      ) : (
                         selectedPubHistory.history
                            .filter(h => {
                               const part = h.nome_parte.toLowerCase();
-                              return !part.includes('comentÃ¡rios') && !part.includes('cÃ¢ntico');
+                              return !part.includes('comentários') && !part.includes('cântico');
                            })
                            .map((h, i) => (
                               <div key={i} className="text-xs flex justify-between items-center bg-gray-50 p-2 rounded border border-gray-100">
@@ -397,7 +382,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                <div className="space-y-2">
                   {renderEditableItem("Oração Inicial", "oracao_inicial", assignments.oracao_inicial)}
                   {renderEditableItem(
-                     schedule.openingComments || "ComentÃ¡rios Iniciais",
+                     schedule.openingComments || "Comentários Iniciais",
                      "comentarios_iniciais",
                      assignments.comentarios_iniciais,
                      null,
@@ -429,7 +414,6 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                   const isDiscurso = part.title.toLowerCase().includes('discurso');
                   const studentKey = isDiscurso ? `ministerio_${idx}` : `ministerio_${idx}_1`;
                   const assistantKey = isDiscurso ? null : `ministerio_${idx}_2`;
-
                   const studentVal = assignments[studentKey];
                   const assistantVal = assignments[assistantKey];
 
@@ -451,7 +435,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                {/* NOSSA VIDA CRISTÃ */}
                {renderSectionHeader(<Music className="w-5 h-5" />, "Nossa Vida Cristã", "text-red-600 border-red-100")}
                {renderEditableItem(
-                  schedule.middleSong || "CÃ¢ntico do Meio",
+                  schedule.middleSong || "Cântico do Meio",
                   "cantico_meio",
                   assignments.cantico_meio,
                   null,
@@ -462,10 +446,8 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
 
                {schedule.living?.map((part, idx) => {
                   const isBibleStudy = normalizeText(part.title).includes('estudo biblico');
-
                   const mainKey = isBibleStudy ? `vida_${idx}_1` : `vida_${idx}`;
                   const readerKey = isBibleStudy ? `vida_${idx}_2` : null;
-
                   const mainVal = assignments[mainKey];
                   const readerVal = assignments[readerKey];
 
@@ -486,7 +468,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
 
                <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
                   {renderEditableItem(
-                     schedule.finalComments || "ComentÃ¡rios Finais",
+                     schedule.finalComments || "Comentários Finais",
                      "comentarios_finais",
                      assignments.comentarios_finais,
                      null,
@@ -513,7 +495,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                <button onClick={onPrint} disabled={!canPdf} className="px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md text-sm font-medium shadow-sm flex items-center gap-2 disabled:opacity-50">
                   <Printer size={16} /> PDF
                </button>
-               <button onClick={() => { onSave && onSave(); onClose(); }} disabled={isSaving || !canSave} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium shadow-sm flex items-center gap-2 disabled:opacity-50">
+               <button onClick={async () => { if (onSave) await onSave(); onClose(); }} disabled={isSaving || !canSave} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium shadow-sm flex items-center gap-2 disabled:opacity-50">
                   {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Salvar
                </button>
             </div>
@@ -522,4 +504,3 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
       </Dialog>
    );
 }
-

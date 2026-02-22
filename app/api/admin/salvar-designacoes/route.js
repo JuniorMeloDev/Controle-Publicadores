@@ -8,6 +8,11 @@ const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 });
 
+function normalizeStr(str) {
+  if (!str) return '';
+  return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 function getPartTitles(scheduleData) {
   const titles = {
     'presidente': 'Presidente',
@@ -34,7 +39,7 @@ function getPartTitles(scheduleData) {
   });
 
   scheduleData.living?.forEach((part, index) => {
-    const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
+    const isBibleStudy = normalizeStr(part.title).includes('estudo biblico');
     if (isBibleStudy) {
        titles[`vida_${index}_1`] = part.title; 
        titles[`vida_${index}_2`] = part.title; 

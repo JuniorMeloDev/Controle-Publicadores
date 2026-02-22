@@ -58,8 +58,10 @@ export async function GET() {
         [decoded.userId]
       );
 
-      const storedPerms = accessRes.rows[0]?.permissoes || null;
-      const permissions = (isAnciao || isServo) ? buildAllPermissions() : normalizePermissions(storedPerms);
+      const storedPerms = accessRes.rows[0]?.permissoes ?? null;
+      // Se for ancião/servo OU se não tiver nenhuma entrada configurada na tabela (null = sem restrições), garante acesso total.
+      // Só aplica permissões restritas quando há um registro explícito em acessos_app.
+      const permissions = (isAnciao || isServo || storedPerms === null) ? buildAllPermissions() : normalizePermissions(storedPerms);
 
       return NextResponse.json({ 
         id: String(decoded.userId), // <--- FORÇA O ID COMO STRING

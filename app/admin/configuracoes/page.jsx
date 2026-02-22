@@ -33,13 +33,15 @@ const EVENT_TYPES = [
 ];
 
 export default function ConfiguracoesPage() {
-    const { permissions } = usePermissions();
-    const canEditConfig = isAllowed(permissions, 'configuracoes_editar', 'actions');
+    const { permissions, isLoading: isPermsLoading } = usePermissions();
+    // Só nega acesso quando as permissões foram carregadas E explicitamente não concedem o direito.
+    // Se ainda está carregando (null) ou não há restrição registrada, libera (o backend valida de verdade).
+    const canEditConfig = isPermsLoading || !permissions || isAllowed(permissions, 'configuracoes_editar', 'actions');
     const [year, setYear] = useState(new Date().getFullYear());
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState({ message: '', type: '' });
-    
+
     // Meeting Days State
     const [midweekDay, setMidweekDay] = useState('');
     const [weekendDay, setWeekendDay] = useState('');
@@ -54,7 +56,7 @@ export default function ConfiguracoesPage() {
     const [genPeriod, setGenPeriod] = useState('mensal');
     const [genLoading, setGenLoading] = useState(false);
     const [previewData, setPreviewData] = useState({ meetings: [], warnings: [] });
-    
+
     // Result Modal State
     const [resultOpen, setResultOpen] = useState(false);
     const [resultData, setResultData] = useState({ success: true, message: '', details: [] });
@@ -128,28 +130,34 @@ export default function ConfiguracoesPage() {
             if (res.ok) {
                 const addedEvent = await res.json();
                 if (addedEvent.ano === year) {
-                    setEvents([...events, addedEvent].sort((a,b) => new Date(a.data) - new Date(b.data)));
+                    setEvents([...events, addedEvent].sort((a, b) => new Date(a.data) - new Date(b.data)));
                 }
                 setNewEvent({ date: '', name: '', type: 'Outro' });
+                setToast({ message: 'Evento adicionado com sucesso!', type: 'success' });
+                setTimeout(() => setToast({ message: '', type: '' }), 3000);
+            } else {
+                setToast({ message: 'Erro ao adicionar evento.', type: 'error' });
             }
         } catch (error) {
             console.error(error);
+            setToast({ message: 'Erro de conexão ao adicionar evento.', type: 'error' });
         }
     };
+
 
     const handleDeleteEvent = async (id) => {
         if (!canEditConfig) {
             setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
             return;
         }
-        if(!confirm('Tem certeza que deseja excluir este evento?')) return;
+        if (!confirm('Tem certeza que deseja excluir este evento?')) return;
         try {
-             await fetch('/api/admin/configuracoes', {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify({ action: 'delete_event', id })
-             });
-             setEvents(events.filter(e => e.id !== id));
+            await fetch('/api/admin/configuracoes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'delete_event', id })
+            });
+            setEvents(events.filter(e => e.id !== id));
         } catch (error) {
             console.error(error);
         }
@@ -166,14 +174,14 @@ export default function ConfiguracoesPage() {
             const res = await fetch('/api/admin/reunioes/gerar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    action: 'preview', 
-                    period: genPeriod, 
-                    year: year 
+                body: JSON.stringify({
+                    action: 'preview',
+                    period: genPeriod,
+                    year: year
                 })
             });
-            
-            if(res.ok) {
+
+            if (res.ok) {
                 const data = await res.json();
                 setPreviewData(data);
                 setGenStep(2);
@@ -196,33 +204,33 @@ export default function ConfiguracoesPage() {
         }
         setGenLoading(true);
         const toCreate = previewData.meetings.filter(m => !m.exists);
-        
+
         if (toCreate.length === 0) {
-             setGenLoading(false);
-             setResultData({
-                 success: true,
-                 message: 'Nenhuma nova reunião para criar.',
-                 details: ['Todas as reuniões do período já existem.']
-             });
-             setGenOpen(false);
-             setResultOpen(true);
-             return;
+            setGenLoading(false);
+            setResultData({
+                success: true,
+                message: 'Nenhuma nova reunião para criar.',
+                details: ['Todas as reuniões do período já existem.']
+            });
+            setGenOpen(false);
+            setResultOpen(true);
+            return;
         }
 
         try {
             const res = await fetch('/api/admin/reunioes/gerar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    action: 'create', 
+                body: JSON.stringify({
+                    action: 'create',
                     year: year,
                     options: { meetings_to_create: toCreate }
                 })
             });
-            
+
             const data = await res.json();
-            
-            if(res.ok) {
+
+            if (res.ok) {
                 setGenOpen(false);
                 setGenStep(1);
                 // Show success modal
@@ -234,7 +242,7 @@ export default function ConfiguracoesPage() {
                 setResultOpen(true);
             } else {
                 // Show error modal
-                 setResultData({
+                setResultData({
                     success: false,
                     message: 'Erro ao criar reuniões',
                     details: [data.message || 'Erro desconhecido.']
@@ -243,7 +251,7 @@ export default function ConfiguracoesPage() {
                 setResultOpen(true);
             }
         } catch (error) {
-             setResultData({
+            setResultData({
                 success: false,
                 message: 'Erro de conexão',
                 details: [error.message]
@@ -259,7 +267,7 @@ export default function ConfiguracoesPage() {
         <DashboardLayout>
             <div className="p-4 sm:p-6 space-y-6 max-w-5xl mx-auto">
                 {/* Header... (Same as before) */}
-                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Configurações Gerais</h1>
                         <p className="text-gray-500">Gerencie os dias de reunião e eventos especiais do calendário.</p>
@@ -285,7 +293,7 @@ export default function ConfiguracoesPage() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        
+
                         {/* CARD 1: DIAS DE REUNIÃO */}
                         <Card className="border-gray-200 shadow-sm flex flex-col">
                             <CardHeader className="bg-gray-50/50 pb-4 border-b border-gray-100">
@@ -330,7 +338,7 @@ export default function ConfiguracoesPage() {
                                     </Button>
 
                                     {/* create meetings button */}
-                                    <Dialog open={genOpen} onOpenChange={(open) => { if(!open) setGenStep(1); setGenOpen(open); }}>
+                                    <Dialog open={genOpen} onOpenChange={(open) => { if (!open) setGenStep(1); setGenOpen(open); }}>
                                         <DialogTrigger asChild>
                                             <Button variant="outline" disabled={!canEditConfig} className="w-full border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50">
                                                 <Sparkles className="w-4 h-4 mr-2" /> Criar Reuniões Automaticamente
@@ -405,7 +413,7 @@ export default function ConfiguracoesPage() {
                                                                     <tbody className="divide-y divide-gray-100">
                                                                         {previewData.meetings.map((m, idx) => (
                                                                             <tr key={idx} className={m.exists ? 'bg-gray-50' : 'bg-white'}>
-                                                                                <td className={`p-2 font-medium ${m.exists ? 'text-gray-500' : 'text-gray-900'}`}>{new Date(m.data).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
+                                                                                <td className={`p-2 font-medium ${m.exists ? 'text-gray-500' : 'text-gray-900'}`}>{new Date(m.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
                                                                                 <td className="p-2 capitalize text-gray-600">{m.weekday}</td>
                                                                                 <td className="p-2 text-gray-700">{m.tipo}</td>
                                                                                 <td className="p-2 text-xs">
@@ -449,7 +457,7 @@ export default function ConfiguracoesPage() {
                         </Card>
 
                         {/* CARD 2: EVENTOS ESPECIAIS (Same as before) */}
-                         <Card className="border-gray-200 shadow-sm lg:row-span-2 h-fit">
+                        <Card className="border-gray-200 shadow-sm lg:row-span-2 h-fit">
                             <CardHeader className="bg-gray-50/50 pb-4 border-b border-gray-100">
                                 <CardTitle className="text-orange-900 flex items-center gap-2">
                                     <Calendar className="w-5 h-5 text-orange-600" />
@@ -460,22 +468,22 @@ export default function ConfiguracoesPage() {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="pt-6 space-y-6">
-                                
+
                                 <div className="p-4 bg-orange-50 rounded-lg border border-orange-100 space-y-3">
                                     <Label className="font-semibold text-orange-900">Adicionar Novo Evento</Label>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div className="space-y-1">
                                             <span className="text-xs font-medium text-gray-700">Nome do Evento</span>
-                                            <Input 
-                                                placeholder="Ex: Assembleia de Circuito" 
+                                            <Input
+                                                placeholder="Ex: Assembleia de Circuito"
                                                 value={newEvent.name}
-                                                onChange={e => setNewEvent({...newEvent, name: e.target.value})}
+                                                onChange={e => setNewEvent({ ...newEvent, name: e.target.value })}
                                                 className="bg-white text-gray-900 border-gray-300 placeholder:text-gray-400"
                                             />
                                         </div>
                                         <div className="space-y-1">
                                             <span className="text-xs font-medium text-gray-700">Tipo</span>
-                                            <Select value={newEvent.type} onValueChange={v => setNewEvent({...newEvent, type: v})}>
+                                            <Select value={newEvent.type} onValueChange={v => setNewEvent({ ...newEvent, type: v })}>
                                                 <SelectTrigger className="bg-white text-gray-900 border-gray-300">
                                                     <SelectValue />
                                                 </SelectTrigger>
@@ -487,10 +495,10 @@ export default function ConfiguracoesPage() {
                                         <div className="space-y-1 sm:col-span-2">
                                             <span className="text-xs font-medium text-gray-700">Data</span>
                                             <div className="flex gap-2">
-                                                <Input 
-                                                    type="date" 
+                                                <Input
+                                                    type="date"
                                                     value={newEvent.date}
-                                                    onChange={e => setNewEvent({...newEvent, date: e.target.value})}
+                                                    onChange={e => setNewEvent({ ...newEvent, date: e.target.value })}
                                                     className="bg-white text-gray-900 border-gray-300 flex-1"
                                                 />
                                                 <Button onClick={handleAddEvent} className="bg-orange-600 hover:bg-orange-700 text-white shrink-0">
@@ -511,7 +519,7 @@ export default function ConfiguracoesPage() {
                                                 <div key={event.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg hover:shadow-sm transition-shadow">
                                                     <div className="flex items-center gap-3">
                                                         <div className="flex flex-col items-center bg-gray-50 px-2 py-1 rounded border border-gray-200 min-w-[3.5rem]">
-                                                            <span className="text-[10px] font-bold text-gray-500 uppercase">{new Date(event.data).toLocaleString('pt-BR', { month: 'short', timeZone: 'UTC' }).replace('.','')}</span>
+                                                            <span className="text-[10px] font-bold text-gray-500 uppercase">{new Date(event.data).toLocaleString('pt-BR', { month: 'short', timeZone: 'UTC' }).replace('.', '')}</span>
                                                             <span className="text-lg font-bold text-gray-900 leading-none">{new Date(event.data).getUTCDate()}</span>
                                                         </div>
                                                         <div>
@@ -534,33 +542,33 @@ export default function ConfiguracoesPage() {
 
                     </div>
                 )}
-             <StatusToast 
-                message={toast.message} 
-                type={toast.type} 
-                onClose={() => setToast({ ...toast, message: '' })} 
-            />
+                <StatusToast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast({ ...toast, message: '' })}
+                />
 
-            {/* Result Modal */}
-            <Dialog open={resultOpen} onOpenChange={setResultOpen}>
-                <DialogContent className="bg-white">
-                    <DialogHeader>
-                        <DialogTitle className={resultData.success ? "text-green-600" : "text-red-600"}>
-                            {resultData.success ? 'Sucesso!' : 'Atenção'}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {resultData.message}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-2">
-                        <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
-                            {resultData.details.map((d, i) => <li key={i}>{d}</li>)}
-                        </ul>
-                    </div>
-                    <DialogFooter>
-                        <Button onClick={() => setResultOpen(false)}>Fechar</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                {/* Result Modal */}
+                <Dialog open={resultOpen} onOpenChange={setResultOpen}>
+                    <DialogContent className="bg-white">
+                        <DialogHeader>
+                            <DialogTitle className={resultData.success ? "text-green-600" : "text-red-600"}>
+                                {resultData.success ? 'Sucesso!' : 'Atenção'}
+                            </DialogTitle>
+                            <DialogDescription>
+                                {resultData.message}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="py-2">
+                            <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                                {resultData.details.map((d, i) => <li key={i}>{d}</li>)}
+                            </ul>
+                        </div>
+                        <DialogFooter>
+                            <Button onClick={() => setResultOpen(false)}>Fechar</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
 
             </div>
         </DashboardLayout>

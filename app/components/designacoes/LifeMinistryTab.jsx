@@ -93,7 +93,7 @@ const mapSavedToAssignments = (savedRows, schedule) => {
     }
   });
   schedule.living?.forEach((part, idx) => {
-    const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
+    const isBibleStudy = part.title.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes('estudo biblico');
     if (isBibleStudy) {
       newAssignments[`vida_${idx}_1`] = popAssignment(part.title);
       newAssignments[`vida_${idx}_2`] = popAssignment(part.title);
@@ -318,7 +318,6 @@ export function LifeMinistryTab() {
       setSchedules([scheduleData]);
       setWeekDescriptions([meeting.descricao]);
       setMeetingDates([meeting.dataSQL]);
-      setAssignmentsList([reconstructedAssignments]);
       setAssignmentsList([reconstructedAssignments]);
       setCurrentIndex(0);
 

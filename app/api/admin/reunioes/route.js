@@ -189,102 +189,219 @@ export async function GET(request) {
     // Format dates safely and Check Conflicts
     
     // 1. Fetch Context (Config & Events) for conflict detection
-    // Optimization: Only if we have some meetings found
-    let meetings = [];
-    if (res.rows.length > 0) {
-        // Assume all meetings are roughly same year context, or use the query year
-        const queryYear = year || new Date().getFullYear();
-        
-        const [configRes, eventsRes] = await Promise.all([
-            client.query('SELECT dia_meio_semana, dia_fim_semana FROM configuracoes_gerais WHERE ano = $1', [queryYear]),
-            client.query('SELECT * FROM eventos_especiais WHERE ano = $1', [queryYear])
-        ]);
+    const queryYear = year || new Date().getFullYear();
+    
+    const [configRes, eventsRes] = await Promise.all([
+        client.query('SELECT dia_meio_semana, dia_fim_semana FROM configuracoes_gerais WHERE ano = $1', [queryYear]),
+        month
+            ? client.query('SELECT * FROM eventos_especiais WHERE ano = $1 AND EXTRACT(MONTH FROM data) = $2', [queryYear, month])
+            : client.query('SELECT * FROM eventos_especiais WHERE ano = $1', [queryYear])
+    ]);
 
-        const config = configRes.rows[0];
-        const events = eventsRes.rows.map(e => ({...e, dateObj: new Date(e.data)}));
+    const config = configRes.rows[0];
+    const specialEvents = eventsRes.rows.map(e => ({
+        ...e,
+        dateObj: new Date(e.data),
+        dateStr: new Date(e.data).toISOString().split('T')[0]
+    }));
 
-        meetings = res.rows.map(row => {
-            const meetingDate = new Date(row.data);
-            const dateStr = meetingDate.toISOString().split('T')[0];
-            const result = {
-                ...row,
-                data_formatada: meetingDate.toLocaleDateString('pt-BR', {timeZone: 'UTC'}),
-                cancelado: false,
-                motivo_cancelamento: ''
-            };
+    // Helper: map day name to UTC day index
+    const daysMap = {
+        'Domingo': 0, 'Segunda-feira': 1, 'Terça-feira': 2,
+        'Quarta-feira': 3, 'Quinta-feira': 4, 'Sexta-feira': 5, 'Sábado': 6
+    };
 
-            if (!config) return result; // Safety
+    // Helper: get ISO date string from a Date in UTC
+    const toDateStr = (d) => d.toISOString().split('T')[0];
 
-            // Conflict Logic (Mirrors Generator Logic)
-            
-            // 1. Exact Day Conflict (Assemblies, Congress, Celebration)
-            const eventOnDay = events.find(e => e.dateObj.toISOString().split('T')[0] === dateStr);
-            if (eventOnDay) {
-                if (['Assembleia', 'Congresso', 'Celebração', 'Memorial'].includes(eventOnDay.tipo)) {
+    // 2. Process existing meetings with conflict logic
+    let meetings = res.rows.map(row => {
+        const meetingDate = new Date(row.data);
+        const dateStr = toDateStr(meetingDate);
+        const result = {
+            ...row,
+            data_formatada: meetingDate.toLocaleDateString('pt-BR', {timeZone: 'UTC'}),
+            cancelado: false,
+            motivo_cancelamento: '',
+            evento_nome: '',
+            virtual: false
+        };
+
+        if (!config) return result;
+
+        // 1. Exact Day Conflict — any event type on the exact meeting day cancels it
+        const eventOnDay = specialEvents.find(e => e.dateStr === dateStr);
+        if (eventOnDay) {
+            result.cancelado = true;
+            result.motivo_cancelamento = `${eventOnDay.tipo}: ${eventOnDay.nome}`;
+            result.evento_nome = eventOnDay.nome;
+        }
+
+        // 2. Complex Rules for Midweek meetings (only if not already cancelled)
+        if (!result.cancelado && row.tipo === 'Meio de Semana') {
+            const current = new Date(meetingDate);
+            const startOfWeek = new Date(current);
+            startOfWeek.setDate(current.getUTCDate() - current.getUTCDay() + 1); // Monday
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(startOfWeek.getUTCDate() + 6); // Sunday
+
+            // 2a. Check for Celebração in the same week
+            const celInWeek = specialEvents.find(e =>
+                e.tipo === 'Celebração' &&
+                e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
+            );
+            if (celInWeek) {
+                result.cancelado = true;
+                result.motivo_cancelamento = `Celebração na semana: ${celInWeek.nome} (${celInWeek.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})})`;
+                result.evento_nome = celInWeek.nome;
+            }
+
+            // 2b. Check for Assembleia/Congresso on the weekend of the SAME week
+            if (!result.cancelado) {
+                const assemblyInWeek = specialEvents.find(e =>
+                    ['Assembleia', 'Congresso'].includes(e.tipo) &&
+                    e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
+                );
+                if (assemblyInWeek) {
                     result.cancelado = true;
-                    result.motivo_cancelamento = `${eventOnDay.tipo} neste dia`;
+                    result.motivo_cancelamento = `${assemblyInWeek.tipo}: ${assemblyInWeek.nome} (${assemblyInWeek.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})})`;
+                    result.evento_nome = assemblyInWeek.nome;
                 }
             }
 
-            // 2. Complex Rules for Midweek
-            // We assume 'Meio de Semana' type is stored in DB row.tipo, or we deduce from config days?
-            // The DB stores 'Meio de Semana' or 'Fim de Semana'.
-            if (!result.cancelado && row.tipo === 'Meio de Semana') {
-                
-                // 2a. Check for Celebração in the same week
-                const current = new Date(meetingDate);
-                const startOfWeek = new Date(current);
-                startOfWeek.setDate(current.getUTCDate() - current.getUTCDay() + 1); // Monday
-                const endOfWeek = new Date(startOfWeek);
-                endOfWeek.setDate(startOfWeek.getUTCDate() + 6); // Sunday
-
-                const celInWeek = events.find(e => 
-                    e.tipo === 'Celebração' && 
-                    e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
-                );
-                
-                if (celInWeek) {
-                    result.cancelado = true;
-                    result.motivo_cancelamento = `Celebração na semana (${celInWeek.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})})`;
-                }
-
-                // 2b. Check for Assembly on UPCOMING weekend (Antecede Assembleia)
-                if (!result.cancelado) {
-                    let nextWeekend = new Date(current);
-                    // Look ahead for the configured weekend day
-                    // Simple heuristic: check next 6 days for config.dia_fim_semana
-                    // Map weekday name to index for comparison?
-                    // Let's iterate day by day up to 6 days
-                    const daysMap = {'Domingo': 0, 'Segunda-feira': 1, 'Terça-feira': 2, 'Quarta-feira': 3, 'Quinta-feira': 4, 'Sexta-feira': 5, 'Sábado': 6};
-                    const targetDayIdx = daysMap[config.dia_fim_semana];
-                    
-                    if (targetDayIdx !== undefined) {
-                         for(let i=1; i<=6; i++) {
-                            const d = new Date(current);
-                            d.setDate(d.getUTCDate() + i);
-                            if (d.getUTCDay() === targetDayIdx) {
-                                // Found the weekend meeting day. Check for Assembly.
-                                const dateStrWe = d.toISOString().split('T')[0];
-                                const weekendEvent = events.find(e => 
-                                    e.dateObj.toISOString().split('T')[0] === dateStrWe &&
-                                    ['Assembleia', 'Congresso'].includes(e.tipo)
-                                );
-                                if (weekendEvent) {
-                                    result.cancelado = true;
-                                    result.motivo_cancelamento = `Antecede ${weekendEvent.tipo} (${weekendEvent.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})})`;
-                                }
-                                break; 
+            // 2c. Check for Assembly/Congress on UPCOMING weekend of next week (Antecede)
+            if (!result.cancelado) {
+                const targetDayIdx = daysMap[config.dia_fim_semana];
+                if (targetDayIdx !== undefined) {
+                    for (let i = 1; i <= 6; i++) {
+                        const d = new Date(current);
+                        d.setDate(d.getUTCDate() + i);
+                        if (d.getUTCDay() === targetDayIdx) {
+                            const dateStrWe = toDateStr(d);
+                            const weekendEvent = specialEvents.find(e =>
+                                e.dateStr === dateStrWe &&
+                                ['Assembleia', 'Congresso'].includes(e.tipo)
+                            );
+                            if (weekendEvent) {
+                                result.cancelado = true;
+                                result.motivo_cancelamento = `Antecede ${weekendEvent.tipo}: ${weekendEvent.nome} (${weekendEvent.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})})`;
+                                result.evento_nome = weekendEvent.nome;
                             }
-                         }
+                            break;
+                        }
                     }
                 }
             }
+        }
 
-            return result;
-        });
+        return result;
+    });
+
+    // 3. Build a set of meeting dates already in DB
+    const meetingDateSet = new Set(res.rows.map(r => toDateStr(new Date(r.data))));
+
+    // 4. For each special event, check if it falls on a configured meeting day
+    //    and does NOT already have a meeting in DB → insert a virtual row
+    if (config) {
+        const midweekDayIdx = daysMap[config.dia_meio_semana];
+        const weekendDayIdx = daysMap[config.dia_fim_semana];
+
+        for (const ev of specialEvents) {
+            if (meetingDateSet.has(ev.dateStr)) continue; // Already has a real meeting
+
+            const dayOfWeek = ev.dateObj.getUTCDay();
+            let meetingType = null;
+
+            if (dayOfWeek === midweekDayIdx) {
+                meetingType = 'Meio de Semana';
+            } else if (dayOfWeek === weekendDayIdx) {
+                meetingType = 'Fim de Semana';
+            } else {
+                // Also check: is this a Celebração that cancels the same week's midweek?
+                // If so, we inject a virtual row for the MIDWEEK day of that week
+                if (ev.tipo === 'Celebração' && midweekDayIdx !== undefined) {
+                    // Find the midweek day of this event's week
+                    const evDay = new Date(ev.dateObj);
+                    const evDayOfWeek = evDay.getUTCDay();
+                    const diffToMonday = evDayOfWeek === 0 ? -6 : 1 - evDayOfWeek;
+                    const monday = new Date(evDay);
+                    monday.setDate(evDay.getUTCDate() + diffToMonday);
+                    
+                    // Find the midweek day of this week
+                    const diffToMidweek = (midweekDayIdx - 1 + 7) % 7; // from Monday
+                    const midweekOfWeek = new Date(monday);
+                    midweekOfWeek.setDate(monday.getUTCDate() + diffToMidweek);
+                    const midweekStr = toDateStr(midweekOfWeek);
+                    
+                    if (!meetingDateSet.has(midweekStr)) {
+                        meetings.push({
+                            id: null,
+                            virtual: true,
+                            data: midweekOfWeek,
+                            data_formatada: midweekOfWeek.toLocaleDateString('pt-BR', {timeZone: 'UTC'}),
+                            tipo: 'Meio de Semana',
+                            cancelado: true,
+                            motivo_cancelamento: `Celebração na semana: ${ev.nome} (${ev.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})})`,
+                            evento_nome: ev.nome,
+                            presencial: 0, zoom: 0, visitantes: 0, total: 0
+                        });
+                        meetingDateSet.add(midweekStr);
+                    }
+                }
+                continue; // Event on a non-meeting day
+            }
+
+            // Inject virtual meeting row for this event
+            meetings.push({
+                id: null,
+                virtual: true,
+                data: ev.dateObj,
+                data_formatada: ev.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC'}),
+                tipo: meetingType,
+                cancelado: true,
+                motivo_cancelamento: `${ev.tipo}: ${ev.nome}`,
+                evento_nome: ev.nome,
+                presencial: 0, zoom: 0, visitantes: 0, total: 0
+            });
+
+            // Se for Assembleia/Congresso no fim de semana, também cancela/injeta o meio de semana da mesma semana
+            if (['Assembleia', 'Congresso'].includes(ev.tipo) && meetingType === 'Fim de Semana' && midweekDayIdx !== undefined) {
+                // Calcular o dia de meio de semana dessa mesma semana (semana começa na Segunda)
+                const evDay = new Date(ev.dateObj);
+                const evDayOfWeek = evDay.getUTCDay();
+                const diffToMonday = evDayOfWeek === 0 ? -6 : 1 - evDayOfWeek;
+                const monday = new Date(evDay);
+                monday.setDate(evDay.getUTCDate() + diffToMonday);
+                const diffToMidweek = (midweekDayIdx - 1 + 7) % 7; // from Monday
+                const midweekOfWeek = new Date(monday);
+                midweekOfWeek.setDate(monday.getUTCDate() + diffToMidweek);
+                const midweekStr = toDateStr(midweekOfWeek);
+
+                if (!meetingDateSet.has(midweekStr)) {
+                    // Não há reunião no DB para esse dia — injeta linha virtual
+                    meetings.push({
+                        id: null,
+                        virtual: true,
+                        data: midweekOfWeek,
+                        data_formatada: midweekOfWeek.toLocaleDateString('pt-BR', {timeZone: 'UTC'}),
+                        tipo: 'Meio de Semana',
+                        cancelado: true,
+                        motivo_cancelamento: `${ev.tipo}: ${ev.nome} (${ev.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})})`,
+                        evento_nome: ev.nome,
+                        presencial: 0, zoom: 0, visitantes: 0, total: 0
+                    });
+                    meetingDateSet.add(midweekStr);
+                }
+                // Se já tem reunião no DB (meetingDateSet.has), a lógica do step 2b já a cancelou
+            }
+        }
     }
 
+    // 5. Sort by date ascending
+    meetings.sort((a, b) => new Date(a.data) - new Date(b.data));
+
     return NextResponse.json(meetings, { status: 200 });
+
   } catch (err) {
     console.error('Erro ao buscar reuniões:', err);
     return NextResponse.json({ message: 'Erro interno.' }, { status: 500 });

@@ -55,12 +55,16 @@ export async function POST(req) {
           'SELECT permissoes FROM acessos_app WHERE publicador_id = $1',
           [user.id]
         );
-        const storedPerms = accessRes.rows[0]?.permissoes || null;
-        const perms = normalizePermissions(storedPerms);
+        const storedPerms = accessRes.rows[0]?.permissoes ?? null;
 
-        const hasAnyPageAccess = Object.values(perms.pages || {}).some(Boolean);
-        if (!hasAnyPageAccess) {
-          return NextResponse.json({ message: 'Você não tem permissão para acessar esta área.' }, { status: 403 });
+        // Se há um registro em acessos_app, verifica se tem ao menos uma página liberada.
+        // Se NÃO há registro (null), não bloqueia — ausência de restrições = acesso total.
+        if (storedPerms !== null) {
+          const perms = normalizePermissions(storedPerms);
+          const hasAnyPageAccess = Object.values(perms.pages || {}).some(Boolean);
+          if (!hasAnyPageAccess) {
+            return NextResponse.json({ message: 'Você não tem permissão para acessar esta área.' }, { status: 403 });
+          }
         }
     }
 
