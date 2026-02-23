@@ -14,6 +14,22 @@ import { StatusToast } from '@/app/components/ui/status-toast';
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 // --- FUNÇÕES AUXILIARES ---
+function truncatePartTitle(title) {
+  if (!title) return '';
+  const norm = title.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (norm.includes('cantico') || norm.startsWith('cantemos')) return title;
+  const match = title.match(/^(.*?\(\d+\s*min\))/i);
+  if (match) {
+    let base = match[1].trim();
+    const afterTime = title.substring(match[0].length);
+    if (afterTime.match(/^[:\s]*Considera/i)) base += ': Consideração';
+    return base;
+  }
+  const dotIdx = title.indexOf('.');
+  if (dotIdx > 0 && dotIdx < 100) return title.substring(0, dotIdx).trim();
+  return title.substring(0, 100).trim();
+}
+
 function getShortName(fullName) {
   if (!fullName || typeof fullName !== 'string') return '';
   const parts = fullName.split(' ').filter(Boolean);
@@ -81,24 +97,24 @@ const mapSavedToAssignments = (savedRows, schedule) => {
   newAssignments['comentarios_finais'] = popAssignment(schedule.finalComments || 'Comentários Finais');
   newAssignments['cantico_meio'] = popAssignment(schedule.middleSong || 'Cântico do Meio');
   schedule.treasures?.forEach((part, idx) => {
-    newAssignments[`tesouro_${idx}`] = popAssignment(part.title);
+    newAssignments[`tesouro_${idx}`] = popAssignment(truncatePartTitle(part.title));
   });
   schedule.ministry?.forEach((part, idx) => {
     const isDiscurso = part.title.toLowerCase().includes('discurso');
     if (isDiscurso) {
-      newAssignments[`ministerio_${idx}`] = popAssignment(part.title);
+      newAssignments[`ministerio_${idx}`] = popAssignment(truncatePartTitle(part.title));
     } else {
-      newAssignments[`ministerio_${idx}_1`] = popAssignment(part.title);
-      newAssignments[`ministerio_${idx}_2`] = popAssignment(part.title);
+      newAssignments[`ministerio_${idx}_1`] = popAssignment(truncatePartTitle(part.title));
+      newAssignments[`ministerio_${idx}_2`] = popAssignment(truncatePartTitle(part.title));
     }
   });
   schedule.living?.forEach((part, idx) => {
     const isBibleStudy = part.title.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes('estudo biblico');
     if (isBibleStudy) {
-      newAssignments[`vida_${idx}_1`] = popAssignment(part.title);
-      newAssignments[`vida_${idx}_2`] = popAssignment(part.title);
+      newAssignments[`vida_${idx}_1`] = popAssignment(truncatePartTitle(part.title));
+      newAssignments[`vida_${idx}_2`] = popAssignment(truncatePartTitle(part.title));
     } else {
-      newAssignments[`vida_${idx}`] = popAssignment(part.title);
+      newAssignments[`vida_${idx}`] = popAssignment(truncatePartTitle(part.title));
     }
   });
   return newAssignments;
@@ -936,7 +952,7 @@ export function LifeMinistryTab() {
     // 2. Treasures
     drawRow('', { text: 'TESOUROS DA PALAVRA DE DEUS', color: colors.blue }, '', 'header');
     schedule.treasures?.forEach((part, idx) => {
-      drawRow(formatTime(currentMinutes), parseRichText(part.title, 'treasures'), assignments[`tesouro_${idx}`]);
+      drawRow(formatTime(currentMinutes), parseRichText(truncatePartTitle(part.title), 'treasures'), assignments[`tesouro_${idx}`]);
       currentMinutes += getDuration(part.title) + 1; // +1 min transition
     });
 
@@ -949,7 +965,7 @@ export function LifeMinistryTab() {
     // 3. Ministry
     drawRow('', { text: 'FAÇA SEU MELHOR NO MINISTÉRIO', color: colors.orange }, '', 'header');
     schedule.ministry?.forEach((part, idx) => {
-      const parts = parseRichText(part.title, 'ministry');
+      const parts = parseRichText(truncatePartTitle(part.title), 'ministry');
       const isDiscurso = part.title.toLowerCase().includes('discurso');
 
       let assignVal;
@@ -975,8 +991,8 @@ export function LifeMinistryTab() {
     currentMinutes += 3;
 
     schedule.living?.forEach((part, idx) => {
-      const parts = parseRichText(part.title, 'living');
-      const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
+      const parts = parseRichText(truncatePartTitle(part.title), 'living');
+      const isBibleStudy = part.title.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes('estudo biblico');
 
       let assignVal;
       let label = null;
