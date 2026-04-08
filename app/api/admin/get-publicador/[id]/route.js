@@ -24,12 +24,12 @@ export async function GET(request, context) {
          p.id, p.nome_completo, p.data_nascimento, p.data_batismo,
          p.nome_chamado,
          g.nome_grupo, p.privilegios, p.designacoes,
-         p.sexo, p.esperanca,   -- <-- ADICIONADO: retornar sexo e esperanca
+         p.sexo, p.esperanca,
          p.telefone, p.email, p.cep, p.logradouro, 
          p.numero, p.complemento, p.bairro, p.cidade, p.estado
        FROM publicadores p
        LEFT JOIN grupos g ON p.grupo_id = g.id
-       WHERE p.id = $1`,
+       WHERE p.id = $1 AND (g.id IS NULL OR g.ativo = TRUE)`,
       [id]
     );
 

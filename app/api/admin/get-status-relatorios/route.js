@@ -26,7 +26,7 @@ export async function GET(req) {
 
   const client = await pool.connect();
   try {
-    // 1. Busca todos os publicadores (Nome e Grupo)
+    // 1. Busca todos os publicadores (Nome e Grupo) - APENAS DE GRUPOS ATIVOS
     const publicadoresRes = await client.query(`
       SELECT 
         p.id, 
@@ -35,6 +35,7 @@ export async function GET(req) {
         g.nome_grupo
       FROM publicadores p
       LEFT JOIN grupos g ON p.grupo_id = g.id
+      WHERE g.id IS NULL OR g.ativo = TRUE
       ORDER BY g.nome_grupo ASC, p.nome_completo ASC
     `);
 

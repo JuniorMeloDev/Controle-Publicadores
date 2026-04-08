@@ -23,6 +23,7 @@ export async function GET() {
         p.esperanca    
       FROM publicadores p
       LEFT JOIN grupos g ON p.grupo_id = g.id
+      WHERE g.id IS NULL OR g.ativo = TRUE
       ORDER BY p.nome_completo ASC
     `);
     

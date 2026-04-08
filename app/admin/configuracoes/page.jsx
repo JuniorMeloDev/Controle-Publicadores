@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import { StatusToast } from "@/app/components/ui/status-toast";
-import { Trash2, Calendar, Save, Plus, Loader2, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Trash2, Calendar, Save, Plus, Loader2, Sparkles, CheckCircle2, AlertTriangle, Edit2, Users, Eye, EyeOff } from 'lucide-react';
 
 const WEEKDAYS = [
     { value: 'Segunda-feira', label: 'Segunda-feira' },
@@ -50,10 +50,21 @@ export default function ConfiguracoesPage() {
     const [events, setEvents] = useState([]);
     const [newEvent, setNewEvent] = useState({ date: '', name: '', type: 'Outro' });
 
+    // Groups State
+    const [grupos, setGrupos] = useState([]);
+    const [groupsLoading, setGroupsLoading] = useState(false);
+    const [groupModalOpen, setGroupModalOpen] = useState(false);
+    const [groupModalMode, setGroupModalMode] = useState('create'); // 'create' ou 'rename'
+    const [selectedGroup, setSelectedGroup] = useState(null);
+    const [groupInputValue, setGroupInputValue] = useState('');
+    const [groupActionLoading, setGroupActionLoading] = useState(false);
+
     // Generation State
     const [genOpen, setGenOpen] = useState(false);
     const [genStep, setGenStep] = useState(1); // 1 = Select, 2 = Preview
     const [genPeriod, setGenPeriod] = useState('mensal');
+    const [genCustomDate, setGenCustomDate] = useState('');
+    const [genCustomType, setGenCustomType] = useState('Meio de Semana');
     const [genLoading, setGenLoading] = useState(false);
     const [previewData, setPreviewData] = useState({ meetings: [], warnings: [] });
 
@@ -63,6 +74,7 @@ export default function ConfiguracoesPage() {
 
     useEffect(() => {
         fetchData();
+        fetchGrupos();
     }, [year]);
 
     const fetchData = async () => {
@@ -79,6 +91,21 @@ export default function ConfiguracoesPage() {
             console.error(error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchGrupos = async () => {
+        setGroupsLoading(true);
+        try {
+            const res = await fetch('/api/admin/grupos');
+            if (res.ok) {
+                const data = await res.json();
+                setGrupos(data);
+            }
+        } catch (error) {
+            console.error('Erro ao buscar grupos:', error);
+        } finally {
+            setGroupsLoading(false);
         }
     };
 
@@ -106,6 +133,159 @@ export default function ConfiguracoesPage() {
             setToast({ message: 'Erro ao salvar dias de reunião.', type: 'error' });
         } finally {
             setSaving(false);
+        }
+    };
+
+    // GROUP MANAGEMENT FUNCTIONS
+    const handleCreateGroup = async () => {
+        if (!groupInputValue.trim()) {
+            setToast({ message: 'O nome do grupo é obrigatório.', type: 'error' });
+            return;
+        }
+
+        if (!canEditConfig) {
+            setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
+            return;
+        }
+
+        setGroupActionLoading(true);
+        try {
+            const res = await fetch('/api/admin/grupos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'create',
+                    nome_grupo: groupInputValue
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setGrupos([...grupos, data.grupo]);
+                setToast({ message: 'Grupo criado com sucesso!', type: 'success' });
+                setGroupModalOpen(false);
+                setGroupInputValue('');
+            } else {
+                const err = await res.json();
+                setToast({ message: err.message || 'Erro ao criar grupo.', type: 'error' });
+            }
+        } catch (error) {
+            console.error(error);
+            setToast({ message: 'Erro de conexão.', type: 'error' });
+        } finally {
+            setGroupActionLoading(false);
+        }
+    };
+
+    const handleRenameGroup = async () => {
+        if (!groupInputValue.trim()) {
+            setToast({ message: 'O novo nome do grupo é obrigatório.', type: 'error' });
+            return;
+        }
+
+        if (!canEditConfig) {
+            setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
+            return;
+        }
+
+        setGroupActionLoading(true);
+        try {
+            const res = await fetch('/api/admin/grupos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'rename',
+                    grupo_id: selectedGroup.id,
+                    novo_nome: groupInputValue
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setGrupos(grupos.map(g => g.id === selectedGroup.id ? data.grupo : g));
+                setToast({ message: 'Grupo renomeado com sucesso!', type: 'success' });
+                setGroupModalOpen(false);
+                setGroupInputValue('');
+                setSelectedGroup(null);
+            } else {
+                const err = await res.json();
+                setToast({ message: err.message || 'Erro ao renomear grupo.', type: 'error' });
+            }
+        } catch (error) {
+            console.error(error);
+            setToast({ message: 'Erro de conexão.', type: 'error' });
+        } finally {
+            setGroupActionLoading(false);
+        }
+    };
+
+    const handleDeleteGroup = async (group) => {
+        if (!window.confirm(`Deseja realmente excluir o grupo "${group.nome_grupo}"?`)) {
+            return;
+        }
+
+        if (!canEditConfig) {
+            setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
+            return;
+        }
+
+        setGroupActionLoading(true);
+        try {
+            const res = await fetch('/api/admin/grupos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'delete',
+                    grupo_id: group.id
+                })
+            });
+
+            if (res.ok) {
+                setGrupos(grupos.filter(g => g.id !== group.id));
+                setToast({ message: 'Grupo excluído com sucesso!', type: 'success' });
+            } else {
+                const err = await res.json();
+                setToast({ message: err.message || 'Erro ao excluir grupo.', type: 'error' });
+            }
+        } catch (error) {
+            console.error(error);
+            setToast({ message: 'Erro de conexão.', type: 'error' });
+        } finally {
+            setGroupActionLoading(false);
+        }
+    };
+
+    const handleToggleGroupStatus = async (group) => {
+        if (!canEditConfig) {
+            setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
+            return;
+        }
+
+        setGroupActionLoading(true);
+        try {
+            const res = await fetch('/api/admin/grupos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'toggle',
+                    grupo_id: group.id,
+                    ativo: !group.ativo
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setGrupos(grupos.map(g => g.id === group.id ? data.grupo : g));
+                setToast({ message: data.message, type: 'success' });
+            } else {
+                const err = await res.json();
+                setToast({ message: err.message || 'Erro ao atualizar grupo.', type: 'error' });
+            }
+        } catch (error) {
+            console.error(error);
+            setToast({ message: 'Erro de conexão.', type: 'error' });
+        } finally {
+            setGroupActionLoading(false);
         }
     };
 
@@ -164,6 +344,51 @@ export default function ConfiguracoesPage() {
     };
 
     // GENERATION LOGIC
+    const handleCreateCustom = async () => {
+        if (!canEditConfig) {
+            setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
+            return;
+        }
+        if (!genCustomDate) {
+            setToast({ message: 'Selecione uma data para a reunião.', type: 'error' });
+            return;
+        }
+
+        setGenLoading(true);
+        try {
+            const res = await fetch('/api/admin/reunioes/gerar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'create_custom',
+                    data: genCustomDate,
+                    tipo: genCustomType
+                })
+            });
+
+            if (res.ok) {
+                setGenOpen(false);
+                setGenStep(1);
+                setGenCustomDate('');
+                setGenCustomType('Meio de Semana');
+                setResultData({
+                    success: true,
+                    message: 'Reunião criada com sucesso!',
+                    details: [`Reunião do tipo "${genCustomType}" criada para ${new Date(genCustomDate).toLocaleDateString('pt-BR')}.`]
+                });
+                setResultOpen(true);
+            } else {
+                const err = await res.json();
+                setToast({ message: err.message || 'Erro ao criar reunião.', type: 'error' });
+            }
+        } catch (error) {
+            console.error(error);
+            setToast({ message: 'Erro de conexão.', type: 'error' });
+        } finally {
+            setGenLoading(false);
+        }
+    };
+
     const handlePreview = async () => {
         if (!canEditConfig) {
             setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
@@ -338,7 +563,15 @@ export default function ConfiguracoesPage() {
                                     </Button>
 
                                     {/* create meetings button */}
-                                    <Dialog open={genOpen} onOpenChange={(open) => { if (!open) setGenStep(1); setGenOpen(open); }}>
+                                    <Dialog open={genOpen} onOpenChange={(open) => { 
+                                        if (!open) {
+                                            setGenStep(1);
+                                            setGenPeriod('mensal');
+                                            setGenCustomDate('');
+                                            setGenCustomType('Meio de Semana');
+                                        }
+                                        setGenOpen(open); 
+                                    }}>
                                         <DialogTrigger asChild>
                                             <Button variant="outline" disabled={!canEditConfig} className="w-full border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50">
                                                 <Sparkles className="w-4 h-4 mr-2" /> Criar Reuniões Automaticamente
@@ -356,8 +589,13 @@ export default function ConfiguracoesPage() {
                                                 {genStep === 1 ? (
                                                     <div className="space-y-4">
                                                         <div className="space-y-2">
-                                                            <Label className="text-gray-900 font-semibold">Período de Criação (a partir de amanhã)</Label>
-                                                            <Select value={genPeriod} onValueChange={setGenPeriod}>
+                                                            <Label className="text-gray-900 font-semibold">Tipo de Criação</Label>
+                                                            <Select value={genPeriod} onValueChange={(value) => {
+                                                                setGenPeriod(value);
+                                                                if (value === 'avulso') {
+                                                                    setGenStep(1);
+                                                                }
+                                                            }}>
                                                                 <SelectTrigger className="w-full text-gray-900 border-gray-300">
                                                                     <SelectValue />
                                                                 </SelectTrigger>
@@ -366,20 +604,54 @@ export default function ConfiguracoesPage() {
                                                                     <SelectItem value="trimestral">Próximo Trimestre</SelectItem>
                                                                     <SelectItem value="semestral">Próximo Semestre</SelectItem>
                                                                     <SelectItem value="anual">Até o final do ano ({year})</SelectItem>
+                                                                    <SelectItem value="avulso">Dia Avulso (Específico)</SelectItem>
                                                                 </SelectContent>
                                                             </Select>
                                                         </div>
-                                                        <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-700 space-y-2">
-                                                            <p className="font-semibold flex items-center gap-2">
-                                                                <CheckCircle2 className="w-4 h-4" /> Regras Consideradas:
-                                                            </p>
-                                                            <ul className="list-disc list-inside space-y-1 ml-1 opacity-90 font-medium">
-                                                                <li>Assembleias/Congressos cancelam reuniões conflitantes.</li>
-                                                                <li>Visitas do Superintendente movem a reunião para Terça-feira.</li>
-                                                                <li>Celebrações cancelam a reunião do dia da semana ou fim de semana.</li>
-                                                                <li>Assembleias cancelam as reuniões daquela semana.</li>
-                                                            </ul>
+
+                                                        {genPeriod === 'avulso' ? (
+                                                            <div className="space-y-4 pt-4 border-t border-gray-200">
+                                                                <div className="space-y-2">
+                                                                    <Label className="text-gray-900 font-semibold">Data da Reunião</Label>
+                                                                    <Input
+                                                                        type="date"
+                                                                        value={genCustomDate}
+                                                                        onChange={(e) => setGenCustomDate(e.target.value)}
+                                                                        className="bg-white text-gray-900 border-gray-300"
+                                                                    />
+                                                                </div>
+                                                                <div className="space-y-2">
+                                                                    <Label className="text-gray-900 font-semibold">Tipo de Reunião</Label>
+                                                                    <Select value={genCustomType} onValueChange={setGenCustomType}>
+                                                                        <SelectTrigger className="w-full text-gray-900 border-gray-300">
+                                                                            <SelectValue />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="Meio de Semana">Meio de Semana (Vida e Ministério)</SelectItem>
+                                                                            <SelectItem value="Fim de Semana">Fim de Semana (Público e Sentinela)</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
+                                                                <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-700 space-y-2">
+                                                                    <p className="font-semibold">ℹ️ Informação</p>
+                                                                    <p>Crie uma reunião em uma data específica, sem restrições de período ou regras de conflito.</p>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div>
+                                                            <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-700 space-y-2">
+                                                                <p className="font-semibold flex items-center gap-2">
+                                                                    <CheckCircle2 className="w-4 h-4" /> Regras Consideradas:
+                                                                </p>
+                                                                <ul className="list-disc list-inside space-y-1 ml-1 opacity-90 font-medium">
+                                                                    <li>Assembleias/Congressos cancelam reuniões conflitantes.</li>
+                                                                    <li>Visitas do Superintendente movem a reunião para Terça-feira.</li>
+                                                                    <li>Celebrações cancelam a reunião do dia da semana ou fim de semana.</li>
+                                                                    <li>Assembleias cancelam as reuniões daquela semana.</li>
+                                                                </ul>
+                                                            </div>
                                                         </div>
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <div className="space-y-6">
@@ -438,8 +710,12 @@ export default function ConfiguracoesPage() {
 
                                             <DialogFooter className="mt-4 border-t pt-4">
                                                 {genStep === 1 ? (
-                                                    <Button onClick={handlePreview} disabled={genLoading} className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white">
-                                                        {genLoading ? <Loader2 className="animate-spin w-4 h-4 ml-2" /> : 'Gerar Prévia'}
+                                                    <Button 
+                                                        onClick={genPeriod === 'avulso' ? handleCreateCustom : handlePreview} 
+                                                        disabled={genLoading || (genPeriod === 'avulso' && !genCustomDate)} 
+                                                        className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white"
+                                                    >
+                                                        {genLoading ? <Loader2 className="animate-spin w-4 h-4 ml-2" /> : (genPeriod === 'avulso' ? 'Criar Reunião' : 'Gerar Prévia')}
                                                     </Button>
                                                 ) : (
                                                     <div className="flex gap-2 w-full justify-end">
@@ -456,7 +732,141 @@ export default function ConfiguracoesPage() {
                             </CardContent>
                         </Card>
 
-                        {/* CARD 2: EVENTOS ESPECIAIS (Same as before) */}
+                        {/* CARD 2: GRUPOS DE SERVIÇO */}
+                        <Card className="border-gray-200 shadow-sm flex flex-col">
+                            <CardHeader className="bg-gray-50/50 pb-4 border-b border-gray-100">
+                                <CardTitle className="flex items-center gap-2 text-gray-900">
+                                    <Users className="w-5 h-5 text-green-600" />
+                                    Grupos de Serviço de Campo
+                                </CardTitle>
+                                <CardDescription className="text-gray-600">
+                                    Crie, renomeie ou exclua grupos de publicadores.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="pt-6 space-y-4 flex-1">
+                                {groupsLoading ? (
+                                    <div className="flex justify-center py-8">
+                                        <Loader2 className="w-6 h-6 animate-spin text-green-600" />
+                                    </div>
+                                ) : (
+                                    <>
+                                        <Dialog open={groupModalOpen} onOpenChange={setGroupModalOpen}>
+                                            <DialogTrigger asChild>
+                                                <Button 
+                                                    onClick={() => {
+                                                        setGroupModalMode('create');
+                                                        setGroupInputValue('');
+                                                        setSelectedGroup(null);
+                                                    }}
+                                                    disabled={!canEditConfig}
+                                                    className="w-full bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                                                >
+                                                    <Plus className="w-4 h-4 mr-2" />
+                                                    Criar Novo Grupo
+                                                </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="bg-white text-gray-900">
+                                                <DialogHeader>
+                                                    <DialogTitle>
+                                                        {groupModalMode === 'create' ? 'Criar Novo Grupo' : 'Renomear Grupo'}
+                                                    </DialogTitle>
+                                                </DialogHeader>
+                                                <div className="space-y-4">
+                                                    <div>
+                                                        <Label htmlFor="groupInput" className="text-gray-700">
+                                                            {groupModalMode === 'create' ? 'Nome do Grupo' : 'Novo Nome'}
+                                                        </Label>
+                                                        <Input
+                                                            id="groupInput"
+                                                            placeholder={groupModalMode === 'create' ? 'Ex: Grupo 1' : 'Novo nome...'}
+                                                            value={groupInputValue}
+                                                            onChange={(e) => setGroupInputValue(e.target.value)}
+                                                            className="mt-2 bg-white text-gray-900 border-gray-300"
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    groupModalMode === 'create' ? handleCreateGroup() : handleRenameGroup();
+                                                                }
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <DialogFooter>
+                                                    <Button variant="outline" onClick={() => setGroupModalOpen(false)}>
+                                                        Cancelar
+                                                    </Button>
+                                                    <Button 
+                                                        onClick={groupModalMode === 'create' ? handleCreateGroup : handleRenameGroup}
+                                                        disabled={groupActionLoading || !groupInputValue.trim()}
+                                                        className="bg-green-600 hover:bg-green-700 text-white"
+                                                    >
+                                                        {groupActionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                                                        {groupModalMode === 'create' ? 'Criar' : 'Renomear'}
+                                                    </Button>
+                                                </DialogFooter>
+                                            </DialogContent>
+                                        </Dialog>
+
+                                        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                            {grupos.length === 0 ? (
+                                                <p className="text-sm text-gray-400 italic text-center py-8">Nenhum grupo cadastrado.</p>
+                                            ) : (
+                                                grupos.map((grupo) => (
+                                                    <div
+                                                        key={grupo.id}
+                                                        className={`flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg hover:shadow-sm transition-shadow group ${!grupo.ativo ? 'opacity-60' : ''}`}
+                                                    >
+                                                        <div className="flex items-center gap-3 flex-1">
+                                                            <Users className={`w-4 h-4 shrink-0 ${grupo.ativo ? 'text-green-600' : 'text-gray-400'}`} />
+                                                            <span className={`text-sm font-medium ${grupo.ativo ? 'text-gray-900' : 'text-gray-500'}`}>
+                                                                {grupo.nome_grupo}
+                                                                {!grupo.ativo && <span className="ml-2 text-xs text-gray-400 italic">(Inativo)</span>}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className={`h-8 w-8 ${grupo.ativo ? 'text-gray-400 hover:text-yellow-600' : 'text-gray-400 hover:text-green-600'}`}
+                                                                onClick={() => handleToggleGroupStatus(grupo)}
+                                                                disabled={!canEditConfig || groupActionLoading}
+                                                                title={grupo.ativo ? 'Desativar grupo' : 'Ativar grupo'}
+                                                            >
+                                                                {grupo.ativo ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 text-gray-400 hover:text-blue-600"
+                                                                onClick={() => {
+                                                                    setGroupModalMode('rename');
+                                                                    setSelectedGroup(grupo);
+                                                                    setGroupInputValue(grupo.nome_grupo);
+                                                                    setGroupModalOpen(true);
+                                                                }}
+                                                                disabled={!canEditConfig || groupActionLoading}
+                                                            >
+                                                                <Edit2 className="w-4 h-4" />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 text-gray-400 hover:text-red-500"
+                                                                onClick={() => handleDeleteGroup(grupo)}
+                                                                disabled={!canEditConfig || groupActionLoading}
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* CARD 3: EVENTOS ESPECIAIS */}
                         <Card className="border-gray-200 shadow-sm lg:row-span-2 h-fit">
                             <CardHeader className="bg-gray-50/50 pb-4 border-b border-gray-100">
                                 <CardTitle className="text-orange-900 flex items-center gap-2">

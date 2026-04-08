@@ -26,7 +26,7 @@ export async function GET(request, { params }) {
           FROM publicadores p
           LEFT JOIN grupos g ON p.grupo_id = g.id
           LEFT JOIN assistencia_detalhe a ON p.id = a.publicador_id AND a.reuniao_id = $1
-
+          WHERE g.id IS NULL OR g.ativo = TRUE
           ORDER BY p.nome_completo ASC
         `, [id]);
     };

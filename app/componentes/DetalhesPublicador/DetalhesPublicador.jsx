@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, Printer, X, Lock } from 'lucide-react';
+import { Loader2, Printer, X, Lock, Trash2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/app/components/ui/dialog';
+import { StatusToast } from '@/app/components/ui/status-toast';
 import FormularioInformacoes from '@/app/componentes/DetalhesPublicador/FormularioInformacoes';
 import AtividadesTeocraticas from '@/app/componentes/DetalhesPublicador/AtividadesTeocraticas';
 
@@ -53,6 +55,8 @@ export default function DetalhesPublicador({
   const [showPassword, setShowPassword] = useState(false);
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [cepError, setCepError] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [toast, setToast] = useState({ message: '', type: '' });
 
   const numeroInputRef = useRef(null);
 
@@ -89,14 +93,6 @@ export default function DetalhesPublicador({
   if (currentUser) {
     const currentUserIdStr = String(currentUser.id || '').trim();
     const publicadorIdStr = String(publicadorId || '').trim();
-
-    // Debug no console para verificar o que está chegando
-    console.log('[PERMISSÃO] Validando acesso:', {
-      EuSou: currentUserIdStr,
-      EstouVendo: publicadorIdStr,
-      SouAnciao: currentUser.isAnciao,
-      SouServo: currentUser.isServo
-    });
 
     canViewActivities =
       currentUser.isAnciao || // Ancião vê tudo
@@ -150,16 +146,12 @@ export default function DetalhesPublicador({
       setRelatorios(relData);
 
     } catch (err) {
-      onSaveSuccess({
-        message: 'Erro ao recarregar dados: ' + err.message,
-        isError: true,
-        keepOpen: true
-      });
+      console.error('Erro ao carregar dados do publicador:', err);
     } finally {
       setIsPageLoading(false);
       setIsLoading(false);
     }
-  }, [publicadorId, onSaveSuccess]);
+  }, [publicadorId]);
 
   useEffect(() => {
     if (publicadorId) fetchTudo(false);
@@ -210,6 +202,40 @@ export default function DetalhesPublicador({
       } else {
         onSaveSuccess({ message: data?.message || 'Erro ao salvar', isError: true, keepOpen: true });
       }
+    } catch (err) {
+      onSaveSuccess({ message: 'Não foi possível conectar ao servidor.', isError: true, keepOpen: true });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeletePublicador = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const executeDeletePublicador = async () => {
+    const publicadorIdValue = Number(String(publicadorId || '').trim());
+    if (!publicadorIdValue || Number.isNaN(publicadorIdValue)) {
+      setToast({ message: 'ID de publicador inválido.', type: 'error' });
+      return;
+    }
+
+    setIsLoading(true);
+    onMessageDismiss();
+    try {
+      const response = await fetch('/api/admin/delete-publicador', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicadorId: publicadorIdValue })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        onSaveSuccess({ message: data?.message || 'Erro ao excluir publicador.', isError: true, keepOpen: true });
+        return;
+      }
+      setDeleteDialogOpen(false);
+      onSaveSuccess({ message: data.message || 'Publicador excluído com sucesso.', isError: false, keepOpen: false });
+      onClose();
     } catch (err) {
       onSaveSuccess({ message: 'Não foi possível conectar ao servidor.', isError: true, keepOpen: true });
     } finally {
@@ -749,6 +775,12 @@ export default function DetalhesPublicador({
     doc.save(`Ficha_${safeName.replace(/\s+/g, '_')}.pdf`);
   };
 
+  useEffect(() => {
+    if (!toast.message) return;
+    const timer = setTimeout(() => setToast({ message: '', type: '' }), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
   if (isPageLoading) {
     return (
       <div className="flex-1 flex items-center justify-center p-8 h-full bg-white">
@@ -782,8 +814,43 @@ export default function DetalhesPublicador({
             <Printer size={18} />
             <span className="hidden sm:inline">Imprimir</span>
           </button>
+          <button
+            onClick={handleDeletePublicador}
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:text-white hover:bg-red-600 transition-colors"
+            title="Excluir Publicador"
+          >
+            <Trash2 size={18} />
+            <span className="hidden sm:inline">Excluir</span>
+          </button>
         </div>
       </div>
+
+      {toast.message && <StatusToast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: '' })} />}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="rounded-xl bg-white text-gray-900 sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Confirmar exclusão</DialogTitle>
+            <DialogDescription>Tem certeza que deseja excluir este publicador? Esta ação não pode ser desfeita.</DialogDescription>
+          </DialogHeader>
+          <div className="mt-6 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setDeleteDialogOpen(false)}
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={executeDeletePublicador}
+              disabled={isLoading}
+              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+            >
+              {isLoading ? 'Excluindo...' : 'Excluir'}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* CONTEÚDO ROLÁVEL */}
       <div className="flex-1 overflow-y-auto p-6">

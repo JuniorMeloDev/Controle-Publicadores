@@ -5,10 +5,11 @@ import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
-import { Loader2, Search, Filter, AlertCircle } from 'lucide-react';
+import { Loader2, Search, Filter, AlertCircle, Plus, Trash2, Calendar, X } from 'lucide-react';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { StatusToast } from '@/app/components/ui/status-toast';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/app/components/ui/dialog';
 
 const MONTHS = [
     { value: '1', label: 'Janeiro' },
@@ -36,6 +37,19 @@ export default function ReunioesPage() {
     const [year, setYear] = useState(currentYear.toString());
     const [month, setMonth] = useState(currentMonth.toString());
 
+    // Estados para a Reunião Personalizada/Avulsa
+    const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+    const [customDate, setCustomDate] = useState('');
+    const [customType, setCustomType] = useState('');
+    const [isCreatingCustom, setIsCreatingCustom] = useState(false);
+
+    // Múltipla seleção e edição
+    const [selectedMeetings, setSelectedMeetings] = useState(new Set());
+    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+    const [isEditDateModalOpen, setIsEditDateModalOpen] = useState(false);
+    const [editDateValue, setEditDateValue] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+
     async function fetchMeetings() {
         try {
             setLoading(true);
@@ -56,20 +70,281 @@ export default function ReunioesPage() {
 
     useEffect(() => {
         fetchMeetings();
+        setSelectedMeetings(new Set()); // Limpa seleção ao trocar mês/ano
     }, [year, month]);
+
+    const toggleMeetingSelection = (id) => {
+        const newSelected = new Set(selectedMeetings);
+        if (newSelected.has(id)) {
+            newSelected.delete(id);
+        } else {
+            newSelected.add(id);
+        }
+        setSelectedMeetings(newSelected);
+    };
+
+    const selectAllVisible = () => {
+        if (selectedMeetings.size === meetings.filter(m => !m.cancelado).length && selectedMeetings.size > 0) {
+            setSelectedMeetings(new Set());
+        } else {
+            setSelectedMeetings(new Set(meetings.filter(m => !m.cancelado).map(m => m.id)));
+        }
+    };
+
+    const handleDeleteSelected = async () => {
+        if (selectedMeetings.size === 0) return;
+        
+        setIsProcessing(true);
+        try {
+            const ids = Array.from(selectedMeetings);
+            const res = await fetch('/api/admin/reunioes/deletar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids })
+            });
+
+            if (res.ok) {
+                setToast({ message: `${ids.length} reunião(ões) deletada(s) com sucesso!`, type: 'success' });
+                setSelectedMeetings(new Set());
+                setIsDeleteConfirmOpen(false);
+                fetchMeetings();
+            } else {
+                const errorData = await res.json();
+                setToast({ message: errorData.message || 'Erro ao deletar reuniões.', type: 'error' });
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            setToast({ message: 'Erro interno ao deletar reuniões.', type: 'error' });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleEditDate = async () => {
+        if (selectedMeetings.size !== 1 || !editDateValue) {
+            setToast({ message: 'Selecione uma reunião e uma data válida.', type: 'error' });
+            return;
+        }
+
+        setIsProcessing(true);
+        try {
+            const id = Array.from(selectedMeetings)[0];
+            const res = await fetch('/api/admin/reunioes/editar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, nova_data: editDateValue })
+            });
+
+            if (res.ok) {
+                setToast({ message: 'Data da reunião alterada com sucesso!', type: 'success' });
+                setSelectedMeetings(new Set());
+                setIsEditDateModalOpen(false);
+                setEditDateValue('');
+                fetchMeetings();
+            } else {
+                const errorData = await res.json();
+                setToast({ message: errorData.message || 'Erro ao editar reunião.', type: 'error' });
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            setToast({ message: 'Erro interno ao editar reunião.', type: 'error' });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleRemoveSpecialEvent = async (meeting) => {
+        setIsProcessing(true);
+        try {
+            const payload = meeting.id ? { id: meeting.id } : { data: meeting.data };
+            const res = await fetch('/api/admin/reunioes/remover-evento-especial', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                setToast({ message: 'Restrição removida com sucesso!', type: 'success' });
+                fetchMeetings();
+            } else {
+                const errorData = await res.json();
+                setToast({ message: errorData.message || 'Erro ao remover restrição.', type: 'error' });
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            setToast({ message: 'Erro interno ao remover restrição.', type: 'error' });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    // Função para criar a reunião avulsa
+    async function handleCreateCustom() {
+        if (!customDate || !customType) {
+            setToast({ message: 'Preencha a data e o tipo/nome do evento.', type: 'error' });
+            return;
+        }
+
+        setIsCreatingCustom(true);
+        try {
+            const res = await fetch('/api/admin/reunioes/gerar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'create_custom',
+                    data: customDate,
+                    tipo: customType
+                })
+            });
+
+            if (res.ok) {
+                setToast({ message: 'Reunião avulsa criada com sucesso!', type: 'success' });
+                setIsCustomModalOpen(false);
+                setCustomDate('');
+                setCustomType('');
+                fetchMeetings(); // Atualiza a lista
+            } else {
+                const errorData = await res.json();
+                setToast({ message: errorData.message || 'Erro ao criar reunião.', type: 'error' });
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            setToast({ message: 'Erro interno ao criar reunião.', type: 'error' });
+        } finally {
+            setIsCreatingCustom(false);
+        }
+    }
 
     return (
         <DashboardLayout>
             <div className="p-6 space-y-6">
                 <StatusToast message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
 
-                {/* Header */}
-                <div className="flex flex-col items-center justify-center gap-4 text-center">
+                {/* Header com botão de Nova Reunião */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Gerenciamento de Reuniões</h1>
                         <p className="text-gray-500">Visualize e gerencie as reuniões e assistências.</p>
                     </div>
+
+                    {/* Modal para Reunião Avulsa */}
+                    <Dialog open={isCustomModalOpen} onOpenChange={setIsCustomModalOpen}>
+                        <DialogTrigger asChild>
+                            <Button className="gap-2 bg-purple-600 hover:bg-purple-700 text-white shadow-sm">
+                                <Plus className="w-4 h-4" /> Nova Reunião Avulsa
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Criar Reunião Personalizada</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <Label>Nome / Tipo do Evento</Label>
+                                    <Input 
+                                        placeholder="Ex: Visita Especial, Reunião Extra..." 
+                                        value={customType}
+                                        onChange={(e) => setCustomType(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Data da Reunião</Label>
+                                    <Input 
+                                        type="date" 
+                                        value={customDate}
+                                        onChange={(e) => setCustomDate(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setIsCustomModalOpen(false)}>Cancelar</Button>
+                                <Button 
+                                    onClick={handleCreateCustom} 
+                                    disabled={isCreatingCustom}
+                                    className="bg-purple-600 hover:bg-purple-700 text-white w-32"
+                                >
+                                    {isCreatingCustom ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Reunião'}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </div>
+
+                {/* Barra de Seleção de Ações */}
+                {selectedMeetings.size > 0 && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                            <span className="font-semibold text-purple-900">{selectedMeetings.size} reunião(ões) selecionada(s)</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {selectedMeetings.size === 1 && (
+                                <Dialog open={isEditDateModalOpen} onOpenChange={setIsEditDateModalOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button variant="outline" size="sm" className="gap-1 border-purple-300 text-purple-700 hover:bg-purple-100">
+                                            <Calendar className="w-4 h-4" /> Editar Data
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                        <DialogHeader>
+                                            <DialogTitle>Alterar Data da Reunião</DialogTitle>
+                                        </DialogHeader>
+                                        <div className="space-y-4 py-4">
+                                            <div className="space-y-2">
+                                                <Label>Nova Data</Label>
+                                                <Input 
+                                                    type="date" 
+                                                    value={editDateValue}
+                                                    onChange={(e) => setEditDateValue(e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                        <DialogFooter>
+                                            <Button variant="outline" onClick={() => setIsEditDateModalOpen(false)}>Cancelar</Button>
+                                            <Button 
+                                                onClick={handleEditDate} 
+                                                disabled={isProcessing}
+                                                className="bg-purple-600 hover:bg-purple-700 text-white"
+                                            >
+                                                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar'}
+                                            </Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
+                            )}
+                            <Button variant="destructive" size="sm" className="gap-1 bg-red-600 text-white hover:bg-red-700" onClick={() => setIsDeleteConfirmOpen(true)}>
+                                <Trash2 className="w-4 h-4 text-white" /> Deletar ({selectedMeetings.size})
+                            </Button>
+                            <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+                                <DialogContent className="bg-white text-gray-900 shadow-xl rounded-2xl border border-gray-200">
+                                    <DialogHeader>
+                                        <DialogTitle>Confirmar Exclusão</DialogTitle>
+                                    </DialogHeader>
+                                    <p className="py-4 text-gray-700">
+                                        Tem certeza que deseja deletar {selectedMeetings.size} reunião(ões)? Esta ação não pode ser desfeita.
+                                    </p>
+                                    <DialogFooter className="flex flex-wrap gap-2">
+                                        <Button variant="outline" onClick={() => setIsDeleteConfirmOpen(false)}>Cancelar</Button>
+                                        <Button 
+                                            onClick={handleDeleteSelected} 
+                                            disabled={isProcessing}
+                                            className="bg-red-600 hover:bg-red-700 text-white"
+                                        >
+                                            {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Deletar'}
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setSelectedMeetings(new Set())}
+                                className="gap-1 text-gray-600 hover:text-gray-900"
+                            >
+                                <X className="w-4 h-4" /> Limpar
+                            </Button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Filters */}
                 <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-wrap gap-4 items-end">
@@ -100,9 +375,6 @@ export default function ReunioesPage() {
                         </Select>
                     </div>
                     <div className="flex-1"></div>
-                    {/* <Button variant="outline" onClick={fetchMeetings} className="gap-2">
-                <Filter className="w-4 h-4" /> Atualizar
-            </Button> */}
                 </div>
 
                 {/* List View */}
@@ -111,6 +383,14 @@ export default function ReunioesPage() {
                         <table className="w-full text-sm text-left">
                             <thead className="bg-gray-50 text-gray-700 font-medium border-b border-gray-200">
                                 <tr>
+                                    <th className="px-4 py-3 w-12">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={selectedMeetings.size > 0 && selectedMeetings.size === meetings.filter(m => !m.cancelado).length}
+                                            onChange={selectAllVisible}
+                                            className="w-4 h-4 cursor-pointer"
+                                        />
+                                    </th>
                                     <th className="px-6 py-3">Data</th>
                                     <th className="px-6 py-3">Dia da Semana</th>
                                     <th className="px-6 py-3">Tipo</th>
@@ -123,14 +403,24 @@ export default function ReunioesPage() {
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {loading ? (
-                                    <tr><td colSpan="7" className="p-8 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></td></tr>
+                                    <tr><td colSpan="9" className="p-8 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></td></tr>
                                 ) : meetings.length === 0 ? (
-                                    <tr><td colSpan="7" className="p-8 text-center text-gray-500">Nenhuma reunião encontrada para este período.</td></tr>
+                                    <tr><td colSpan="9" className="p-8 text-center text-gray-500">Nenhuma reunião encontrada para este período.</td></tr>
                                 ) : (
                                     meetings.map((meeting) => (
                                         <tr key={meeting.id ?? `virtual-${meeting.data_formatada}`}
                                             className={`transition-colors group relative ${meeting.cancelado ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}`}
                                         >
+                                            <td className="px-4 py-3">
+                                                {!meeting.cancelado && (
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={selectedMeetings.has(meeting.id)}
+                                                        onChange={() => toggleMeetingSelection(meeting.id)}
+                                                        className="w-4 h-4 cursor-pointer"
+                                                    />
+                                                )}
+                                            </td>
                                             <td className={`px-6 py-3 font-medium border-l-4 ${meeting.cancelado
                                                     ? 'text-gray-400 border-red-300 line-through'
                                                     : 'text-gray-900 border-transparent hover:border-purple-500'
@@ -145,7 +435,7 @@ export default function ReunioesPage() {
                                                         ? 'bg-gray-100 text-gray-500 border-gray-200 line-through'
                                                         : meeting.tipo === 'Meio de Semana'
                                                             ? 'bg-blue-50 text-blue-700 border-blue-100'
-                                                            : meeting.tipo === 'Especial'
+                                                            : meeting.tipo === 'Especial' || meeting.tipo !== 'Fim de Semana' // Destaca os tipos customizados
                                                                 ? 'bg-orange-50 text-orange-700 border-orange-100'
                                                                 : 'bg-purple-50 text-purple-700 border-purple-100'
                                                     }`}>
@@ -158,24 +448,36 @@ export default function ReunioesPage() {
                                             <td className="px-6 py-3 text-center font-bold text-gray-900">{meeting.cancelado ? '-' : (meeting.total || '-')}</td>
                                             <td className="px-6 py-3 text-right">
                                                 {meeting.cancelado ? (
-                                                    <div className="relative inline-block">
-                                                        <span className="cursor-help flex items-center justify-end gap-1 text-xs font-medium text-red-600 italic px-3 py-2 bg-red-100/50 rounded-md border border-red-200">
-                                                            <AlertCircle className="w-3 h-3" /> Evento Especial
-                                                        </span>
-                                                        {/* Custom Tooltip */}
-                                                        <div className="absolute bottom-full right-0 mb-2 w-max max-w-xs z-50 hidden group-hover:block animate-in fade-in zoom-in-95 duration-200">
-                                                            <div className="bg-gray-900 text-white text-xs rounded-md py-2 px-3 shadow-xl relative">
-                                                                <p className="font-semibold mb-0.5">
-                                                                    {meeting.virtual ? 'Evento Especial' : 'Reunião Cancelada'}
-                                                                </p>
-                                                                {meeting.evento_nome && (
-                                                                    <p className="font-medium text-orange-300 mb-0.5">{meeting.evento_nome}</p>
-                                                                )}
-                                                                <p className="opacity-90 font-light">{meeting.motivo_cancelamento}</p>
-                                                                {/* Arrow */}
-                                                                <div className="absolute top-full right-4 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+                                                    <div className="flex flex-col gap-2 items-end">
+                                                        <div className="relative inline-block">
+                                                            <span className="cursor-help flex items-center justify-end gap-1 text-xs font-medium text-red-600 italic px-3 py-2 bg-red-100/50 rounded-md border border-red-200">
+                                                                <AlertCircle className="w-3 h-3" /> Evento Especial
+                                                            </span>
+                                                            {/* Custom Tooltip */}
+                                                            <div className="absolute bottom-full right-0 mb-2 w-max max-w-xs z-50 hidden group-hover:block animate-in fade-in zoom-in-95 duration-200">
+                                                                <div className="bg-gray-900 text-white text-xs rounded-md py-2 px-3 shadow-xl relative">
+                                                                    <p className="font-semibold mb-0.5">
+                                                                        {meeting.virtual ? 'Evento Especial' : 'Reunião Cancelada'}
+                                                                    </p>
+                                                                    {meeting.evento_nome && (
+                                                                        <p className="font-medium text-orange-300 mb-0.5">{meeting.evento_nome}</p>
+                                                                    )}
+                                                                    <p className="opacity-90 font-light">{meeting.motivo_cancelamento}</p>
+                                                                    {/* Arrow */}
+                                                                    <div className="absolute top-full right-4 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+                                                                </div>
                                                             </div>
                                                         </div>
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="sm" 
+                                                            onClick={() => handleRemoveSpecialEvent(meeting)}
+                                                            disabled={isProcessing}
+                                                            className="text-xs gap-1 text-orange-600 border-orange-200 hover:bg-orange-50"
+                                                        >
+                                                            {isProcessing ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                                                            Remover
+                                                        </Button>
                                                     </div>
                                                 ) : (
                                                     <Link href={`/admin/reunioes/${meeting.id}`}>
@@ -187,7 +489,6 @@ export default function ReunioesPage() {
                                             </td>
                                         </tr>
                                     ))
-
                                 )}
                             </tbody>
                         </table>

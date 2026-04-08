@@ -26,11 +26,33 @@ export async function POST(request) {
     try {
         const body = await request.json();
         const { action, period, year, options } = body; 
-        // action: 'preview' or 'create'
-        // period: 'mensal', 'trimestral', 'semestral', 'anual'
-        // year: 2025
-        // options: { meetings_to_create: [...] } (only for 'create')
+        
+        // NOVO: Tratamento direto para criação de reunião avulsa/personalizada
+        if (action === 'create_custom') {
+            const { data, tipo } = body;
+            
+            if (!data || !tipo) {
+                return NextResponse.json({ message: 'A data e o tipo são obrigatórios.' }, { status: 400 });
+            }
 
+            // Verifica se já existe uma reunião para o dia escolhido para evitar duplicação ou erro crítico
+            const verificaExistente = await client.query('SELECT id FROM reunioes_registro WHERE data = $1', [data]);
+            if (verificaExistente.rows.length > 0) {
+                return NextResponse.json({ message: 'Já existe uma reunião registada nesta data.' }, { status: 400 });
+            }
+
+            // Insere diretamente na base de dados
+            await client.query(`
+                INSERT INTO reunioes_registro (data, tipo) 
+                VALUES ($1, $2)
+            `, [data, tipo]);
+
+            return NextResponse.json({ message: 'Reunião personalizada criada com sucesso!' }, { status: 201 });
+        }
+
+
+        // LOGICA PADRÃO EM LOTE (Mensal, Trimestral, etc...)
+        
         // 1. Fetch Configuration & Events
         const configRes = await client.query('SELECT * FROM configuracoes_gerais WHERE ano = $1', [year]);
         const config = configRes.rows[0];
@@ -51,7 +73,7 @@ export async function POST(request) {
         let startDate = new Date(now);
         startDate.setDate(startDate.getDate() + 1); 
         
-        // Adjust start date if we are in a different year context (not likely based on requirements, but good safety)
+        // Adjust start date if we are in a different year context
         if (startDate.getFullYear() < year) {
              startDate = new Date(year, 0, 1);
         } else if (startDate.getFullYear() > year) {
@@ -97,12 +119,10 @@ export async function POST(request) {
             if (type) {
                 // RULE 1: Special Events on the day itself
                 if (eventOnDay) {
-                    // Celebração handling (Exact day match)
                     if (eventOnDay.tipo === 'Celebração') {
                        skip = true;
                        reason = `Celebração neste dia (${eventOnDay.nome})`;
                     } 
-                    // Assemblies/Congresses always cancel the specific day meeting if it coincides
                     else if (['Assembleia', 'Congresso'].includes(eventOnDay.tipo)) {
                         skip = true;
                         reason = `${eventOnDay.tipo} neste dia`;
@@ -110,17 +130,13 @@ export async function POST(request) {
                 }
             }
 
-
-            // RULE 2: Complex Interactions (Weekend Assembly cancels preceding Midweek, Celebração cancels Midweek)
-            // If today is Midweek, check for upcoming Weekend events OR Celebração in the week
+            // RULE 2: Complex Interactions
             if (type === 'Meio de Semana' && !skip) {
-                // Find start and end of current week (Monday to Sunday)
                 const startOfWeek = new Date(current);
                 startOfWeek.setDate(current.getDate() - current.getDay() + 1); // Monday
                 const endOfWeek = new Date(startOfWeek);
                 endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
 
-                // Check for Celebração in this week
                 const celebracaoInWeek = events.find(e => 
                     e.tipo === 'Celebração' && 
                     e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
@@ -133,14 +149,12 @@ export async function POST(request) {
                 }
 
                 if (!skip) {
-                     // Find next Weekend meeting date
                     let nextWeekend = new Date(current);
                     for(let i=1; i<=6; i++) {
                         nextWeekend.setDate(nextWeekend.getDate() + 1);
                         if (getWeekdayName(nextWeekend) === config.dia_fim_semana) break;
                     }
                     
-                    // Check if there is an Assembly/Congress on that weekend date
                     const weekendEvent = events.find(e => 
                         e.dateObj.toISOString().split('T')[0] === nextWeekend.toISOString().split('T')[0] &&
                         ['Assembleia', 'Congresso'].includes(e.tipo)
@@ -152,7 +166,6 @@ export async function POST(request) {
                         reason = `Antecede ${weekendEvent.tipo} no fim de semana (${formatDateBR(weDate)})`;
                     }
                     
-                    // Check for Visit (Move logic)
                     const visitInWeek = events.find(e => 
                         e.tipo === 'Visita do Superintendente' && 
                         e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
@@ -167,7 +180,7 @@ export async function POST(request) {
                 }
             }
 
-             // RULE 3: Visit injection (if configured day is NOT Tuesday)
+             // RULE 3: Visit injection
              if (weekday === 'Terça-feira' && config.dia_meio_semana !== 'Terça-feira') {
                 const startOfWeek = new Date(current);
                 startOfWeek.setDate(current.getDate() - current.getDay() + 1);
@@ -209,7 +222,6 @@ export async function POST(request) {
         
         // 4. Action Handling
         if (action === 'preview') {
-            // Check existing in DB to mark as "Already Exists"
             if (proposedMeetings.length > 0) {
                 const dates = proposedMeetings.map(m => m.data);
                 const existingRes = await client.query(`SELECT data FROM reunioes_registro WHERE data = ANY($1::date[])`, [dates]);
@@ -225,10 +237,8 @@ export async function POST(request) {
                 warnings 
             });
         } 
-        
         else if (action === 'create') {
             const { meetings_to_create } = options; 
-            // Expects array of objects { data, tipo }
             
             if (!meetings_to_create || !Array.isArray(meetings_to_create)) {
                  return NextResponse.json({ message: 'Nenhuma reunião selecionada.' }, { status: 400 });

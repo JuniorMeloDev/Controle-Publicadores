@@ -17,6 +17,7 @@ import {
   SheetDescription,
   SheetClose 
 } from "@/app/components/ui/sheet";
+import { StatusToast } from '@/app/components/ui/status-toast';
 import TrocaGrupoSheet from '@/app/componentes/TrocaGrupoSheet'; 
 
 function getShortName(fullName) {
@@ -110,8 +111,6 @@ function GerenciarContent() {
   };
 
   const handleCloseDrawer = () => { 
-    setSuccessMessage(null); 
-    setErrorMessage(null); 
     setSelectedPublicadorId(null); 
     setModoNovo(false); 
     setIsTransferSheetOpen(false);
@@ -138,6 +137,8 @@ function GerenciarContent() {
 
   return (
     <DashboardLayout>
+      {successMessage && <StatusToast message={successMessage} type="success" onClose={handleMessageDismiss} />}
+      {errorMessage && <StatusToast message={errorMessage} type="error" onClose={handleMessageDismiss} />}
       <div className="flex h-[calc(100vh-7rem)] bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           
           <div className="flex-1 flex flex-col bg-gray-50/30 min-w-0">

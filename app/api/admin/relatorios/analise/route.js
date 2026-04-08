@@ -20,8 +20,8 @@ export async function GET(request) {
 
   const client = await pool.connect();
   try {
-    // Base WHERE clause
-    let whereClause = `WHERE r.mes = $1 AND r.ano_servico = $2`;
+    // Base WHERE clause - INCLUIR FILTRO DE GRUPOS ATIVOS
+    let whereClause = `WHERE r.mes = $1 AND r.ano_servico = $2 AND (g.id IS NULL OR g.ativo = TRUE)`;
     const params = [mes, ano_servico];
     let paramIndex = 3;
 
@@ -87,7 +87,7 @@ export async function GET(request) {
     
     // NEW LOGIC: INATIVOS & IRREGULARES
     // 1. Get ALL relevant publishers (applying the same group/type filters as main query)
-    let pubWhere = "WHERE 1=1";
+    let pubWhere = "WHERE 1=1 AND (g.id IS NULL OR COALESCE(g.ativo, TRUE) = TRUE)";
     const pubParams = [];
     let pIdx = 1;
     
@@ -109,8 +109,8 @@ export async function GET(request) {
     let inativosList = [];
 
     if (tipo_pioneiro !== 'auxiliar') { // Only calculate for Regular/Publishers/All
-        // Fetch ALL matching publishers IDs AND Names
-        const allPubsQuery = `SELECT id, nome_completo FROM publicadores p ${pubWhere} ORDER BY nome_completo ASC`;
+        // Fetch ALL matching publishers IDs AND Names - COM FILTRO DE GRUPOS ATIVOS
+        const allPubsQuery = `SELECT id, nome_completo FROM publicadores p LEFT JOIN grupos g ON p.grupo_id = g.id ${pubWhere} ORDER BY nome_completo ASC`;
         const allPubsRes = await client.query(allPubsQuery, pubParams);
         
         const allPubMap = new Map();
