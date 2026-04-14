@@ -43,7 +43,6 @@ export async function GET(request) {
         whereClause += ` AND (r.pioneiro_auxiliar IS DISTINCT FROM true)`;
     }
 
-    // Main Query: Aggregated Stats
     const query = `
         SELECT 
             COUNT(DISTINCT r.publicador_id) as total_publicadores,
@@ -53,6 +52,7 @@ export async function GET(request) {
             COUNT(CASE WHEN r.pioneiro_auxiliar = true THEN 1 END) as count_auxiliares
         FROM relatorios_mensais r
         JOIN publicadores p ON r.publicador_id = p.id
+        LEFT JOIN grupos g ON p.grupo_id = g.id
         ${whereClause}
     `;
 
@@ -110,7 +110,7 @@ export async function GET(request) {
 
     if (tipo_pioneiro !== 'auxiliar') { // Only calculate for Regular/Publishers/All
         // Fetch ALL matching publishers IDs AND Names - COM FILTRO DE GRUPOS ATIVOS
-        const allPubsQuery = `SELECT id, nome_completo FROM publicadores p LEFT JOIN grupos g ON p.grupo_id = g.id ${pubWhere} ORDER BY nome_completo ASC`;
+        const allPubsQuery = `SELECT p.id, p.nome_completo FROM publicadores p LEFT JOIN grupos g ON p.grupo_id = g.id ${pubWhere} ORDER BY p.nome_completo ASC`;
         const allPubsRes = await client.query(allPubsQuery, pubParams);
         
         const allPubMap = new Map();
