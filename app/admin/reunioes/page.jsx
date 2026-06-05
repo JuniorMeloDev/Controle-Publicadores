@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -50,7 +50,7 @@ export default function ReunioesPage() {
     const [editDateValue, setEditDateValue] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
 
-    async function fetchMeetings() {
+    const fetchMeetings = useCallback(async () => {
         try {
             setLoading(true);
             const res = await fetch(`/api/admin/reunioes?year=${year}&month=${month}`);
@@ -66,12 +66,12 @@ export default function ReunioesPage() {
         } finally {
             setLoading(false);
         }
-    }
+    }, [year, month]);
 
     useEffect(() => {
         fetchMeetings();
         setSelectedMeetings(new Set()); // Limpa seleção ao trocar mês/ano
-    }, [year, month]);
+    }, [fetchMeetings]);
 
     const toggleMeetingSelection = (id) => {
         const newSelected = new Set(selectedMeetings);
@@ -179,6 +179,26 @@ export default function ReunioesPage() {
     };
 
     // Função para criar a reunião avulsa
+    const getTypeClasses = (meeting) => {
+        if (meeting.cancelado) {
+            return 'bg-gray-100 text-gray-500 border-gray-200 line-through';
+        }
+
+        if (meeting.tipo === 'Meio de Semana') {
+            return 'bg-blue-50 text-blue-700 border-blue-100';
+        }
+
+        if (meeting.tipo === 'Especial' || meeting.tipo !== 'Fim de Semana') {
+            return 'bg-orange-50 text-orange-700 border-orange-100';
+        }
+
+        return 'bg-purple-50 text-purple-700 border-purple-100';
+    };
+
+    const getWeekdayLabel = (meeting) => {
+        return new Date(meeting.data).toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'UTC' });
+    };
+
     async function handleCreateCustom() {
         if (!customDate || !customType) {
             setToast({ message: 'Preencha a data e o tipo/nome do evento.', type: 'error' });
@@ -379,7 +399,7 @@ export default function ReunioesPage() {
 
                 {/* List View */}
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-sm text-left">
                             <thead className="bg-gray-50 text-gray-700 font-medium border-b border-gray-200">
                                 <tr>
@@ -492,6 +512,112 @@ export default function ReunioesPage() {
                                 )}
                             </tbody>
                         </table>
+                    </div>
+
+                    <div className="md:hidden divide-y divide-gray-100">
+                        {loading ? (
+                            <div className="p-8 text-center text-gray-500">
+                                <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+                            </div>
+                        ) : meetings.length === 0 ? (
+                            <div className="p-8 text-center text-gray-500">
+                                Nenhuma reunião encontrada para este período.
+                            </div>
+                        ) : (
+                            meetings.map((meeting) => (
+                                <div
+                                    key={meeting.id ?? `virtual-${meeting.data_formatada}`}
+                                    className={`p-4 ${meeting.cancelado ? 'bg-red-50' : 'bg-white'}`}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className="pt-1">
+                                            {!meeting.cancelado ? (
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedMeetings.has(meeting.id)}
+                                                    onChange={() => toggleMeetingSelection(meeting.id)}
+                                                    className="w-4 h-4 cursor-pointer"
+                                                />
+                                            ) : (
+                                                <div className="w-4 h-4" />
+                                            )}
+                                        </div>
+
+                                        <div className="min-w-0 flex-1 space-y-3">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <div className={`text-base font-semibold ${meeting.cancelado ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                                                        {meeting.data_formatada}
+                                                    </div>
+                                                    <div className={`text-sm capitalize ${meeting.cancelado ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
+                                                        {getWeekdayLabel(meeting)}
+                                                    </div>
+                                                </div>
+                                                <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium border shrink-0 ${getTypeClasses(meeting)}`}>
+                                                    {meeting.tipo}
+                                                </span>
+                                            </div>
+
+                                            {meeting.cancelado ? (
+                                                <div className="space-y-3">
+                                                    <div className="rounded-lg border border-red-200 bg-white/70 p-3">
+                                                        <p className="flex items-center gap-1 text-xs font-semibold text-red-600 uppercase tracking-wide">
+                                                            <AlertCircle className="w-3 h-3" /> Evento Especial
+                                                        </p>
+                                                        {meeting.evento_nome && (
+                                                            <p className="mt-1 text-sm font-medium text-orange-700">{meeting.evento_nome}</p>
+                                                        )}
+                                                        <p className="mt-1 text-sm text-gray-700">{meeting.motivo_cancelamento}</p>
+                                                    </div>
+
+                                                    <div className="flex justify-end">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleRemoveSpecialEvent(meeting)}
+                                                            disabled={isProcessing}
+                                                            className="text-xs gap-1 text-orange-600 border-orange-200 hover:bg-orange-50"
+                                                        >
+                                                            {isProcessing ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                                                            Remover
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div className="rounded-lg bg-gray-50 p-3">
+                                                            <div className="text-[11px] uppercase tracking-wide text-gray-500">Presencial</div>
+                                                            <div className="mt-1 text-sm font-semibold text-gray-900">{meeting.presencial || '-'}</div>
+                                                        </div>
+                                                        <div className="rounded-lg bg-gray-50 p-3">
+                                                            <div className="text-[11px] uppercase tracking-wide text-gray-500">Zoom</div>
+                                                            <div className="mt-1 text-sm font-semibold text-gray-900">{meeting.zoom || '-'}</div>
+                                                        </div>
+                                                        <div className="rounded-lg bg-gray-50 p-3">
+                                                            <div className="text-[11px] uppercase tracking-wide text-gray-500">Visitantes</div>
+                                                            <div className="mt-1 text-sm font-semibold text-gray-900">{meeting.visitantes || '-'}</div>
+                                                        </div>
+                                                        <div className="rounded-lg bg-gray-50 p-3">
+                                                            <div className="text-[11px] uppercase tracking-wide text-gray-500">Total</div>
+                                                            <div className="mt-1 text-sm font-semibold text-gray-900">{meeting.total || '-'}</div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex justify-end">
+                                                        <Link href={`/admin/reunioes/${meeting.id}`}>
+                                                            <Button variant="ghost" size="sm" className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 cursor-pointer">
+                                                                Gerenciar
+                                                            </Button>
+                                                        </Link>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </div>
             </div>
