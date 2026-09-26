@@ -1,7 +1,7 @@
-﻿'use client';
+'use client';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
-import { User, BookOpen, Music, Mic, Users, Save, Loader2, Printer, Edit2, Check, X, ChevronDown, Search, Wand2, Sparkles, History, Mail } from "lucide-react";
+import { User, BookOpen, Music, Mic, Users, Save, Loader2, Printer, Edit2, Check, X, ChevronDown, Search, Wand2, Sparkles, History, Mail, MessageCircle } from "lucide-react";
 import { useState, useEffect, useRef } from 'react';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
@@ -124,7 +124,7 @@ const normalizeText = (text) => {
       .replace(/[\u0300-\u036f]/g, '');
 };
 
-export function MobileDesignationModal({ isOpen, onClose, schedule, assignments, weekDescription, publicadores, historyData = [], onAssignmentChange, onSave, isSaving, onPrint, onScheduleUpdate, onOpenEmail }) {
+export function MobileDesignationModal({ isOpen, onClose, schedule, assignments, weekDescription, publicadores, historyData = [], onAssignmentChange, onSave, isSaving, onPrint, onScheduleUpdate, onOpenEmail, onShareWhatsApp }) {
    const { permissions } = usePermissions();
    const canSave = isAllowed(permissions, 'designacoes_salvar', 'actions');
    const canPdf = isAllowed(permissions, 'designacoes_pdf', 'actions');
@@ -144,17 +144,53 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
       label: p.nome_curto || p.nome_completo
    })) || [];
 
-   // -- SMART AUTO FILL LOGIC (RANDOM + UNIQUE) --
+   // -- SMART AUTO FILL LOGIC (RODÍZIO EQUILIBRADO + HISTÓRICO) --
    const handleAutoFill = () => {
       const newAssigns = {};
       const usedNames = new Set();
+
+      // Mapeamento de histórico recente para cada publicador
+      const lastAssignedMap = new Map();
+      if (Array.isArray(historyData)) {
+         historyData.forEach(h => {
+            if (h.nome_completo && h.data_reuniao) {
+               const time = new Date(h.data_reuniao).getTime();
+               if (!lastAssignedMap.has(h.nome_completo) || time > lastAssignedMap.get(h.nome_completo)) {
+                  lastAssignedMap.set(h.nome_completo, time);
+               }
+            }
+         });
+      }
+
+      const nowTime = new Date().getTime();
+      const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
       const pickUnique = (pool) => {
          if (!pool || pool.length === 0) return '';
          const available = pool.filter(p => !usedNames.has(p.nome_completo));
          if (available.length === 0) return '';
-         const idx = Math.floor(Math.random() * available.length);
-         const chosen = available[idx].nome_completo;
+
+         // 1. Filtrar quem NÃO teve designação nos últimos 14 dias
+         const notRecentlyAssigned = available.filter(p => {
+            const lastTime = lastAssignedMap.get(p.nome_completo);
+            if (!lastTime) return true; // Nunca designado no histórico
+            return (nowTime - lastTime) > FOURTEEN_DAYS_MS;
+         });
+
+         // Se houver publicadores sem designação recente, usa essa lista; senão usa todos disponíveis
+         const candidatePool = notRecentlyAssigned.length > 0 ? notRecentlyAssigned : available;
+
+         // Ordena priorizando quem está há mais tempo sem designação
+         candidatePool.sort((a, b) => {
+            const timeA = lastAssignedMap.get(a.nome_completo) || 0;
+            const timeB = lastAssignedMap.get(b.nome_completo) || 0;
+            return timeA - timeB;
+         });
+
+         // Variedade saudável: sorteia entre os primeiros 3 com maior tempo de espera
+         const topCount = Math.min(3, candidatePool.length);
+         const randomIdx = Math.floor(Math.random() * topCount);
+         const chosen = candidatePool[randomIdx].nome_completo;
          usedNames.add(chosen);
          return chosen;
       };
@@ -481,23 +517,57 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
 
             </div>
 
-            <div className="p-3 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+            <div className="p-3 border-t border-gray-100 bg-gray-50 flex flex-wrap items-center justify-between gap-2">
                {/* AUTO INSERT BUTTON */}
-               <button onClick={handleAutoFill} className="px-3 py-2 bg-white border border-purple-200 text-purple-700 hover:bg-purple-50 rounded-md text-sm font-medium shadow-sm flex items-center gap-2 transition-colors mr-auto">
+               <button 
+                  type="button" 
+                  onClick={handleAutoFill} 
+                  className="px-3 py-2 bg-white border border-purple-200 text-purple-700 hover:bg-purple-50 rounded-md text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 transition-colors"
+                  title="Preenchimento inteligente baseado em rodízio justo e histórico"
+               >
                   <Sparkles size={16} /> Inserir Automático
                </button>
 
-               {onOpenEmail && (
-                  <button onClick={onOpenEmail} className="px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md text-sm font-medium shadow-sm flex items-center gap-2">
-                     <Mail size={16} /> E-mail
+               <div className="flex flex-wrap items-center gap-2">
+                  {onShareWhatsApp && (
+                     <button
+                        type="button"
+                        onClick={() => onShareWhatsApp(schedule, assignments, weekDescription)}
+                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 transition-colors"
+                        title="Enviar programação completa via WhatsApp"
+                     >
+                        <MessageCircle size={16} /> WhatsApp
+                     </button>
+                  )}
+
+                  {onOpenEmail && (
+                     <button 
+                        type="button" 
+                        onClick={onOpenEmail} 
+                        className="px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 transition-colors"
+                     >
+                        <Mail size={16} /> E-mail
+                     </button>
+                  )}
+
+                  <button 
+                     type="button" 
+                     onClick={onPrint} 
+                     disabled={!canPdf} 
+                     className="px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                  >
+                     <Printer size={16} /> PDF
                   </button>
-               )}
-               <button onClick={onPrint} disabled={!canPdf} className="px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md text-sm font-medium shadow-sm flex items-center gap-2 disabled:opacity-50">
-                  <Printer size={16} /> PDF
-               </button>
-               <button onClick={async () => { if (onSave) await onSave(); onClose(); }} disabled={isSaving || !canSave} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium shadow-sm flex items-center gap-2 disabled:opacity-50">
-                  {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Salvar
-               </button>
+
+                  <button 
+                     type="button" 
+                     onClick={async () => { if (onSave) await onSave(); onClose(); }} 
+                     disabled={isSaving || !canSave} 
+                     className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                  >
+                     {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Salvar
+                  </button>
+               </div>
             </div>
 
          </DialogContent>

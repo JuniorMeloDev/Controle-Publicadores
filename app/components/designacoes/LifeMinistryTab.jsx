@@ -157,6 +157,54 @@ const generateWhatsAppText = (weekText, schedule, assignments) => {
   return encodeURIComponent(text);
 };
 
+function getWeekCompletionStats(schedule, assignments = {}) {
+  if (!schedule) return { total: 0, filled: 0, percentage: 0 };
+  let total = 0;
+  let filled = 0;
+
+  total += 1; if (assignments.presidente) filled += 1;
+  total += 1; if (assignments.oracao_inicial) filled += 1;
+  total += 1; if (assignments.comentarios_iniciais) filled += 1;
+
+  schedule.treasures?.forEach((_, idx) => {
+    total += 1;
+    if (assignments[`tesouro_${idx}`]) filled += 1;
+  });
+  total += 1;
+  if (assignments.leitura_biblia) filled += 1;
+
+  schedule.ministry?.forEach((part, idx) => {
+    const isDiscurso = part.title?.toLowerCase().includes('discurso');
+    if (isDiscurso) {
+      total += 1;
+      if (assignments[`ministerio_${idx}`] || assignments[`ministerio_${idx}_1`]) filled += 1;
+    } else {
+      total += 2;
+      if (assignments[`ministerio_${idx}_1`] || assignments[`ministerio_${idx}`]) filled += 1;
+      if (assignments[`ministerio_${idx}_2`]) filled += 1;
+    }
+  });
+
+  total += 1; if (assignments.cantico_meio) filled += 1;
+  schedule.living?.forEach((part, idx) => {
+    const isBibleStudy = part.title?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes('estudo biblico');
+    if (isBibleStudy) {
+      total += 2;
+      if (assignments[`vida_${idx}_1`] || assignments[`vida_${idx}`]) filled += 1;
+      if (assignments[`vida_${idx}_2`]) filled += 1;
+    } else {
+      total += 1;
+      if (assignments[`vida_${idx}`] || assignments[`vida_${idx}_1`]) filled += 1;
+    }
+  });
+
+  total += 1; if (assignments.comentarios_finais) filled += 1;
+  total += 1; if (assignments.oracao_final) filled += 1;
+
+  const percentage = total > 0 ? Math.round((filled / total) * 100) : 0;
+  return { total, filled, percentage };
+}
+
 // --- SUB-COMPONENTE: Lista de Histórico ---
 const HistoryList = ({ listaFiltrada, meetingDates, currentIndex, hasData, handleLoadSavedMeeting }) => (
   <div className="space-y-1 p-1">
@@ -560,11 +608,12 @@ export function LifeMinistryTab() {
     } finally { setIsSaving(false); }
   };
 
-  const handleGeneratePDF = () => {
+  const handleGeneratePDF = (indexOverride) => {
+    const targetIdx = typeof indexOverride === 'number' ? indexOverride : currentIndex;
     const doc = new jsPDF('p', 'mm', 'a4');
-    const schedule = schedules[currentIndex];
-    const assignments = assignmentsList[currentIndex];
-    const weekText = weekDescriptions[currentIndex];
+    const schedule = schedules[targetIdx];
+    const assignments = assignmentsList[targetIdx];
+    const weekText = weekDescriptions[targetIdx];
 
     if (!schedule || !assignments) return;
 
@@ -1135,10 +1184,26 @@ export function LifeMinistryTab() {
     }
   };
 
-  const handleShareWhatsApp = () => {
-    const currentSchedule = schedules[currentIndex];
-    const currentAssignments = assignmentsList[currentIndex];
-    const currentDescription = weekDescriptions[currentIndex];
+  const handleShareWhatsApp = (scheduleOverride, assignmentsOverride, descriptionOverride) => {
+    let currentSchedule = scheduleOverride;
+    let currentAssignments = assignmentsOverride;
+    let currentDescription = descriptionOverride;
+
+    if (typeof scheduleOverride === 'number') {
+      const idx = scheduleOverride;
+      currentSchedule = schedules[idx];
+      currentAssignments = assignmentsList[idx];
+      currentDescription = weekDescriptions[idx];
+    } else if (!currentSchedule || typeof currentSchedule !== 'object' || !currentSchedule.initialSong) {
+      currentSchedule = schedules[currentIndex];
+      currentAssignments = assignmentsList[currentIndex];
+      currentDescription = weekDescriptions[currentIndex];
+    }
+
+    if (!currentSchedule || !currentAssignments) {
+      setToastData({ message: 'Nenhuma designação disponível para compartilhar.', type: 'error' });
+      return;
+    }
     const text = generateWhatsAppText(currentDescription, currentSchedule, currentAssignments);
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
@@ -1266,6 +1331,7 @@ export function LifeMinistryTab() {
         onPrint={handleGeneratePDF}
         onScheduleUpdate={handleSchedulePartUpdate}
         onOpenEmail={handleOpenEmailModal}
+        onShareWhatsApp={handleShareWhatsApp}
       />
 
       <div className="flex flex-col gap-8">
@@ -1283,6 +1349,128 @@ export function LifeMinistryTab() {
             <input type="file" multiple accept=".rtf, .txt" className="hidden" onChange={handleFilesParse} disabled={isParsing || !canImport} />
           </label>
         </div>
+
+        {/* CARDS DE PRÉVIA DAS SEMANAS IMPORTADAS */}
+        {schedules.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-purple-100 p-5 sm:p-6 flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+              <div>
+                <h2 className="font-bold text-gray-900 text-base sm:text-lg flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-purple-600" />
+                  Semanas Carregadas nesta Sessão
+                  <span className="text-xs bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full">
+                    {schedules.length} {schedules.length === 1 ? 'semana' : 'semanas'}
+                  </span>
+                </h2>
+                <p className="text-xs text-gray-500">
+                  Visão geral do preenchimento das designações de cada reunião. Clique em Abrir para editar.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {schedules.map((schedule, idx) => {
+                const assignments = assignmentsList[idx] || {};
+                const weekText = weekDescriptions[idx] || `Semana ${idx + 1}`;
+                const stats = getWeekCompletionStats(schedule, assignments);
+                const isComplete = stats.percentage === 100;
+
+                return (
+                  <div
+                    key={idx}
+                    className={`border rounded-xl p-4 flex flex-col justify-between transition-all hover:shadow-md bg-white ${
+                      currentIndex === idx && isMobileModalOpen
+                        ? 'border-purple-500 ring-2 ring-purple-100'
+                        : 'border-gray-200 hover:border-purple-300'
+                    }`}
+                  >
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-bold text-gray-900 text-sm line-clamp-1" title={weekText}>
+                            {weekText}
+                          </h3>
+                          <p className="text-xs text-gray-500 truncate">
+                            {schedule?.weekDate || 'Reunião do Meio de Semana'}
+                          </p>
+                        </div>
+                        <span
+                          className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                            isComplete
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}
+                        >
+                          {stats.percentage}%
+                        </span>
+                      </div>
+
+                      {/* Barra de progresso */}
+                      <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            isComplete ? 'bg-emerald-500' : 'bg-purple-600'
+                          }`}
+                          style={{ width: `${stats.percentage}%` }}
+                        />
+                      </div>
+
+                      {/* Informações rápidas */}
+                      <div className="text-xs text-gray-600 space-y-1.5 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-gray-400">Presidente:</span>
+                          <span className="font-medium text-gray-800 truncate max-w-[130px]">
+                            {assignments.presidente || <span className="text-gray-400 italic">Pendente</span>}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-gray-400">Leitor Bíblia:</span>
+                          <span className="font-medium text-gray-800 truncate max-w-[130px]">
+                            {assignments.leitura_biblia || <span className="text-gray-400 italic">Pendente</span>}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-[11px] text-gray-400 pt-1 border-t border-gray-200/50">
+                          <span>Partes preenchidas:</span>
+                          <span className="font-semibold text-gray-700">{stats.filled} de {stats.total}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Ações do Card */}
+                    <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentIndex(idx);
+                          setIsMobileModalOpen(true);
+                        }}
+                        className="flex-1 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                      >
+                        Abrir / Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleShareWhatsApp(idx)}
+                        title="Compartilhar no WhatsApp"
+                        className="p-2 text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 rounded-lg transition-colors border border-emerald-200 shrink-0"
+                      >
+                        <MessageCircle size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleGeneratePDF(idx)}
+                        title="Gerar PDF"
+                        className="p-2 text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 rounded-lg transition-colors border border-gray-200 shrink-0"
+                      >
+                        <FileText size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* HISTÓRICO DE REUNIÕES */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden min-h-[500px]">

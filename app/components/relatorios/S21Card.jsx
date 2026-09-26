@@ -43,6 +43,27 @@ const S21Card = ({ publisherData, serviceYear, isEditing = false, onReportChange
         studies: acc.studies + (Number(curr.estudos_biblicos) || 0),
     }), { hours: 0, studies: 0 });
 
+    // Meses com relatório válido/ativo no ano de serviço
+    const activeMonths = yearReports.filter(r => 
+        r.participou_ministerio || 
+        (Number(r.horas) > 0) || 
+        (Number(r.estudos_biblicos) > 0) ||
+        Number(r.publicacoes) > 0 ||
+        Number(r.videos) > 0 ||
+        Number(r.revisitas) > 0
+    );
+    const monthsCount = activeMonths.length;
+
+    const averages = {
+        hours: monthsCount > 0 ? (totals.hours / monthsCount) : 0,
+        studies: monthsCount > 0 ? (totals.studies / monthsCount) : 0,
+    };
+
+    const formatAverage = (val) => {
+        if (!val || val === 0) return '';
+        return Number.isInteger(val) ? val.toString() : val.toFixed(1).replace('.', ',');
+    };
+
     // HANDLERS
     const handleToggle = (mes, field, currentVal) => {
         if (!isEditing || !onReportChange) return;
@@ -196,13 +217,26 @@ const S21Card = ({ publisherData, serviceYear, isEditing = false, onReportChange
                         );
                     })}
                     {/* LINHA DE TOTAIS */}
-                    <tr className={`${ROW_HEIGHT} font-bold bg-blue-50`}>
-                        <td className={`${BORDER_CLASS} text-right px-2 uppercase`}>Total</td>
-                        <td className={`${BORDER_CLASS} bg-gray-200`}></td>
-                        <td className={BORDER_CLASS}>{totals.studies || ''}</td>
-                        <td className={`${BORDER_CLASS} bg-gray-200`}></td>
-                        <td className={BORDER_CLASS}>{totals.hours || ''}</td>
-                        <td className={`${BORDER_CLASS} bg-gray-200`}></td>
+                    <tr className={`${ROW_HEIGHT} font-bold bg-blue-50/80`}>
+                        <td className={`${BORDER_CLASS} text-right px-2 uppercase font-extrabold`}>Total</td>
+                        <td className={`${BORDER_CLASS} bg-gray-200/60`}></td>
+                        <td className={`${BORDER_CLASS} font-bold`}>{totals.studies || ''}</td>
+                        <td className={`${BORDER_CLASS} bg-gray-200/60`}></td>
+                        <td className={`${BORDER_CLASS} font-bold`}>{totals.hours || ''}</td>
+                        <td className={`${BORDER_CLASS} text-left px-2 text-[10px] text-gray-600 font-normal`}>
+                            {monthsCount > 0 ? `${monthsCount} ${monthsCount === 1 ? 'mês com atividade' : 'meses com atividade'}` : ''}
+                        </td>
+                    </tr>
+                    {/* LINHA DE MÉDIAS (OFICIAL AO TÉRMINO DO ANO DE SERVIÇO) */}
+                    <tr className={`${ROW_HEIGHT} font-bold bg-blue-50/80`}>
+                        <td className={`${BORDER_CLASS} text-right px-2 uppercase font-extrabold`}>Média</td>
+                        <td className={`${BORDER_CLASS} bg-gray-200/60`}></td>
+                        <td className={`${BORDER_CLASS} font-bold`}>{formatAverage(averages.studies)}</td>
+                        <td className={`${BORDER_CLASS} bg-gray-200/60`}></td>
+                        <td className={`${BORDER_CLASS} font-bold`}>{formatAverage(averages.hours)}</td>
+                        <td className={`${BORDER_CLASS} text-left px-2 text-[10px] text-gray-600 font-normal`}>
+                            Média mensal oficial
+                        </td>
                     </tr>
                 </tbody>
             </table>

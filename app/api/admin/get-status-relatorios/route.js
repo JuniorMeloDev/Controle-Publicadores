@@ -32,6 +32,7 @@ export async function GET(req) {
         p.id, 
         p.nome_completo, 
         p.nome_chamado,
+        p.telefone,
         g.nome_grupo
       FROM publicadores p
       LEFT JOIN grupos g ON p.grupo_id = g.id
@@ -67,6 +68,7 @@ export async function GET(req) {
         id: idStr,
         nome_completo: pub.nome_completo,
         nome_curto: pub.nome_chamado || pub.nome_completo.split(' ')[0],
+        telefone: pub.telefone || '',
         nome_grupo: pub.nome_grupo || 'Sem Grupo',
         status: enviou ? 'Enviado' : 'Pendente'
       };

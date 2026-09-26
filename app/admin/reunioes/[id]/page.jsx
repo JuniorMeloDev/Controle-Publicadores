@@ -7,14 +7,27 @@ import { Input } from '@/app/components/ui/input';
 import { Badge } from '@/app/components/ui/badge';
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { StatusToast } from '@/app/components/ui/status-toast';
-import { Search, Save, Loader2, ArrowLeft, Users, Video, XCircle } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/app/components/ui/sheet';
+import { Search, Save, Loader2, ArrowLeft, Users, Video, XCircle, ClipboardList, BookOpen, Mic, Calendar } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+
+const formatMeetingDate = (dateVal) => {
+   if (!dateVal) return '';
+   const str = String(dateVal).split('T')[0];
+   const parts = str.split('-');
+   if (parts.length !== 3) return '';
+   const [y, m, d] = parts;
+   const dt = new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
+   return dt.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+};
 
 export default function DetalheReuniaoPage() {
    const params = useParams();
    const router = useRouter();
    const [data, setData] = useState([]); // List of publishers with attendance status
+   const [meetingDetails, setMeetingDetails] = useState(null); // Meeting info and assignments
+   const [isAssignmentsOpen, setIsAssignmentsOpen] = useState(false); // Lateral sheet state
    const [loading, setLoading] = useState(true);
    const [saving, setSaving] = useState(false);
    const [searchTerm, setSearchTerm] = useState('');
@@ -46,6 +59,7 @@ export default function DetalheReuniaoPage() {
                const json = await res.json();
                const jsonDetails = await resDetails.json();
                setData(json);
+               setMeetingDetails(jsonDetails);
                setVisitantes(jsonDetails.visitantes || 0);
             }
          } catch (err) {
@@ -59,6 +73,15 @@ export default function DetalheReuniaoPage() {
       }
       fetchData();
    }, [params.id]);
+
+   const assignmentsCount = useMemo(() => {
+      if (!meetingDetails?.designacoes) return 0;
+      const { privilegios = [], discurso, vidaMinisterio = [] } = meetingDetails.designacoes;
+      let count = privilegios.length + vidaMinisterio.length;
+      if (discurso?.orador) count += 1;
+      if (discurso?.presidente_nome) count += 1;
+      return count;
+   }, [meetingDetails]);
 
    // Toast Timer
    useEffect(() => {
@@ -195,6 +218,22 @@ export default function DetalheReuniaoPage() {
                </div>
 
                <div className="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto bg-white md:bg-transparent p-3 md:p-0 rounded-lg shadow-sm md:shadow-none border md:border-0 border-gray-200">
+                  <Button
+                     type="button"
+                     variant="outline"
+                     onClick={() => setIsAssignmentsOpen(true)}
+                     className="flex items-center gap-1.5 border-purple-200 text-purple-700 hover:bg-purple-50 hover:text-purple-800 shadow-xs"
+                     title="Ver quem foram os designados desta reunião"
+                  >
+                     <ClipboardList className="w-4 h-4 text-purple-600" />
+                     <span className="hidden sm:inline">Designações</span>
+                     {assignmentsCount > 0 && (
+                        <span className="bg-purple-100 text-purple-800 text-[11px] font-bold px-1.5 py-0.5 rounded-full">
+                           {assignmentsCount}
+                        </span>
+                     )}
+                  </Button>
+
                   <div className="flex items-center gap-2">
                      <span className="text-sm font-medium text-gray-700">Visitantes:</span>
                      <Input
@@ -306,6 +345,133 @@ export default function DetalheReuniaoPage() {
                )}
             </div>
          </div>
+
+         {/* ABA LATERAL / SHEET DE DESIGNAÇÕES DA REUNIÃO */}
+         <Sheet open={isAssignmentsOpen} onOpenChange={setIsAssignmentsOpen}>
+            <SheetContent side="right" className="w-full sm:max-w-md md:max-w-lg p-0 flex flex-col bg-white">
+               <SheetHeader className="p-5 border-b border-gray-100 bg-gray-50/50">
+                  <div className="flex items-center gap-2.5">
+                     <div className="w-9 h-9 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                        <ClipboardList size={20} />
+                     </div>
+                     <div>
+                        <SheetTitle className="text-lg font-bold text-gray-900">
+                           Designações do Dia
+                        </SheetTitle>
+                        <SheetDescription className="text-xs text-gray-500 capitalize">
+                           {formatMeetingDate(meetingDetails?.data) || 'Reunião'} • {meetingDetails?.tipo || 'Programação'}
+                        </SheetDescription>
+                     </div>
+                  </div>
+               </SheetHeader>
+
+               <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                  {/* Discurso Público (Fim de Semana) */}
+                  {meetingDetails?.designacoes?.discurso && (
+                     <div className="bg-purple-50/60 border border-purple-100 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                           <span className="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
+                              <Mic className="w-3.5 h-3.5" /> Discurso Público
+                           </span>
+                           {meetingDetails.designacoes.discurso.cantico && (
+                              <span className="text-[11px] bg-purple-100 text-purple-800 font-semibold px-2 py-0.5 rounded">
+                                 Cântico {meetingDetails.designacoes.discurso.cantico}
+                              </span>
+                           )}
+                        </div>
+
+                        <div>
+                           <h4 className="text-[11px] text-gray-500 uppercase tracking-wider font-semibold">Tema</h4>
+                           <p className="text-sm font-semibold text-gray-900 mt-0.5 leading-snug">
+                              {meetingDetails.designacoes.discurso.tema || 'Tema não definido'}
+                           </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-purple-100">
+                           <div>
+                              <h4 className="text-[11px] text-gray-500 uppercase font-semibold">Orador</h4>
+                              <p className="text-xs font-bold text-gray-900 mt-0.5">
+                                 {meetingDetails.designacoes.discurso.orador || 'A definir'}
+                              </p>
+                              {meetingDetails.designacoes.discurso.congregacao && (
+                                 <p className="text-[11px] text-gray-500 truncate">
+                                    {meetingDetails.designacoes.discurso.congregacao}
+                                 </p>
+                              )}
+                           </div>
+                           <div>
+                              <h4 className="text-[11px] text-gray-500 uppercase font-semibold">Presidente</h4>
+                              <p className="text-xs font-bold text-gray-900 mt-0.5">
+                                 {meetingDetails.designacoes.discurso.presidente_nome || '---'}
+                              </p>
+                           </div>
+                        </div>
+                     </div>
+                  )}
+
+                  {/* Vida e Ministério (Meio de Semana) */}
+                  {meetingDetails?.designacoes?.vidaMinisterio?.length > 0 && (
+                     <div className="space-y-3">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+                           <BookOpen className="w-3.5 h-3.5 text-purple-600" /> Partes da Reunião
+                        </h3>
+                        <div className="bg-gray-50/70 border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
+                           {meetingDetails.designacoes.vidaMinisterio.map((p, idx) => (
+                              <div key={idx} className="p-3 flex items-start justify-between gap-3 text-xs">
+                                 <span className="text-gray-600 font-medium flex-1">
+                                    {p.nome_parte}
+                                 </span>
+                                 <span className="font-bold text-gray-900 text-right shrink-0">
+                                    {p.nome_completo}
+                                 </span>
+                              </div>
+                           ))}
+                        </div>
+                     </div>
+                  )}
+
+                  {/* Privilégios Mecânicos (Indicadores, Leitor de Sentinela, etc.) */}
+                  {meetingDetails?.designacoes?.privilegios?.length > 0 && (
+                     <div className="space-y-3">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+                           <Users className="w-3.5 h-3.5 text-purple-600" /> Tarefas e Indicadores
+                        </h3>
+                        <div className="bg-gray-50/70 border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
+                           {meetingDetails.designacoes.privilegios.map((priv, idx) => (
+                              <div key={idx} className="p-3 flex items-center justify-between gap-3 text-xs">
+                                 <span className="text-gray-600 font-medium">
+                                    {priv.tipo}
+                                 </span>
+                                 <span className="font-bold text-gray-900 text-right">
+                                    {priv.nome}
+                                 </span>
+                              </div>
+                           ))}
+                        </div>
+                     </div>
+                  )}
+
+                  {/* Vazio */}
+                  {assignmentsCount === 0 && (
+                     <div className="flex flex-col items-center justify-center py-12 text-center text-gray-400 p-4">
+                        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                           <ClipboardList className="w-6 h-6 text-gray-400" />
+                        </div>
+                        <p className="font-medium text-sm text-gray-700">Nenhuma designação encontrada</p>
+                        <p className="text-xs text-gray-500 mt-1 max-w-xs">
+                           As designações para esta data ainda não foram vinculadas no módulo de Vida e Ministério ou Discursos Públicos.
+                        </p>
+                        <Link
+                           href="/admin/designacoes"
+                           className="mt-4 text-xs font-semibold text-purple-600 hover:text-purple-700 hover:underline"
+                        >
+                           Ir para Designações →
+                        </Link>
+                     </div>
+                  )}
+               </div>
+            </SheetContent>
+         </Sheet>
       </DashboardLayout>
    );
 }

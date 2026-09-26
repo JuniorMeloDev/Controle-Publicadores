@@ -4,10 +4,24 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
-import { Users, Calendar, ArrowRight, TrendingUp, FileText, CheckCircle, Clock, Loader2, X, Printer, Search } from 'lucide-react';
+import { Users, Calendar, ArrowRight, TrendingUp, FileText, CheckCircle, Clock, Loader2, X, Printer, Search, MessageCircle } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from '@/app/components/ui/sheet';
 import { Button } from '@/app/components/ui/button';
 import ListaStatusImprimivel from '@/app/componentes/Relatorios/ListaStatusImprimivel';
+
+// Helper de cobrança carinhosa de relatório via WhatsApp
+const getWhatsAppReminderUrl = (pub, month) => {
+  const name = pub.nome_curto || pub.nome_completo?.split(' ')[0] || 'Irmão(ã)';
+  const msg = `Olá, ${name}! 😊 Passando para deixar um lembrete carinhoso sobre o seu relatório de serviço de campo referente ao mês de ${month}. Quando puder enviar, agradecemos de coração!`;
+  const encodedMsg = encodeURIComponent(msg);
+
+  const phoneDigits = pub.telefone?.replace(/\D/g, '') || '';
+  if (phoneDigits.length >= 10) {
+    const fullNumber = phoneDigits.startsWith('55') ? phoneDigits : `55${phoneDigits}`;
+    return `https://wa.me/${fullNumber}?text=${encodedMsg}`;
+  }
+  return `https://wa.me/?text=${encodedMsg}`;
+};
 
 // --- CONSTANTES E FUNÇÕES DE DATA ---
 const MESES = [
@@ -526,24 +540,38 @@ export default function Dashboard() {
                     return a.nome_completo.localeCompare(b.nome_completo);
                   })
                   .map(pub => (
-                    <div key={pub.id} className="flex items-center justify-between p-3 border-b border-gray-100 bg-white rounded-md hover:shadow-sm transition-all">
-                      <div className="min-w-0">
+                    <div key={pub.id} className="flex items-center justify-between p-3 border-b border-gray-100 bg-white rounded-md hover:shadow-sm transition-all gap-2">
+                      <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-gray-900 truncate">
                           {pub.nome_completo}
                         </p>
                         <p className="text-xs text-gray-500">{pub.nome_grupo}</p>
                       </div>
-                      <Link
-                        href={`/admin/gerenciar?id=${pub.id}`}
-                        onClick={() => setIsSheetOpen(false)}
-                        className={`flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full transition-colors ${pub.status === 'Enviado' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          } hover:opacity-80`}
-                        title="Ver detalhes do publicador"
-                      >
-                        {pub.status === 'Enviado' ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                        {pub.status}
-                        <ArrowRight className="w-3 h-3 ml-1" />
-                      </Link>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {pub.status === 'Pendente' && (
+                          <a
+                            href={getWhatsAppReminderUrl(pub, selectedMonth)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors shadow-xs"
+                            title={`Cobrar ${pub.nome_curto || pub.nome_completo} no WhatsApp`}
+                          >
+                            <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="hidden xs:inline">Cobrar</span>
+                          </a>
+                        )}
+                        <Link
+                          href={`/admin/gerenciar?id=${pub.id}`}
+                          onClick={() => setIsSheetOpen(false)}
+                          className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${pub.status === 'Enviado' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            } hover:opacity-80`}
+                          title="Ver detalhes do publicador"
+                        >
+                          {pub.status === 'Enviado' ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                          {pub.status}
+                          <ArrowRight className="w-3 h-3 ml-0.5" />
+                        </Link>
+                      </div>
                     </div>
                   ))}
 
