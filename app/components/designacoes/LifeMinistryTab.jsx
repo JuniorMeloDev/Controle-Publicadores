@@ -357,11 +357,22 @@ export function LifeMinistryTab() {
       });
     };
 
-    const files = Array.from(event.target.files);
-    if (files.length === 0) return;
+    const allSelectedFiles = Array.from(event.target.files);
+    if (allSelectedFiles.length === 0) return;
 
     // Reset input
     event.target.value = '';
+
+    // Arquivos _00.rtf são apenas a capa/sumário da apostila bimestral, não são semanas de reunião
+    const files = allSelectedFiles.filter(f => !f.name.match(/_00\.(rtf|txt)$/i));
+
+    if (files.length === 0) {
+      setToastData({
+        message: 'O arquivo com final "_00" é apenas a capa da apostila. Por favor, selecione os arquivos das semanas (_01, _02, _03...) para importar.',
+        type: 'error'
+      });
+      return;
+    }
 
     files.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -392,13 +403,20 @@ export function LifeMinistryTab() {
           clearTimeout(timeoutId);
         }
 
-        if (!response.ok) throw new Error(`Erro ao processar ${file.name}`);
+        if (!response.ok) {
+          let errData;
+          try {
+            errData = await response.json();
+          } catch (_) {}
+          throw new Error(errData?.message || `Erro ao processar ${file.name}`);
+        }
         const parsedData = await response.json();
 
-        // Validate Data
-        if (!parsedData || !parsedData.weekDate) {
-          console.warn(`Dados inválidos em ${file.name}`, parsedData);
-          setToastData({ message: `Aviso: Dados inválidos em ${file.name}. Ignorado.`, type: 'error' });
+        // Validate Data: checar se tem data e se contém partes reais de reunião
+        const hasParts = (parsedData?.treasures?.length > 0) || (parsedData?.ministry?.length > 0) || (parsedData?.living?.length > 0);
+        if (!parsedData || !parsedData.weekDate || !hasParts) {
+          console.warn(`Dados sem partes de reunião em ${file.name}`, parsedData);
+          setToastData({ message: `Aviso: ${file.name} não contém partes de reunião (ex: capa/sumário). Ignorado.`, type: 'error' });
           continue;
         }
 
@@ -775,7 +793,25 @@ export function LifeMinistryTab() {
     const colTimeW = 16;
     // colNameW já definido acima como 75
     const colPartW = contentWidth - colTimeW - colNameW;
-    const minH = 12; // Altura mínima maior para encher a folha
+
+    // Contagem de linhas para cálculo dinâmico de altura (preencher toda a folha A4)
+    let totalRowsCount = 2; // Cântico inicial + Comentários iniciais
+    totalRowsCount += (schedule.treasures?.length || 0);
+    if (assignments.leitura_biblia && !schedule.treasures?.some(t => t.title?.toLowerCase().includes('leitura'))) {
+      totalRowsCount += 1;
+    }
+    totalRowsCount += (schedule.ministry?.length || 0);
+    totalRowsCount += 1; // Cântico do meio
+    totalRowsCount += (schedule.living?.length || 0);
+    totalRowsCount += 2; // Comentários finais + Cântico final
+
+    const pageHeight = 297;
+    const topMargin = 6;
+    const bottomMargin = 6;
+    const usableHeight = pageHeight - topMargin - bottomMargin; // 285mm
+    const sectionHeadersTotalH = 3 * 9; // 3 seções * 9mm = 27mm
+    const availableForRows = usableHeight - headerH - sectionHeadersTotalH; // ~218mm
+    const dynamicMinH = Math.max(12, Math.min(18.5, Math.floor((availableForRows / Math.max(1, totalRowsCount)) * 10) / 10));
 
     const drawRow = (time, richParts, nameVal, type, secondaryLabel = null) => {
       // Handle "Oração --->" right alignment special case
@@ -796,7 +832,7 @@ export function LifeMinistryTab() {
         textH = measureAndRender(finalRichParts, 0, 0, colPartW - 4, 6, true); // lineHeight 6
       }
 
-      let h = Math.max(minH, textH + 5);
+      let h = Math.max(dynamicMinH, textH + 6);
 
       // Header Row
       if (type === 'header') {

@@ -229,7 +229,25 @@ export const generateLifeMinistryPDF = (schedule, assignments, weekText, existin
     // --- TABELA ---
     const colTimeW = 16;
     const colPartW = contentWidth - colTimeW - colNameW;
-    const minH = 12; // Increased spacing as requested
+
+    // Contagem de linhas para cálculo dinâmico de altura (preencher toda a folha A4)
+    let totalRowsCount = 2; // Cântico inicial + Comentários iniciais
+    totalRowsCount += (schedule.treasures?.length || 0);
+    if (assignments.leitura_biblia && !schedule.treasures?.some(t => t.title?.toLowerCase().includes('leitura'))) {
+      totalRowsCount += 1;
+    }
+    totalRowsCount += (schedule.ministry?.length || 0);
+    totalRowsCount += 1; // Cântico do meio
+    totalRowsCount += (schedule.living?.length || 0);
+    totalRowsCount += 2; // Comentários finais + Cântico final
+
+    const pageHeight = 297;
+    const topMargin = 6;
+    const bottomMargin = 6;
+    const usableHeight = pageHeight - topMargin - bottomMargin; // 285mm
+    const sectionHeadersTotalH = 3 * 9; // 3 seções * 9mm = 27mm
+    const availableForRows = usableHeight - headerH - sectionHeadersTotalH; // ~218mm
+    const dynamicMinH = Math.max(12, Math.min(18.5, Math.floor((availableForRows / Math.max(1, totalRowsCount)) * 10) / 10));
 
     const drawRow = (timeStr, richParts, nameVal, type = 'normal', secondaryLabel = null) => {
       // Handle "Oração --->" special alignment
@@ -256,7 +274,7 @@ export const generateLifeMinistryPDF = (schedule, assignments, weekText, existin
          // Using measureAndRender helper which should remain compatible
         textH = measureAndRender(dummyParts, 0, 0, colPartW - 4, 6, true); 
       }
-      let h = Math.max(minH, textH + 5);
+      let h = Math.max(dynamicMinH, textH + 6);
 
       if (type === 'header') {
         // Section Header
