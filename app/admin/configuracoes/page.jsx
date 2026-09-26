@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import { StatusToast } from "@/app/components/ui/status-toast";
-import { Trash2, Calendar, Save, Plus, Loader2, Sparkles, CheckCircle2, AlertTriangle, Edit2, Users, Eye, EyeOff } from 'lucide-react';
+import { Trash2, Calendar, Save, Plus, Loader2, Sparkles, CheckCircle2, AlertTriangle, Edit2, Users, Eye, EyeOff, Database, DownloadCloud, ShieldCheck } from 'lucide-react';
 
 const WEEKDAYS = [
     { value: 'Segunda-feira', label: 'Segunda-feira' },
@@ -71,6 +71,39 @@ export default function ConfiguracoesPage() {
     // Result Modal State
     const [resultOpen, setResultOpen] = useState(false);
     const [resultData, setResultData] = useState({ success: true, message: '', details: [] });
+
+    // Backup State
+    const [isExportingBackup, setIsExportingBackup] = useState(false);
+
+    const handleExportBackup = async () => {
+        setIsExportingBackup(true);
+        try {
+            const res = await fetch('/api/admin/backup');
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.message || 'Erro ao gerar backup');
+            }
+
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            const dataStr = new Date().toISOString().split('T')[0];
+            a.download = `backup_congregacao_${dataStr}.json`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            setToast({ message: 'Backup completo exportado com sucesso!', type: 'success' });
+        } catch (err) {
+            console.error(err);
+            setToast({ message: err.message || 'Erro ao baixar backup.', type: 'error' });
+        } finally {
+            setIsExportingBackup(false);
+        }
+    };
 
     useEffect(() => {
         fetchData();
@@ -946,6 +979,55 @@ export default function ConfiguracoesPage() {
                                             ))}
                                         </div>
                                     )}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* CARD 4: BACKUP COMPLETO DO BANCO DE DADOS */}
+                        <Card className="border-purple-200 bg-gradient-to-br from-white to-purple-50/40 shadow-sm col-span-1 lg:col-span-2">
+                            <CardHeader className="bg-purple-50/60 pb-4 border-b border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div>
+                                    <CardTitle className="text-purple-950 flex items-center gap-2">
+                                        <Database className="w-5 h-5 text-purple-600" />
+                                        Backup Completo em 1 Clique
+                                    </CardTitle>
+                                    <CardDescription className="text-purple-700/80 mt-1">
+                                        Exporte uma cópia completa de segurança (.JSON) com todos os dados da congregação.
+                                    </CardDescription>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-xs text-purple-700 font-medium bg-purple-100/70 px-3 py-1.5 rounded-full border border-purple-200 self-start sm:self-auto">
+                                    <ShieldCheck className="w-4 h-4 text-purple-600" />
+                                    Snapshot Seguro
+                                </div>
+                            </CardHeader>
+                            <CardContent className="pt-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                <div className="space-y-2 max-w-2xl text-sm text-gray-600">
+                                    <p>
+                                        O arquivo gerado reúne todas as tabelas: <strong>publicadores</strong>, <strong>grupos</strong>, <strong>assistência presencial e Zoom</strong>, <strong>discursos públicos</strong>, <strong>designações de Vida e Ministério</strong>, <strong>relatórios mensais</strong> e <strong>configurações</strong>.
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        💡 <strong>Dica:</strong> Guarde este arquivo em local seguro (computador, pen drive ou nuvem) para manter o histórico da congregação sempre protegido.
+                                    </p>
+                                </div>
+
+                                <div className="shrink-0 w-full md:w-auto">
+                                    <Button
+                                        onClick={handleExportBackup}
+                                        disabled={isExportingBackup || !canEditConfig}
+                                        className="w-full md:w-auto bg-purple-600 hover:bg-purple-700 text-white font-bold py-6 px-6 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                                    >
+                                        {isExportingBackup ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                <span>Gerando Backup...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <DownloadCloud className="w-5 h-5" />
+                                                <span>Exportar Backup Completo (.JSON)</span>
+                                            </>
+                                        )}
+                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>
