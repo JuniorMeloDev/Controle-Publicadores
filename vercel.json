@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/admin/cron/enviar-designacoes",
+      "path": "/api/cron/lembretes",
       "schedule": "0 13 * * *"
     }
   ]

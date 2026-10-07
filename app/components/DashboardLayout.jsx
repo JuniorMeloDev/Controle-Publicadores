@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { 
-  Search, Bell, Home, Users, Calendar, 
+  Search, Home, Users, Calendar,
   LogOut, Menu, ChevronRight, Workflow,
   User, Key, ChevronDown, X, Loader2,
   Clock, BarChart3, Settings
@@ -12,6 +12,7 @@ import {
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { GlobalSearch } from '@/app/components/GlobalSearch';
+import { NotificationBell } from '@/app/components/NotificationBell';
 import { PermissionsProvider } from '@/app/components/PermissionsContext';
 import { getPageKeyForPath, isAllowed } from '@/app/lib/access-control';
 
@@ -311,10 +312,7 @@ export function DashboardLayout({ children }) {
           <div className="flex items-center gap-4">
             <GlobalSearch />
             
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="w-5 h-5 text-gray-500" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
-            </Button>
+            <NotificationBell userId={usuario.id} permissions={permissions} />
 
             <div className="relative pl-4 border-l border-gray-100" ref={userMenuRef}>
                 <button 

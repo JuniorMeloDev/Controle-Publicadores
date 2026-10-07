@@ -49,7 +49,40 @@ privilégios mecânicos, discursos públicos e limpeza semanal. A limpeza por gr
 aparece para os integrantes do grupo; responsáveis informados por nome e oradores
 são associados quando o nome corresponde ao cadastro.
 
-## Testes
+## Alertas e lembretes automáticos
+
+O sininho mostra apenas alertas da pessoa conectada: próximas designações de todas
+as categorias, limpeza do grupo/responsável e relatório do mês anterior pendente.
+O prazo do relatório usa o mês civil; a consulta respeita o ano de serviço.
+É possível marcar alertas como lidos. Alterações e exclusões nas designações são
+refletidas automaticamente, e reuniões canceladas não geram lembretes.
+
+Em **Configurações → Alertas e lembretes**, defina os tipos e a antecedência.
+As regras são da congregação e a edição exige `configuracoes_editar`.
+Ativar os e-mails também exige `designacoes_email`. O envio começa desativado.
+
+Para ativar os e-mails, configure no servidor/hospedagem:
+
+- `EMAIL_USER`: conta Gmail remetente.
+- `EMAIL_PASS`: senha de aplicativo dessa conta (a mesma usada no envio manual).
+- `CRON_SECRET`: segredo aleatório forte para autenticar o agendador.
+
+Depois, publique e habilite os lembretes em Configurações. O `vercel.json` chama
+`GET /api/cron/lembretes` diariamente às 13h UTC (10h em Brasília). A Vercel envia
+`Authorization: Bearer <CRON_SECRET>` automaticamente; veja a
+[documentação do agendador](https://vercel.com/docs/cron-jobs/manage-cron-jobs).
+Em outra hospedagem, programe a mesma chamada diária com esse cabeçalho.
+No ambiente local, o `next dev` não executa o agendamento sozinho.
+
+Cada e-mail reúne as designações da pessoa para uma data. A rotina registra
+sucesso/falha por destinatário e por antecedência, evita repetir envios confirmados
+e tenta novamente falhas nas próximas execuções até a data da designação.
+Limpeza pode ser incluída separadamente. Não há envio de relatório atrasado por
+e-mail nesta versão. A configuração mostra os totais de envios e falhas pendentes.
+As três tabelas `alertas_*` são criadas automaticamente no primeiro uso; não é
+necessário executar um SQL manual. Os testes simulam também o servidor de e-mail.
+
+## Executar os testes
 
 ```bash
 npm test

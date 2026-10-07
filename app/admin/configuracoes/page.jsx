@@ -1,6 +1,9 @@
 'use client';
 
 import { DashboardLayout } from '@/app/components/DashboardLayout';
+import { AlertSettingsCard } from '@/app/components/AlertSettingsCard';
+import { SettingsTabs, SettingsPanel } from '@/app/components/SettingsTabs';
+import { SettingsEventsList } from '@/app/components/SettingsEventsList';
 import { useState, useEffect } from 'react';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
@@ -523,26 +526,14 @@ export default function ConfiguracoesPage() {
 
     return (
         <DashboardLayout>
-            <div className="p-4 sm:p-6 space-y-6 max-w-5xl mx-auto">
-                {/* Header... (Same as before) */}
+            <div className="w-full min-w-0 p-3 sm:p-6 space-y-5 sm:space-y-6 max-w-5xl mx-auto">
+                {/* Page header */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Configurações Gerais</h1>
-                        <p className="text-gray-500">Gerencie os dias de reunião e eventos especiais do calendário.</p>
+                        <p className="text-sm sm:text-base text-gray-500">Organize o calendário, os grupos, os alertas e os backups da congregação.</p>
                     </div>
-                    <div className="flex items-center gap-2 bg-white p-2 rounded-lg border shadow-sm">
-                        <Label className="text-sm font-medium text-gray-700">Ano de Referência:</Label>
-                        <Select value={String(year)} onValueChange={(v) => setYear(parseInt(v))}>
-                            <SelectTrigger className="w-24 border-none shadow-none focus:ring-0 bg-transparent h-8 p-0 px-2 font-bold text-lg text-purple-700">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {[year - 1, year, year + 1, year + 2].map(y => (
-                                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+
                 </div>
 
                 {loading ? (
@@ -550,11 +541,27 @@ export default function ConfiguracoesPage() {
                         <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
+                    <SettingsTabs>
+                        <SettingsPanel value="reunioes" className="grid grid-cols-1 lg:grid-cols-2 items-start gap-5 sm:gap-6">
+                            <div className="lg:col-span-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <p className="text-sm text-gray-600">Calendário das reuniões e datas especiais do ano selecionado.</p>
+                                <div className="flex w-full sm:w-auto items-center justify-between sm:justify-start gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                                    <Label className="text-sm font-medium text-gray-700">Ano de Referência:</Label>
+                                    <Select value={String(year)} onValueChange={(v) => setYear(parseInt(v))}>
+                                        <SelectTrigger className="w-24 border-none shadow-none focus:ring-0 bg-transparent h-8 p-0 px-2 font-bold text-lg text-purple-700">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {[year - 1, year, year + 1, year + 2].map(y => (
+                                                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
                         {/* CARD 1: DIAS DE REUNIÃO */}
-                        <Card className="border-gray-200 shadow-sm flex flex-col">
-                            <CardHeader className="bg-gray-50/50 pb-4 border-b border-gray-100">
+                        <Card className="min-w-0 border-gray-200 bg-white shadow-sm flex flex-col">
+                            <CardHeader className="bg-gray-50/50 p-4 sm:p-6 pb-4 sm:pb-4 border-b border-gray-100">
                                 <CardTitle className="flex items-center gap-2 text-gray-900">
                                     <Calendar className="w-5 h-5 text-blue-600" />
                                     Dias de Reunião ({year})
@@ -563,7 +570,7 @@ export default function ConfiguracoesPage() {
                                     Defina em quais dias da semana ocorrem as reuniões regulares.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="pt-6 space-y-6 flex-1">
+                            <CardContent className="px-4 sm:px-6 pt-5 sm:pt-6 space-y-6 flex-1">
                                 <div className="space-y-4">
                                     <div className="space-y-2">
                                         <Label className="text-gray-700">Reunião de Meio de Semana (Vida e Ministério)</Label>
@@ -590,7 +597,7 @@ export default function ConfiguracoesPage() {
                                     </div>
                                 </div>
                                 <div className="space-y-3 pt-2">
-                                    <Button onClick={handleSaveWeekdays} disabled={saving || !canEditConfig} className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50">
+                                    <Button onClick={handleSaveWeekdays} disabled={saving || !canEditConfig} className="w-full min-h-11 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50">
                                         {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                                         Salvar Dias
                                     </Button>
@@ -606,11 +613,11 @@ export default function ConfiguracoesPage() {
                                         setGenOpen(open); 
                                     }}>
                                         <DialogTrigger asChild>
-                                            <Button variant="outline" disabled={!canEditConfig} className="w-full border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50">
+                                            <Button variant="outline" disabled={!canEditConfig} className="w-full h-auto min-h-11 whitespace-normal border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50">
                                                 <Sparkles className="w-4 h-4 mr-2" /> Criar Reuniões Automaticamente
                                             </Button>
                                         </DialogTrigger>
-                                        <DialogContent className="max-w-2xl bg-white max-h-[85vh] overflow-hidden flex flex-col text-gray-900">
+                                        <DialogContent className="w-[calc(100%_-_2rem)] max-w-2xl rounded-xl bg-white max-h-[85dvh] overflow-hidden flex flex-col text-gray-900">
                                             <DialogHeader>
                                                 <DialogTitle>Gerador Automático de Reuniões</DialogTitle>
                                                 <DialogDescription>
@@ -764,10 +771,68 @@ export default function ConfiguracoesPage() {
                                 </div>
                             </CardContent>
                         </Card>
+                        {/* CARD 3: EVENTOS ESPECIAIS */}
+                        <Card className="border-gray-200 bg-white shadow-sm min-w-0 h-fit">
+                            <CardHeader className="bg-gray-50/50 p-4 sm:p-6 pb-4 sm:pb-4 border-b border-gray-100">
+                                <CardTitle className="text-orange-900 flex items-center gap-2">
+                                    <Calendar className="w-5 h-5 text-orange-600" />
+                                    Eventos Especiais & Datas Importantes
+                                </CardTitle>
+                                <CardDescription className="text-gray-600">
+                                    Adicione Assembleias, Congressos, Visitas e outras datas que alteram a rotina.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="px-4 sm:px-6 pt-5 sm:pt-6 space-y-6">
 
+                                <div className="p-4 bg-orange-50 rounded-lg border border-orange-100 space-y-3">
+                                    <Label className="font-semibold text-orange-900">Adicionar Novo Evento</Label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <span className="text-xs font-medium text-gray-700">Nome do Evento</span>
+                                            <Input
+                                                placeholder="Ex: Assembleia de Circuito"
+                                                value={newEvent.name}
+                                                onChange={e => setNewEvent({ ...newEvent, name: e.target.value })}
+                                                className="bg-white text-gray-900 border-gray-300 placeholder:text-gray-400"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-xs font-medium text-gray-700">Tipo</span>
+                                            <Select value={newEvent.type} onValueChange={v => setNewEvent({ ...newEvent, type: v })}>
+                                                <SelectTrigger className="bg-white text-gray-900 border-gray-300">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {EVENT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-1 sm:col-span-2">
+                                            <span className="text-xs font-medium text-gray-700">Data</span>
+                                            <div className="flex flex-col sm:flex-row gap-2">
+                                                <Input
+                                                    type="date"
+                                                    value={newEvent.date}
+                                                    onChange={e => setNewEvent({ ...newEvent, date: e.target.value })}
+                                                    className="min-w-0 w-full bg-white text-gray-900 border-gray-300 flex-1"
+                                                />
+                                                <Button onClick={handleAddEvent} disabled={!canEditConfig} className="min-h-11 w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white shrink-0">
+                                                    <Plus className="w-4 h-4" />
+                                                    Adicionar
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <SettingsEventsList events={events} year={year} canEdit={canEditConfig} onDelete={handleDeleteEvent} />
+                            </CardContent>
+                        </Card>
+                        </SettingsPanel>
+                        <SettingsPanel value="grupos">
                         {/* CARD 2: GRUPOS DE SERVIÇO */}
-                        <Card className="border-gray-200 shadow-sm flex flex-col">
-                            <CardHeader className="bg-gray-50/50 pb-4 border-b border-gray-100">
+                        <Card className="min-w-0 border-gray-200 bg-white shadow-sm flex flex-col">
+                            <CardHeader className="bg-gray-50/50 p-4 sm:p-6 pb-4 sm:pb-4 border-b border-gray-100">
                                 <CardTitle className="flex items-center gap-2 text-gray-900">
                                     <Users className="w-5 h-5 text-green-600" />
                                     Grupos de Serviço de Campo
@@ -776,7 +841,7 @@ export default function ConfiguracoesPage() {
                                     Crie, renomeie ou exclua grupos de publicadores.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="pt-6 space-y-4 flex-1">
+                            <CardContent className="px-4 sm:px-6 pt-5 sm:pt-6 space-y-4 flex-1">
                                 {groupsLoading ? (
                                     <div className="flex justify-center py-8">
                                         <Loader2 className="w-6 h-6 animate-spin text-green-600" />
@@ -792,13 +857,13 @@ export default function ConfiguracoesPage() {
                                                         setSelectedGroup(null);
                                                     }}
                                                     disabled={!canEditConfig}
-                                                    className="w-full bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                                                    className="w-full min-h-11 bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
                                                 >
                                                     <Plus className="w-4 h-4 mr-2" />
                                                     Criar Novo Grupo
                                                 </Button>
                                             </DialogTrigger>
-                                            <DialogContent className="bg-white text-gray-900">
+                                            <DialogContent className="w-[calc(100%_-_2rem)] max-h-[85dvh] overflow-y-auto rounded-xl bg-white text-gray-900">
                                                 <DialogHeader>
                                                     <DialogTitle>
                                                         {groupModalMode === 'create' ? 'Criar Novo Grupo' : 'Renomear Grupo'}
@@ -846,20 +911,20 @@ export default function ConfiguracoesPage() {
                                                 grupos.map((grupo) => (
                                                     <div
                                                         key={grupo.id}
-                                                        className={`flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg hover:shadow-sm transition-shadow group ${!grupo.ativo ? 'opacity-60' : ''}`}
+                                                        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-white border border-gray-100 rounded-lg hover:shadow-sm transition-shadow group ${!grupo.ativo ? 'opacity-60' : ''}`}
                                                     >
-                                                        <div className="flex items-center gap-3 flex-1">
+                                                        <div className="flex min-w-0 items-center gap-3 flex-1">
                                                             <Users className={`w-4 h-4 shrink-0 ${grupo.ativo ? 'text-green-600' : 'text-gray-400'}`} />
-                                                            <span className={`text-sm font-medium ${grupo.ativo ? 'text-gray-900' : 'text-gray-500'}`}>
+                                                            <span className={`min-w-0 break-words text-sm font-medium ${grupo.ativo ? 'text-gray-900' : 'text-gray-500'}`}>
                                                                 {grupo.nome_grupo}
                                                                 {!grupo.ativo && <span className="ml-2 text-xs text-gray-400 italic">(Inativo)</span>}
                                                             </span>
                                                         </div>
-                                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <div className="flex shrink-0 self-end sm:self-auto gap-1">
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className={`h-8 w-8 ${grupo.ativo ? 'text-gray-400 hover:text-yellow-600' : 'text-gray-400 hover:text-green-600'}`}
+                                                                className={`h-11 w-11 sm:h-9 sm:w-9 ${grupo.ativo ? 'text-gray-400 hover:text-yellow-600' : 'text-gray-400 hover:text-green-600'}`}
                                                                 onClick={() => handleToggleGroupStatus(grupo)}
                                                                 disabled={!canEditConfig || groupActionLoading}
                                                                 title={grupo.ativo ? 'Desativar grupo' : 'Ativar grupo'}
@@ -869,7 +934,8 @@ export default function ConfiguracoesPage() {
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className="h-8 w-8 text-gray-400 hover:text-blue-600"
+                                                                className="h-11 w-11 sm:h-9 sm:w-9 text-gray-500 hover:text-blue-600"
+                                                                aria-label={`Renomear ${grupo.nome_grupo}`}
                                                                 onClick={() => {
                                                                     setGroupModalMode('rename');
                                                                     setSelectedGroup(grupo);
@@ -898,94 +964,14 @@ export default function ConfiguracoesPage() {
                                 )}
                             </CardContent>
                         </Card>
-
-                        {/* CARD 3: EVENTOS ESPECIAIS */}
-                        <Card className="border-gray-200 shadow-sm lg:row-span-2 h-fit">
-                            <CardHeader className="bg-gray-50/50 pb-4 border-b border-gray-100">
-                                <CardTitle className="text-orange-900 flex items-center gap-2">
-                                    <Calendar className="w-5 h-5 text-orange-600" />
-                                    Eventos Especiais & Datas Importantes
-                                </CardTitle>
-                                <CardDescription className="text-gray-600">
-                                    Adicione Assembleias, Congressos, Visitas e outras datas que alteram a rotina.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="pt-6 space-y-6">
-
-                                <div className="p-4 bg-orange-50 rounded-lg border border-orange-100 space-y-3">
-                                    <Label className="font-semibold text-orange-900">Adicionar Novo Evento</Label>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div className="space-y-1">
-                                            <span className="text-xs font-medium text-gray-700">Nome do Evento</span>
-                                            <Input
-                                                placeholder="Ex: Assembleia de Circuito"
-                                                value={newEvent.name}
-                                                onChange={e => setNewEvent({ ...newEvent, name: e.target.value })}
-                                                className="bg-white text-gray-900 border-gray-300 placeholder:text-gray-400"
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-xs font-medium text-gray-700">Tipo</span>
-                                            <Select value={newEvent.type} onValueChange={v => setNewEvent({ ...newEvent, type: v })}>
-                                                <SelectTrigger className="bg-white text-gray-900 border-gray-300">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {EVENT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-1 sm:col-span-2">
-                                            <span className="text-xs font-medium text-gray-700">Data</span>
-                                            <div className="flex gap-2">
-                                                <Input
-                                                    type="date"
-                                                    value={newEvent.date}
-                                                    onChange={e => setNewEvent({ ...newEvent, date: e.target.value })}
-                                                    className="bg-white text-gray-900 border-gray-300 flex-1"
-                                                />
-                                                <Button onClick={handleAddEvent} className="bg-orange-600 hover:bg-orange-700 text-white shrink-0">
-                                                    <Plus className="w-4 h-4" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <h4 className="font-medium text-sm text-gray-500 uppercase tracking-wider">Eventos em {year}</h4>
-                                    {events.length === 0 ? (
-                                        <p className="text-sm text-gray-400 italic text-center py-4">Nenhum evento cadastrado para este ano.</p>
-                                    ) : (
-                                        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                                            {events.map((event) => (
-                                                <div key={event.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg hover:shadow-sm transition-shadow">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex flex-col items-center bg-gray-50 px-2 py-1 rounded border border-gray-200 min-w-[3.5rem]">
-                                                            <span className="text-[10px] font-bold text-gray-500 uppercase">{new Date(event.data).toLocaleString('pt-BR', { month: 'short', timeZone: 'UTC' }).replace('.', '')}</span>
-                                                            <span className="text-lg font-bold text-gray-900 leading-none">{new Date(event.data).getUTCDate()}</span>
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-semibold text-gray-900 text-sm">{event.nome}</p>
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded textxs font-medium bg-purple-50 text-purple-700 text-[10px] border border-purple-100">
-                                                                {event.tipo}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-red-500" onClick={() => handleDeleteEvent(event.id)}>
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </Button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-
+                        </SettingsPanel>
+                        <SettingsPanel value="alertas">
+                            <AlertSettingsCard />
+                        </SettingsPanel>
+                        <SettingsPanel value="backup">
                         {/* CARD 4: BACKUP COMPLETO DO BANCO DE DADOS */}
-                        <Card className="border-purple-200 bg-gradient-to-br from-white to-purple-50/40 shadow-sm col-span-1 lg:col-span-2">
-                            <CardHeader className="bg-purple-50/60 pb-4 border-b border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <Card className="border-purple-200 bg-gradient-to-br from-white to-purple-50/40 shadow-sm min-w-0">
+                            <CardHeader className="bg-purple-50/60 p-4 sm:p-6 pb-4 sm:pb-4 border-b border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                 <div>
                                     <CardTitle className="text-purple-950 flex items-center gap-2">
                                         <Database className="w-5 h-5 text-purple-600" />
@@ -1000,7 +986,7 @@ export default function ConfiguracoesPage() {
                                     Snapshot Seguro
                                 </div>
                             </CardHeader>
-                            <CardContent className="pt-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <CardContent className="px-4 sm:px-6 pt-5 sm:pt-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                                 <div className="space-y-2 max-w-2xl text-sm text-gray-600">
                                     <p>
                                         O arquivo gerado reúne todas as tabelas: <strong>publicadores</strong>, <strong>grupos</strong>, <strong>assistência presencial e Zoom</strong>, <strong>discursos públicos</strong>, <strong>designações de Vida e Ministério</strong>, <strong>relatórios mensais</strong> e <strong>configurações</strong>.
@@ -1010,11 +996,11 @@ export default function ConfiguracoesPage() {
                                     </p>
                                 </div>
 
-                                <div className="shrink-0 w-full md:w-auto">
+                                <div className="shrink-0 w-full lg:w-auto">
                                     <Button
                                         onClick={handleExportBackup}
                                         disabled={isExportingBackup || !canEditConfig}
-                                        className="w-full md:w-auto bg-purple-600 hover:bg-purple-700 text-white font-bold py-6 px-6 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                                        className="w-full lg:w-auto bg-purple-600 hover:bg-purple-700 text-white h-auto min-h-11 whitespace-normal text-center font-semibold py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                                     >
                                         {isExportingBackup ? (
                                             <>
@@ -1031,8 +1017,8 @@ export default function ConfiguracoesPage() {
                                 </div>
                             </CardContent>
                         </Card>
-
-                    </div>
+                        </SettingsPanel>
+                    </SettingsTabs>
                 )}
                 <StatusToast
                     message={toast.message}
@@ -1042,7 +1028,7 @@ export default function ConfiguracoesPage() {
 
                 {/* Result Modal */}
                 <Dialog open={resultOpen} onOpenChange={setResultOpen}>
-                    <DialogContent className="bg-white">
+                    <DialogContent className="w-[calc(100%_-_2rem)] max-h-[85dvh] overflow-y-auto rounded-xl bg-white">
                         <DialogHeader>
                             <DialogTitle className={resultData.success ? "text-green-600" : "text-red-600"}>
                                 {resultData.success ? 'Sucesso!' : 'Atenção'}
