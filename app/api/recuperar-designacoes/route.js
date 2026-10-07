@@ -21,11 +21,20 @@ export async function GET(req) {
     // Busca as designações e o nome do publicador
     // Ordena por ID para tentar manter a ordem de quem é estudante/ajudante
     const res = await client.query(`
-      SELECT d.nome_parte, p.nome_completo
-      FROM designacoes_reuniao d
-      JOIN publicadores p ON d.publicador_id = p.id
-      WHERE d.data_reuniao = $1
-      ORDER BY d.id ASC
+      SELECT nome_parte, nome_completo FROM (
+        SELECT d.nome_parte, p.nome_completo, d.id::bigint AS ordem
+        FROM designacoes_reuniao d
+        JOIN publicadores p ON d.publicador_id = p.id
+        WHERE d.data_reuniao = $1
+        UNION ALL
+        SELECT externo->>'nome_parte', externo->>'nome_completo',
+            2147483648::bigint + ordem
+        FROM reunioes_dados r
+        CROSS JOIN LATERAL jsonb_array_elements(
+            COALESCE(r.dados_json->'participantes_externos', '[]'::jsonb)
+        ) WITH ORDINALITY AS participantes(externo, ordem)
+        WHERE r.data_reuniao = $1
+      ) designacoes ORDER BY ordem
     `, [date]);
     
     return NextResponse.json(res.rows, { status: 200 });

@@ -34,3 +34,26 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Privilégios mecânicos
+
+Escolha uma semana na aba Privilégios Mecânicos para abrir o modal das reuniões.
+O botão **Inserir automático** preenche os campos vazios, priorizando publicadores
+sem designação há mais tempo e evitando repetir pessoas na semana. As sugestões
+podem ser ajustadas antes de clicar em **Salvar semana**. O ancião de apoio é
+escolhido entre os anciãos; os demais privilégios usam publicadores do sexo masculino
+batizados. O leitor de A Sentinela aparece apenas na reunião de fim de semana.
+
+O histórico e o resumo de próximas designações incluem Vida e Ministério,
+privilégios mecânicos, discursos públicos e limpeza semanal. A limpeza por grupo
+aparece para os integrantes do grupo; responsáveis informados por nome e oradores
+são associados quando o nome corresponde ao cadastro.
+
+## Testes
+
+```bash
+npm test
+```
+
+Os testes usam somente pessoas, IDs e designações fictícios. As consultas e gravações
+do aplicativo são simuladas nos testes; o comando não acessa nem altera o banco real.

@@ -25,7 +25,7 @@ const SearchableSelect = ({ value, options, onChange, placeholder }) => {
 
    // Find label for current value
    const selectedOption = options?.find(o => o.value === value);
-   const displayValue = selectedOption ? selectedOption.label : '';
+   const displayValue = selectedOption ? selectedOption.label : (value || '');
 
    // Normalize for accent-insensitive search
    const normalize = (str) => str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() : '';

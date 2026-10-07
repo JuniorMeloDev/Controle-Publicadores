@@ -1,5 +1,6 @@
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { getPublisherAssignments } from '@/app/lib/publisher-assignments';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,23 +32,12 @@ export async function GET(request, context) {
       [id]
     );
 
-    // 2. Buscar o histórico de designações de reunião
-    const designacoesRes = await client.query(
-      `SELECT 
-         id, 
-         data_reuniao as data_evento, 
-         descricao_semana, 
-         nome_parte,
-         'designacao' as tipo_evento
-       FROM designacoes_reuniao
-       WHERE publicador_id = $1`,
-      [id]
-    );
+    const designacoes = await getPublisherAssignments(client, { publisherId: id });
 
     // 3. Combinar os dois resultados
     const historicoCombinado = [
       ...historicoPessoalRes.rows,
-      ...designacoesRes.rows
+      ...designacoes.map(a => ({ ...a, data_evento: a.data_reuniao, tipo_evento: 'designacao' }))
     ];
 
     // 4. Ordenar os resultados combinados pela data_evento (mais novo primeiro)

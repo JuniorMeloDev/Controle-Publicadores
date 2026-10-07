@@ -1,263 +1,163 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { Loader2, Calendar, Settings, Save, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, Calendar, ChevronRight, Loader2, Settings } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
-import { PublisherCombobox } from '@/app/components/reunioes/PublisherCombobox';
 import { PrivilegeTypesModal } from '@/app/components/designacoes/PrivilegeTypesModal';
+import { MechanicalWeekModal } from '@/app/components/designacoes/MechanicalWeekModal';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
+import { addDateDays, getWeekStart, isMechanicalTypeApplicable } from '@/app/lib/mechanical-assignments';
 
-// Helper to format date
-const formatDate = (dateStr) => {
-    if(!dateStr) return '';
-    try {
-        const [y, m, day] = dateStr.split('T')[0].split('-');
-        return `${day}/${m}/${y}`;
-    } catch(e) { return dateStr; }
-};
+const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+export const formatMechanicalDate = value => String(value).slice(0, 10).split('-').reverse().join('/');
 
 export function MechanicalPrivilegesTab() {
-  const { permissions } = usePermissions();
-  const canEdit = isAllowed(permissions, 'privilegios_mecanicos_editar', 'actions');
-  const [meetings, setMeetings] = useState([]);
-  const [publishers, setPublishers] = useState([]);
-  const [privilegeTypes, setPrivilegeTypes] = useState([]);
-  const [assignments, setAssignments] = useState({}); // { [meetingId]: { [typeId]: publisherId } }
-  
-  const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState(null);
-  
-  // Filter States
-  const [month, setMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
-  const [year, setYear] = useState(String(new Date().getFullYear()));
+    const { permissions } = usePermissions();
+    const canEdit = isAllowed(permissions, 'privilegios_mecanicos_editar', 'actions');
+    const [meetings, setMeetings] = useState([]);
+    const [publishers, setPublishers] = useState([]);
+    const [types, setTypes] = useState([]);
+    const [assignments, setAssignments] = useState({});
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [month, setMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
+    const [year, setYear] = useState(String(new Date().getFullYear()));
+    const [typesOpen, setTypesOpen] = useState(false);
+    const [selectedWeek, setSelectedWeek] = useState(null);
+    const [reload, setReload] = useState(0);
 
-  // Types Modal
-  const [isTypesModalOpen, setIsTypesModalOpen] = useState(false);
-
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
-
-  async function fetchInitialData() {
-    setLoading(true);
-    try {
-        const [mRes, pRes, tRes] = await Promise.all([
-            fetch('/api/admin/reunioes?limit=100'),
-            fetch('/api/admin/get-publicadores'),
-            fetch('/api/admin/privilegios/tipos')
-        ]);
-        
-        if (mRes.ok) {
-            const data = await mRes.json();
-            const normalized = data.map(m => ({
-                ...m,
-                dataISO: m.data.split('T')[0]
-            })).sort((a, b) => new Date(a.dataISO) - new Date(b.dataISO));
-            setMeetings(normalized);
+    useEffect(() => {
+        const controller = new AbortController();
+        async function load() {
+            setLoading(true);
+            setError('');
+            try {
+                const responses = await Promise.all([
+                    fetch('/api/admin/reunioes?all=1', { signal: controller.signal }),
+                    fetch('/api/admin/get-publicadores', { signal: controller.signal }),
+                    fetch('/api/admin/privilegios/tipos', { signal: controller.signal })
+                ]);
+                if (responses.some(r => !r.ok)) throw new Error('Não foi possível carregar as reuniões e os publicadores.');
+                const [meetingData, publisherData, typeData] = await Promise.all(responses.map(r => r.json()));
+                const realMeetings = meetingData.filter(m => m.id && !m.virtual).map(m => ({
+                    ...m, data: m.data.slice(0, 10)
+                })).sort((a, b) => a.data.localeCompare(b.data));
+                const ids = realMeetings.map(m => m.id);
+                const assignmentMap = {};
+                if (ids.length) {
+                    const response = await fetch('/api/admin/privilegios/atribuicoes?reuniao_ids=' + ids.join(','), { signal: controller.signal });
+                    if (!response.ok) throw new Error('Não foi possível carregar as designações.');
+                    for (const row of await response.json()) {
+                        assignmentMap[row.reuniao_id] ||= {};
+                        assignmentMap[row.reuniao_id][row.privilegio_tipo_id] = row.publicador_id;
+                    }
+                }
+                if (!controller.signal.aborted) {
+                    setMeetings(realMeetings);
+                    setPublishers(publisherData);
+                    setTypes(typeData.filter(t => t.ativo));
+                    setAssignments(assignmentMap);
+                }
+            } catch (err) {
+                if (!controller.signal.aborted) setError(err.message);
+            } finally {
+                if (!controller.signal.aborted) setLoading(false);
+            }
         }
-        if (pRes.ok) setPublishers(await pRes.json());
-        if (tRes.ok) setPrivilegeTypes(await tRes.json());
-        
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
-  }
+        load();
+        return () => controller.abort();
+    }, [reload]);
 
-  // Reload types when changed in modal
-  const refreshTypes = async () => {
-      const res = await fetch('/api/admin/privilegios/tipos');
-      if(res.ok) setPrivilegeTypes(await res.json());
-  };
+    const weeks = useMemo(() => {
+        const groups = new Map();
+        for (const meeting of meetings) {
+            const start = getWeekStart(meeting.data);
+            if (!groups.has(start)) groups.set(start, { start, end: addDateDays(start, 6), meetings: [] });
+            groups.get(start).meetings.push(meeting);
+        }
+        return [...groups.values()].filter(week => week.meetings.some(meeting =>
+            (!year || meeting.data.slice(0, 4) === year) && (!month || meeting.data.slice(5, 7) === month)));
+    }, [meetings, month, year]);
+    const years = [...new Set([String(new Date().getFullYear()), ...meetings.map(m => m.data.slice(0, 4))])].sort().reverse();
 
-  // Filter Meetings
-  const filteredMeetings = useMemo(() => {
-    let list = meetings;
-    if (month) list = list.filter(m => m.dataISO.split('-')[1] === month);
-    if (year) list = list.filter(m => m.dataISO.split('-')[0] === year);
-    return list;
-  }, [meetings, month, year]);
-
-  // Fetch assignments for filtered meetings (Effect)
-  useEffect(() => {
-    if (filteredMeetings.length > 0 && privilegeTypes.length > 0) {
-        // Optimization: Fetch assignments for these meetings in batch? 
-        // Or one by one. Backend supports get by single ID.
-        // Let's implement a batch or just loop for now. 
-        // Given typically < 10 meetings per month, Loop is fine.
-        filteredMeetings.forEach(m => fetchAssignmentsHelper(m.id));
+    function handleSaved(rows) {
+        setAssignments(previous => {
+            const next = { ...previous };
+            for (const row of rows) {
+                next[row.reuniao_id] = { ...next[row.reuniao_id] };
+                for (const assignment of row.assignments) next[row.reuniao_id][assignment.tipo_id] = assignment.publicador_id;
+            }
+            return next;
+        });
+        setSelectedWeek(null);
+        setSuccess('Designações da semana salvas com sucesso.');
+        window.dispatchEvent(new Event('designacoes-atualizadas'));
     }
-  }, [filteredMeetings, privilegeTypes]); // Dependencies slightly loose to catch initial load
 
-  async function fetchAssignmentsHelper(meetingId) {
-      if (assignments[meetingId]) return; // Already loaded? Maybe need refresh if types changed?
-      try {
-          const res = await fetch(`/api/admin/privilegios/atribuicoes?reuniao_id=${meetingId}`);
-          if (res.ok) {
-              const data = await res.json();
-              const map = {};
-              data.forEach(a => {
-                  map[a.privilegio_tipo_id] = a.publicador_id;
-              });
-              setAssignments(prev => ({ ...prev, [meetingId]: map }));
-          }
-      } catch (e) { console.error(e); }
-  }
-
-  // Update Local State
-  const handleAssignmentChange = (meetingId, typeId, pubId) => {
-      setAssignments(prev => ({
-          ...prev,
-          [meetingId]: {
-              ...(prev[meetingId] || {}),
-              [typeId]: pubId
-          }
-      }));
-  };
-
-  const handleSave = async (meeting) => {
-      if (!canEdit) return;
-      setSavingId(meeting.id);
-      try {
-          // Construct Payload
-          const meetingAssignments = assignments[meeting.id] || {};
-          const payload = Object.entries(meetingAssignments).map(([typeId, pubId]) => ({
-              tipo_id: parseInt(typeId),
-              publicador_id: pubId
-          }));
-
-          const res = await fetch('/api/admin/privilegios/atribuicoes', {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({
-                  reuniao_id: meeting.id,
-                  assignments: payload
-              })
-          });
-
-          if (res.ok) {
-              // Maybe show toast
-          } else {
-              alert('Erro ao salvar');
-          }
-      } catch(e) { console.error(e); }
-      finally { setSavingId(null); }
-  };
-
-  return (
-    <div className="p-6 max-w-7xl mx-auto w-full flex flex-col gap-8">
-       {/* HEADER */}
-       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900">Privilégios Mecânicos</h1>
-                <p className="text-gray-500 text-sm mt-1">Gerencie ou crie privilégios mecânicos das reuniões.</p>
+    return (
+        <div className="p-4 sm:p-6 max-w-5xl mx-auto w-full space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sm:p-6 flex flex-col sm:flex-row justify-between gap-4">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Privilégios Mecânicos</h2>
+                    <p className="text-sm text-gray-500 mt-1">Escolha uma semana para organizar as designações das reuniões.</p>
+                </div>
+                <Button variant="outline" disabled={!canEdit} onClick={() => setTypesOpen(true)} className="gap-2">
+                    <Settings className="w-4 h-4" /> Gerenciar Tipos de Privilégios
+                </Button>
             </div>
-            
-            <Button 
-                variant="outline"
-                onClick={() => setIsTypesModalOpen(true)}
-                disabled={!canEdit}
-                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            >
-                <Settings className="w-4 h-4" />
-                Gerenciar Tipos de Privilégios
-            </Button>
-       </div>
-
-       {!canEdit && (
-          <div className="text-xs text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-md">
-            Você não tem permissão para editar privilégios mecânicos.
-          </div>
-       )}
-
-       <PrivilegeTypesModal 
-            open={isTypesModalOpen} 
-            onOpenChange={setIsTypesModalOpen} 
-            onUpdate={refreshTypes} 
-       />
-
-       {/* CONTENT */}
-       <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden min-h-[500px]">
-            {/* TOOLBAR */}
-            <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-                 <h2 className="font-bold text-gray-800 flex items-center gap-2">
-                    <Calendar size={20} className="text-gray-500" />
-                    Reuniões
-                 </h2>
-
-                 <div className="flex items-center gap-3">
-                    <select 
-                        value={month} 
-                        onChange={(e) => setMonth(e.target.value)} 
-                        className="text-sm border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-purple-500 outline-none text-gray-700"
-                    >
-                        <option value="">Todos os Meses</option>
-                        {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((m, i) => <option key={i} value={String(i+1).padStart(2, '0')}>{m}</option>)}
-                    </select>
-                    
-                    <select 
-                        value={year} 
-                        onChange={(e) => setYear(e.target.value)} 
-                        className="text-sm border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-purple-500 outline-none text-gray-700"
-                    >
-                        <option value="">Todos os Anos</option>
-                        {Array.from(new Set(meetings.map(m => m.dataISO.split('-')[0]))).sort().reverse().map(y => (
-                             <option key={y} value={y}>{y}</option>
-                        ))}
-                    </select>
-                 </div>
-            </div>
-            
-            <div className="flex-1 p-6 md:p-8 bg-gray-50/30">
-                {loading ? (
-                    <div className="flex justify-center p-12"><Loader2 className="animate-spin text-purple-600" /></div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {filteredMeetings.length === 0 && (
-                             <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
-                                <AlertCircle size={48} className="mb-4 opacity-20" />
-                                <p>Nenhuma reunião encontrada com os filtros atuais.</p>
-                             </div>
-                        )}
-                        {filteredMeetings.map(meeting => (
-                            <Card key={meeting.id} className="border-l-4 border-l-purple-500 shadow-sm transition-shadow hover:shadow-md bg-white">
-                                <CardHeader className="bg-gray-50/50 pb-3 border-b border-gray-100 flex flex-row items-center justify-between space-y-0 pr-4">
-                                     <div>
-                                        <CardTitle className="text-gray-900 font-bold text-lg">{formatDate(meeting.dataISO)}</CardTitle>
-                                        <CardDescription className="text-purple-600 font-medium text-xs mt-1 uppercase tracking-wide">{meeting.tipo}</CardDescription>
-                                     </div>
-                                     <Button 
-                                        size="sm"
-                                        onClick={() => handleSave(meeting)}
-                                        disabled={savingId === meeting.id || !canEdit}
-                                        className={`h-8 transition-colors ${
-                                            savingId === meeting.id 
-                                            ? 'bg-purple-100 text-purple-700' 
-                                            : 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
-                                        }`}
-                                     >
-                                        {savingId === meeting.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
-                                        {savingId === meeting.id ? 'Salvando' : 'Salvar'}
-                                     </Button>
-                                </CardHeader>
-                                <CardContent className={`pt-4 space-y-3 ${!canEdit ? 'pointer-events-none opacity-60' : ''}`}>
-                                    {privilegeTypes.length === 0 && <p className="text-sm text-gray-400 italic">Nenhum privilégio cadastrado.</p>}
-                                    {privilegeTypes.map(type => (
-                                        <PublisherCombobox 
-                                            key={type.id}
-                                            label={type.nome}
-                                            publishers={publishers}
-                                            value={(assignments[meeting.id] || {})[type.id]}
-                                            onChange={(val) => handleAssignmentChange(meeting.id, type.id, val)}
-                                        />
-                                    ))}
-                                </CardContent>
-                            </Card>
-                        ))}
+            {!canEdit && <p className="text-sm text-gray-600 bg-gray-50 border rounded-lg p-3">Você pode consultar as designações, mas não tem permissão para editá-las.</p>}
+            {success && <p role="status" className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">{success}</p>}
+            {error && <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center justify-between gap-3">
+                <span>{error}</span><Button variant="outline" size="sm" onClick={() => setReload(value => value + 1)}>Tentar novamente</Button>
+            </div>}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-between gap-4">
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2"><Calendar size={20} className="text-purple-600" /> Semanas de reuniões</h3>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <select aria-label="Mês" value={month} onChange={e => setMonth(e.target.value)} className="text-sm border rounded-md px-3 py-2 bg-white text-gray-700">
+                            <option value="">Todos os meses</option>
+                            {months.map((name, index) => <option key={name} value={String(index + 1).padStart(2, '0')}>{name}</option>)}
+                        </select>
+                        <select aria-label="Ano" value={year} onChange={e => setYear(e.target.value)} className="text-sm border rounded-md px-3 py-2 bg-white text-gray-700">
+                            <option value="">Todos os anos</option>
+                            {years.map(value => <option key={value} value={value}>{value}</option>)}
+                        </select>
                     </div>
-                )}
+                </div>
+                {loading ? <div className="flex justify-center p-12"><Loader2 className="animate-spin text-purple-600" aria-label="Carregando semanas" /></div>
+                    : !weeks.length ? <div className="flex flex-col items-center py-16 text-gray-500 gap-3"><AlertCircle className="text-gray-300" size={36} /><p>Nenhuma semana encontrada com os filtros atuais.</p></div>
+                    : <div className="divide-y divide-gray-100">
+                        {weeks.map(week => {
+                            const activeMeetings = week.meetings.filter(m => !m.cancelado);
+                            const total = activeMeetings.reduce((count, m) => count + types.filter(t => isMechanicalTypeApplicable(t, m)).length, 0);
+                            const filled = activeMeetings.reduce((count, m) => count + types.filter(t => isMechanicalTypeApplicable(t, m) && assignments[m.id]?.[t.id]).length, 0);
+                            return (
+                                <button key={week.start} type="button" disabled={!activeMeetings.length}
+                                    onClick={() => { setSuccess(''); setSelectedWeek(week); }}
+                                    className="w-full text-left p-4 sm:p-5 hover:bg-purple-50 focus-visible:outline-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between gap-4 group">
+                                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                        <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center shrink-0"><Calendar size={20} /></div>
+                                        <div className="min-w-0">
+                                            <p className="font-semibold text-gray-900 group-hover:text-purple-700">Semana de {formatMechanicalDate(week.start)} a {formatMechanicalDate(week.end)}</p>
+                                            <p className="text-xs text-gray-500 mt-1">{activeMeetings.map(m => formatMechanicalDate(m.data) + ' · ' + m.tipo).join(' / ') || 'Reuniões canceladas'}</p>
+                                            {week.meetings.some(m => m.cancelado) && <p className="text-xs text-amber-700 mt-1">Há reunião cancelada nesta semana.</p>}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                                        <span className={`text-xs px-2 py-1 rounded-full ${filled === total && total > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{filled}/{total}</span>
+                                        <ChevronRight size={20} className="text-gray-400 group-hover:text-purple-600" />
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>}
             </div>
-       </div>
-    </div>
-  );
+            <PrivilegeTypesModal open={typesOpen} onOpenChange={setTypesOpen} onUpdate={() => setReload(value => value + 1)} />
+            {selectedWeek && <MechanicalWeekModal key={selectedWeek.start} week={selectedWeek}
+                types={types} publishers={publishers} savedAssignments={assignments} canEdit={canEdit}
+                onClose={() => setSelectedWeek(null)} onSaved={handleSaved} />}
+        </div>
+    );
 }

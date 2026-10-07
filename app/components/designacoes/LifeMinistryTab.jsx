@@ -80,8 +80,11 @@ function getGroupLabel(dataSQL) {
 const mapSavedToAssignments = (savedRows, schedule) => {
   const newAssignments = {};
   if (!savedRows || savedRows.length === 0) return newAssignments;
+  const externalParticipants = schedule.participantes_externos || [];
+  const externalByPart = new Map(externalParticipants.map(p => [p.parte_id, p.nome_completo]));
   const rowsByPart = {};
   savedRows.forEach(row => {
+    if (externalParticipants.some(p => p.nome_parte === row.nome_parte && p.nome_completo === row.nome_completo)) return;
     if (!rowsByPart[row.nome_parte]) rowsByPart[row.nome_parte] = [];
     rowsByPart[row.nome_parte].push(row.nome_completo);
   });
@@ -97,15 +100,15 @@ const mapSavedToAssignments = (savedRows, schedule) => {
   newAssignments['comentarios_finais'] = popAssignment(schedule.finalComments || 'Comentários Finais');
   newAssignments['cantico_meio'] = popAssignment(schedule.middleSong || 'Cântico do Meio');
   schedule.treasures?.forEach((part, idx) => {
-    newAssignments[`tesouro_${idx}`] = popAssignment(truncatePartTitle(part.title));
+    newAssignments[`tesouro_${idx}`] = externalByPart.get(`tesouro_${idx}`) || popAssignment(truncatePartTitle(part.title));
   });
   schedule.ministry?.forEach((part, idx) => {
     const isDiscurso = part.title.toLowerCase().includes('discurso');
     if (isDiscurso) {
-      newAssignments[`ministerio_${idx}`] = popAssignment(truncatePartTitle(part.title));
+      newAssignments[`ministerio_${idx}`] = externalByPart.get(`ministerio_${idx}`) || popAssignment(truncatePartTitle(part.title));
     } else {
-      newAssignments[`ministerio_${idx}_1`] = popAssignment(truncatePartTitle(part.title));
-      newAssignments[`ministerio_${idx}_2`] = popAssignment(truncatePartTitle(part.title));
+      newAssignments[`ministerio_${idx}_1`] = externalByPart.get(`ministerio_${idx}_1`) || popAssignment(truncatePartTitle(part.title));
+      newAssignments[`ministerio_${idx}_2`] = externalByPart.get(`ministerio_${idx}_2`) || popAssignment(truncatePartTitle(part.title));
     }
   });
   schedule.living?.forEach((part, idx) => {

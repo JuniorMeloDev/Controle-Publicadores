@@ -209,7 +209,7 @@ const SelecaoPublicador = ({ partId, publicadores, assignments, handleAssignment
           onKeyDown={handleKeyDown}
           className="w-full flex justify-center items-center bg-transparent hover:bg-neutral-100 border-none py-1 px-1 text-black font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-blue-50 cursor-pointer text-base rounded"
         >
-          <span className="truncate">{selectedPublicador ? selectedPublicador.nome_curto : "Selecione..."}</span>
+          <span className="truncate">{selectedPublicador ? selectedPublicador.nome_curto : currentValue || "Selecione..."}</span>
           <ChevronsUpDown className="ml-1 h-3 w-3 opacity-50" />
         </button>
         {isOpen && (

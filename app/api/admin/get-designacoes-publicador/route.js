@@ -1,5 +1,6 @@
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { getPublisherAssignments } from '@/app/lib/publisher-assignments';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,15 +18,7 @@ export async function GET(req) {
 
   const client = await pool.connect();
   try {
-    const res = await client.query(`
-      SELECT d.data_reuniao, d.nome_parte
-      FROM designacoes_reuniao d
-      WHERE d.publicador_id = $1 
-      AND d.data_reuniao >= CURRENT_DATE
-      AND d.nome_parte NOT ILIKE 'Comentários%'
-      AND d.nome_parte NOT ILIKE 'Cântico%'
-      ORDER BY d.data_reuniao ASC
-    `, [id]);
+    const assignments = await getPublisherAssignments(client, { publisherId: id, futureOnly: true });
     
     // Also fetch publisher name for the modal title
     const pubRes = await client.query('SELECT nome_completo, nome_chamado FROM publicadores WHERE id = $1', [id]);
@@ -47,7 +40,7 @@ export async function GET(req) {
 
     return NextResponse.json({
         publisher: publisherName,
-        assignments: res.rows
+        assignments: assignments.filter(a => a.origem !== 'vida_ministerio' || !/^(Comentários|Cântico)/i.test(a.nome_parte))
     }, { status: 200 });
   } catch (err) {
     console.error('Erro ao buscar designações do publicador:', err);

@@ -94,21 +94,32 @@ export async function POST(request) {
 
     await client.query('BEGIN');
 
+    const partTitles = getPartTitles(scheduleData);
+    const pubRes = await client.query('SELECT id, nome_completo FROM publicadores');
+    const publicadorMap = new Map(pubRes.rows.map(p => [p.nome_completo, p.id]));
+    const participantesExternos = [];
+    for (const [partId, nome] of Object.entries(assignments)) {
+      if (!nome || publicadorMap.has(nome)) continue;
+      const titulo = partTitles[partId];
+      const parteEstudante = (/^tesouro_\d+$/.test(partId) && normalizeStr(titulo).includes('leitura da biblia')) ||
+        (/^ministerio_\d+(?:_[12])?$/.test(partId) && !normalizeStr(titulo).includes('consideracao'));
+      if (!titulo || !parteEstudante || typeof nome !== 'string' || !nome.trim()) {
+        await client.query('ROLLBACK');
+        return NextResponse.json({ message: 'Participantes sem cadastro são permitidos apenas em partes de estudantes.' }, { status: 400 });
+      }
+      participantesExternos.push({ parte_id: partId, nome_parte: titulo, nome_completo: nome.trim() });
+    }
+
     // 1. Salva o Programa
     await client.query(`
       INSERT INTO reunioes_dados (data_reuniao, dados_json, descricao_texto)
       VALUES ($1, $2, $3)
       ON CONFLICT (data_reuniao) 
       DO UPDATE SET dados_json = $2, descricao_texto = $3
-    `, [meetingDate, JSON.stringify(scheduleData), scheduleData.weekDate]);
+    `, [meetingDate, JSON.stringify({ ...scheduleData, participantes_externos: participantesExternos }), scheduleData.weekDate]);
 
     // 2. Salva as Designações
-    const partTitles = getPartTitles(scheduleData);
     const weekDateString = scheduleData.weekDate || 'Semana';
-
-    // Busca IDs
-    const pubRes = await client.query('SELECT id, nome_completo FROM publicadores');
-    const publicadorMap = new Map(pubRes.rows.map(p => [p.nome_completo, p.id]));
 
     // Limpa anteriores
     await client.query('DELETE FROM designacoes_reuniao WHERE data_reuniao = $1', [meetingDate]);

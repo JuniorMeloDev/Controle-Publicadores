@@ -62,7 +62,7 @@ function EventoDesignacao({ evento }) {
       <div className="min-w-0 flex-1 justify-between space-x-4 pt-1.5">
         <div>
           <p className="text-sm text-gray-500">
-            Designação de Reunião em <time dateTime={evento.data_evento}>{formatarData(evento.data_evento)}</time>
+            {evento.categoria || 'Designação de Reunião'} em <time dateTime={evento.data_evento}>{formatarData(evento.data_evento)}</time>
           </p>
           <p className="mt-0.5 text-sm text-gray-900 font-bold">
             {evento.nome_parte}

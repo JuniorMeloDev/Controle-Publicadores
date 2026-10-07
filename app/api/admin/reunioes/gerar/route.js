@@ -1,5 +1,6 @@
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { findVisitInWeek, getVisitTuesday } from '@/app/lib/meeting-visits';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,16 +8,9 @@ const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 });
 
-// Helper: Add days to a date
-function addDays(date, days) {
-    const result = new Date(date);
-    result.setDate(result.getDate() + days);
-    return result;
-}
-
 // Helper: Get weekday name (Segunda-feira, etc) from date
 function getWeekdayName(date) {
-    const day = date.getDay(); // 0 = Sunday
+    const day = date.getUTCDay(); // 0 = Sunday
     const days = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
     return days[day];
 }
@@ -61,33 +55,35 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Configure os dias de reunião primeiro.' }, { status: 400 });
         }
 
-        const eventsRes = await client.query('SELECT * FROM eventos_especiais WHERE ano = $1', [year]);
+        const eventsRes = await client.query(`SELECT * FROM eventos_especiais
+            WHERE data BETWEEN make_date($1::int, 1, 1) - 7
+                AND make_date($1::int, 12, 31) + 7`, [year]);
         const events = eventsRes.rows.map(e => ({
             ...e,
-            dateObj: new Date(e.data) // Pre-parse for easier comparison
+            dateObj: new Date(`${new Date(e.data).toISOString().slice(0, 10)}T00:00:00Z`)
         }));
 
         // 2. Determine Date Range
-        const now = new Date();
+        const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
         // Start from tomorrow to avoid issues with "today"
-        let startDate = new Date(now);
-        startDate.setDate(startDate.getDate() + 1); 
+        let startDate = new Date(`${today}T00:00:00Z`);
+        startDate.setUTCDate(startDate.getUTCDate() + 1);
         
         // Adjust start date if we are in a different year context
-        if (startDate.getFullYear() < year) {
-             startDate = new Date(year, 0, 1);
-        } else if (startDate.getFullYear() > year) {
+        if (startDate.getUTCFullYear() < year) {
+             startDate = new Date(Date.UTC(year, 0, 1));
+        } else if (startDate.getUTCFullYear() > year) {
              return NextResponse.json({ message: 'O ano selecionado já passou.' }, { status: 400 });
         }
 
         let endDate = new Date(startDate);
-        if (period === 'mensal') endDate.setMonth(endDate.getMonth() + 1);
-        else if (period === 'trimestral') endDate.setMonth(endDate.getMonth() + 3);
-        else if (period === 'semestral') endDate.setMonth(endDate.getMonth() + 6);
-        else if (period === 'anual') endDate = new Date(year, 11, 31);
+        if (period === 'mensal') endDate.setUTCMonth(endDate.getUTCMonth() + 1);
+        else if (period === 'trimestral') endDate.setUTCMonth(endDate.getUTCMonth() + 3);
+        else if (period === 'semestral') endDate.setUTCMonth(endDate.getUTCMonth() + 6);
+        else if (period === 'anual') endDate = new Date(Date.UTC(year, 11, 31));
         
         // Cap at end of year
-        if (endDate.getFullYear() > year) endDate = new Date(year, 11, 31);
+        if (endDate.getUTCFullYear() > year) endDate = new Date(Date.UTC(year, 11, 31));
 
 
         // 3. Simulation Logic
@@ -116,6 +112,13 @@ export async function POST(request) {
             if (weekday === config.dia_meio_semana) type = 'Meio de Semana';
             if (weekday === config.dia_fim_semana) type = 'Fim de Semana';
 
+            const visitInWeek = findVisitInWeek(events, dateStr);
+            const visitTuesday = visitInWeek && getVisitTuesday(visitInWeek.data);
+            if (visitInWeek && dateStr === visitTuesday) {
+                type = 'Meio de Semana';
+                reason = 'Reunião de visita na terça-feira';
+            }
+
             if (type) {
                 // RULE 1: Special Events on the day itself
                 if (eventOnDay) {
@@ -133,9 +136,9 @@ export async function POST(request) {
             // RULE 2: Complex Interactions
             if (type === 'Meio de Semana' && !skip) {
                 const startOfWeek = new Date(current);
-                startOfWeek.setDate(current.getDate() - current.getDay() + 1); // Monday
+                startOfWeek.setUTCDate(current.getUTCDate() - (current.getUTCDay() + 6) % 7); // Monday
                 const endOfWeek = new Date(startOfWeek);
-                endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
+                endOfWeek.setUTCDate(startOfWeek.getUTCDate() + 6); // Sunday
 
                 const celebracaoInWeek = events.find(e => 
                     e.tipo === 'Celebração' && 
@@ -151,7 +154,7 @@ export async function POST(request) {
                 if (!skip) {
                     let nextWeekend = new Date(current);
                     for(let i=1; i<=6; i++) {
-                        nextWeekend.setDate(nextWeekend.getDate() + 1);
+                        nextWeekend.setUTCDate(nextWeekend.getUTCDate() + 1);
                         if (getWeekdayName(nextWeekend) === config.dia_fim_semana) break;
                     }
                     
@@ -162,48 +165,16 @@ export async function POST(request) {
 
                     if (weekendEvent) {
                         skip = true;
-                        const weDate = weekendEvent.data.toISOString().split('T')[0];
+                        const weDate = weekendEvent.dateObj.toISOString().split('T')[0];
                         reason = `Antecede ${weekendEvent.tipo} no fim de semana (${formatDateBR(weDate)})`;
                     }
                     
-                    const visitInWeek = events.find(e => 
-                        e.tipo === 'Visita do Superintendente' && 
-                        e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
-                    );
-
-                    if (visitInWeek) {
-                        if (weekday !== 'Terça-feira') {
-                            skip = true;
-                            reason = `Semana de Visita: Reunião movida para Terça-feira`;
-                        }
+                    if (!skip && visitInWeek && dateStr !== visitTuesday) {
+                        skip = true;
+                        reason = 'Semana de Visita: Reunião movida para Terça-feira';
                     }
                 }
             }
-
-             // RULE 3: Visit injection
-             if (weekday === 'Terça-feira' && config.dia_meio_semana !== 'Terça-feira') {
-                const startOfWeek = new Date(current);
-                startOfWeek.setDate(current.getDate() - current.getDay() + 1);
-                const endOfWeek = new Date(startOfWeek);
-                endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-                const visitInWeek = events.find(e => 
-                    e.tipo === 'Visita do Superintendente' && 
-                    e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
-                );
-
-                if (visitInWeek) {
-                    if (!proposedMeetings.find(m => m.data === dateStr)) { 
-                         proposedMeetings.push({
-                            data: dateStr,
-                            tipo: 'Meio de Semana',
-                            weekday: 'Terça-feira',
-                            reason: 'Reunião de Visita (Forçada na Terça)'
-                        });
-                        warnings.push(`Reunião de Visita gerada excepcionalmente na Terça-feira (${formatDateBR(dateStr)})`);
-                    }
-                }
-             }
 
             // General Generation logic for Configured Days
             if (type && !skip) {
@@ -211,13 +182,16 @@ export async function POST(request) {
                     data: dateStr,
                     tipo: type,
                     weekday: weekday,
-                    reason: 'Agenda Regular'
+                    reason: reason || 'Agenda Regular'
                 });
+                if (visitInWeek && dateStr === visitTuesday) {
+                    warnings.push(`Reunião de Visita gerada na Terça-feira (${formatDateBR(dateStr)})`);
+                }
             } else if (skip && type) {
                 warnings.push(`Reunião de ${type} em ${formatDateBR(dateStr)} pulada: ${reason}`);
             }
 
-            current.setDate(current.getDate() + 1);
+            current.setUTCDate(current.getUTCDate() + 1);
         }
         
         // 4. Action Handling
@@ -238,7 +212,7 @@ export async function POST(request) {
             });
         } 
         else if (action === 'create') {
-            const { meetings_to_create } = options; 
+            const { meetings_to_create } = options || {};
             
             if (!meetings_to_create || !Array.isArray(meetings_to_create)) {
                  return NextResponse.json({ message: 'Nenhuma reunião selecionada.' }, { status: 400 });
@@ -247,11 +221,13 @@ export async function POST(request) {
             let createdCount = 0;
             for (const m of meetings_to_create) {
                 try {
+                     const visit = m.tipo === 'Meio de Semana' && findVisitInWeek(events, m.data);
+                     const meetingDate = visit ? getVisitTuesday(visit.data) : m.data;
                      await client.query(`
                         INSERT INTO reunioes_registro (data, tipo) 
                         VALUES ($1, $2)
                         ON CONFLICT (data) DO NOTHING
-                     `, [m.data, m.tipo]);
+                     `, [meetingDate, m.tipo]);
                      createdCount++;
                 } catch (e) {
                     console.error("Insert error for " + m.data, e);

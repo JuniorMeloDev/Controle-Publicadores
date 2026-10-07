@@ -1,6 +1,7 @@
 
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { findVisitInWeek, getVisitTuesday, isSuperintendentVisit } from '@/app/lib/meeting-visits';
 
 export const dynamic = 'force-dynamic';
 
@@ -145,6 +146,7 @@ export async function GET(request) {
     const url = new URL(request.url);
     const month = url.searchParams.get('month');
     const year = url.searchParams.get('year');
+    const all = url.searchParams.get('all') === '1';
     
     let query = `
       SELECT 
@@ -180,7 +182,7 @@ export async function GET(request) {
     
     const limit = url.searchParams.get('limit');
 
-    if (!year && !month) {
+    if (!year && !month && !all) {
          query += ` LIMIT ${limit ? parseInt(limit) : 20}`; // Default limit 20
     }
 
@@ -192,13 +194,16 @@ export async function GET(request) {
     const queryYear = year || new Date().getFullYear();
     
     const [configRes, eventsRes] = await Promise.all([
-        client.query('SELECT dia_meio_semana, dia_fim_semana FROM configuracoes_gerais WHERE ano = $1', [queryYear]),
-        month
-            ? client.query('SELECT * FROM eventos_especiais WHERE ano = $1 AND EXTRACT(MONTH FROM data) = $2', [queryYear, month])
-            : client.query('SELECT * FROM eventos_especiais WHERE ano = $1', [queryYear])
+        all
+            ? client.query('SELECT ano, dia_meio_semana, dia_fim_semana FROM configuracoes_gerais')
+            : client.query('SELECT ano, dia_meio_semana, dia_fim_semana FROM configuracoes_gerais WHERE ano = $1', [queryYear]),
+        // Include adjacent days so a visit at a month/year boundary affects the whole week.
+        all ? client.query('SELECT * FROM eventos_especiais') : client.query(`SELECT * FROM eventos_especiais
+            WHERE data BETWEEN make_date($1::int, 1, 1) - 7
+                AND make_date($1::int, 12, 31) + 7`, [queryYear])
     ]);
 
-    const config = configRes.rows[0];
+    const configs = new Map(configRes.rows.map(c => [String(c.ano || queryYear), c]));
     const specialEvents = eventsRes.rows.map(e => ({
         ...e,
         dateObj: new Date(e.data),
@@ -218,6 +223,7 @@ export async function GET(request) {
     let meetings = res.rows.map(row => {
         const meetingDate = new Date(row.data);
         const dateStr = toDateStr(meetingDate);
+        const config = configs.get(dateStr.slice(0, 4));
         const result = {
             ...row,
             data_formatada: meetingDate.toLocaleDateString('pt-BR', {timeZone: 'UTC'}),
@@ -229,8 +235,8 @@ export async function GET(request) {
 
         if (!config) return result;
 
-        // 1. Exact Day Conflict — any event type on the exact meeting day cancels it
-        const eventOnDay = specialEvents.find(e => e.dateStr === dateStr);
+        // A visit moves the midweek meeting; it does not cancel the Tuesday meeting.
+        const eventOnDay = specialEvents.find(e => e.dateStr === dateStr && !isSuperintendentVisit(e));
         if (eventOnDay) {
             result.cancelado = true;
             result.motivo_cancelamento = `${eventOnDay.tipo}: ${eventOnDay.nome}`;
@@ -245,12 +251,19 @@ export async function GET(request) {
             const endOfWeek = new Date(startOfWeek);
             endOfWeek.setDate(startOfWeek.getUTCDate() + 6); // Sunday
 
+            const visitInWeek = findVisitInWeek(specialEvents, dateStr);
+            if (visitInWeek && dateStr !== getVisitTuesday(visitInWeek.data)) {
+                result.cancelado = true;
+                result.motivo_cancelamento = 'Semana de visita: reunião transferida para terça-feira.';
+                result.evento_nome = visitInWeek.nome;
+            }
+
             // 2a. Check for Celebração in the same week
             const celInWeek = specialEvents.find(e =>
                 e.tipo === 'Celebração' &&
                 e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
             );
-            if (celInWeek) {
+            if (!result.cancelado && celInWeek) {
                 result.cancelado = true;
                 result.motivo_cancelamento = `Celebração na semana: ${celInWeek.nome} (${celInWeek.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})})`;
                 result.evento_nome = celInWeek.nome;
@@ -302,12 +315,17 @@ export async function GET(request) {
 
     // 4. For each special event, check if it falls on a configured meeting day
     //    and does NOT already have a meeting in DB → insert a virtual row
-    if (config) {
-        const midweekDayIdx = daysMap[config.dia_meio_semana];
-        const weekendDayIdx = daysMap[config.dia_fim_semana];
-
+    if (configs.size) {
         for (const ev of specialEvents) {
+            if (isSuperintendentVisit(ev)) continue;
+            // The context query also includes events outside the requested period.
+            if (!all && String(ev.ano) !== String(queryYear)) continue;
+            if (month && ev.dateObj.getUTCMonth() + 1 !== Number(month)) continue;
             if (meetingDateSet.has(ev.dateStr)) continue; // Already has a real meeting
+            const config = configs.get(ev.dateStr.slice(0, 4));
+            if (!config) continue;
+            const midweekDayIdx = daysMap[config.dia_meio_semana];
+            const weekendDayIdx = daysMap[config.dia_fim_semana];
 
             const dayOfWeek = ev.dateObj.getUTCDay();
             let meetingType = null;
