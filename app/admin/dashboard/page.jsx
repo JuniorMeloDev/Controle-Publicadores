@@ -256,7 +256,8 @@ export default function Dashboard() {
       link: "/admin/reunioes"
     },
     {
-      label: `Relatórios (${selectedMonth}/${selectedYear})`,
+      label: `Relatórios (${selectedMonth})`,
+      sublabel: `Ano de Serviço ${selectedYear}`,
       // Mostra o status geral antes da filtragem:
       value: `${statusRelatorios.filter(p => p.status === 'Enviado').length} de ${statusRelatorios.length}`,
       change: `${statusRelatorios.filter(p => p.status === 'Pendente').length} Pendentes`,
@@ -279,10 +280,16 @@ export default function Dashboard() {
     <DashboardLayout>
       <div className="space-y-8">
         {/* Cabeçalho da Página */}
-        <div className="flex flex-col items-center justify-center gap-4 text-center">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-gray-100">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-gray-900">Visão Geral</h1>
-            <p className="text-gray-500 mt-1">Bem-vindo ao painel de controle da congregação.</p>
+            <p className="text-gray-500 text-sm mt-0.5">Bem-vindo ao painel de controle da congregação.</p>
+          </div>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 shadow-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span>
+              Ano de Serviço {selectedYear}
+            </span>
           </div>
         </div>
 
@@ -305,7 +312,12 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <div className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</div>
-                  <div className="text-sm text-gray-500">{stat.label}</div>
+                  <div className="text-sm font-medium text-gray-700">{stat.label}</div>
+                  {stat.sublabel && (
+                    <div className="text-xs text-purple-600 font-medium mt-1 flex items-center gap-1">
+                      <span>•</span> {stat.sublabel}
+                    </div>
+                  )}
                 </CardContent>
               </Link>
             </Card>

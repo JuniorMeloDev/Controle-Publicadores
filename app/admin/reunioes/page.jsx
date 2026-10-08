@@ -250,18 +250,19 @@ export default function ReunioesPage() {
                         <p className="text-gray-500">Visualize e gerencie as reuniões e assistências.</p>
                     </div>
 
-                    {/* Modal para Reunião Avulsa */}
-                    <MeetingGeneratorDialog year={year} month={month} onCreated={async (createdYear, createdMonth) => {
-                        setYear(createdYear); setMonth(String(Number(createdMonth)));
-                        if (createdYear === year && Number(createdMonth) === Number(month)) await fetchMeetings();
-                    }} />
-                    <Dialog open={isCustomModalOpen} onOpenChange={setIsCustomModalOpen}>
-                        <DialogTrigger asChild>
-                            <Button className="gap-2 bg-purple-600 hover:bg-purple-700 text-white shadow-sm">
-                                <Plus className="w-4 h-4" /> Nova Reunião Avulsa
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent>
+                    {/* Ações do Cabeçalho */}
+                    <div className="flex flex-wrap items-center gap-3">
+                        <MeetingGeneratorDialog year={year} month={month} onCreated={async (createdYear, createdMonth) => {
+                            setYear(createdYear); setMonth(String(Number(createdMonth)));
+                            if (createdYear === year && Number(createdMonth) === Number(month)) await fetchMeetings();
+                        }} />
+                        <Dialog open={isCustomModalOpen} onOpenChange={setIsCustomModalOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" className="gap-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-purple-700 shadow-xs">
+                                    <Plus className="w-4 h-4 text-purple-600" /> Nova Reunião Avulsa
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
                             <DialogHeader>
                                 <DialogTitle>Criar Reunião Personalizada</DialogTitle>
                             </DialogHeader>
@@ -295,6 +296,7 @@ export default function ReunioesPage() {
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
+                    </div>
                 </div>
 
                 {/* Barra de Seleção de Ações */}

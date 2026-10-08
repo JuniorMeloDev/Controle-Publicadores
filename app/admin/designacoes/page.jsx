@@ -28,18 +28,25 @@ function DesignacoesContent() {
 
   return (
       <div className="p-2 space-y-4">
-         <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900">Gerenciamento de Designações</h1>
-            <p className="text-gray-500">Planeje e organize as reuniões e privilégios.</p>
-            <Link href="/admin/reunioes" className="inline-block mt-2 text-sm text-purple-600 hover:underline">Abrir calendário de reuniões</Link>
+         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-gray-100">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Gerenciamento de Designações</h1>
+              <p className="text-gray-500 text-sm mt-0.5">Planeje e organize as reuniões e privilégios da congregação.</p>
+            </div>
+            <Link 
+              href="/admin/reunioes" 
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors w-fit"
+            >
+              📅 Abrir calendário de reuniões
+            </Link>
          </div>
 
          <DesignationPeriodProvider><Tabs defaultValue="vida-ministerio" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 md:grid-cols-4 h-auto max-w-4xl mb-4 gap-2">
-              <TabsTrigger value="vida-ministerio">Vida e Ministério</TabsTrigger>
-              <TabsTrigger value="discursos-publicos">Discursos Públicos</TabsTrigger>
-              <TabsTrigger value="privilegios-mecanicos">Privilégios Mecânicos</TabsTrigger>
-              <TabsTrigger value="limpeza-semanal">Limpeza Semanal</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto max-w-4xl mb-4 gap-2 p-1.5 bg-gray-100/80 rounded-xl">
+              <TabsTrigger value="vida-ministerio" className="text-xs sm:text-sm py-2">Vida e Ministério</TabsTrigger>
+              <TabsTrigger value="discursos-publicos" className="text-xs sm:text-sm py-2">Discursos Públicos</TabsTrigger>
+              <TabsTrigger value="privilegios-mecanicos" className="text-xs sm:text-sm py-2">Privilégios Mecânicos</TabsTrigger>
+              <TabsTrigger value="limpeza-semanal" className="text-xs sm:text-sm py-2">Limpeza Semanal</TabsTrigger>
             </TabsList>
             
             <TabsContent value="vida-ministerio">

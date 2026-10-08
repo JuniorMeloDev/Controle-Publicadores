@@ -92,16 +92,20 @@ export default function FiltroELista({
             <button 
                 onClick={onStartTransfer} 
                 title="Trocar Publicadores de Grupo" 
-                className={`p-2 rounded-md shadow-sm transition-colors relative
-                    bg-gray-100 hover:bg-gray-200 text-gray-600
-                `}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 shadow-xs transition-colors"
             >
-                <Shuffle size={18} />
+                <Shuffle size={14} className="text-gray-500" />
+                <span className="hidden sm:inline">Trocar Grupo</span>
             </button>
             
             {/* BOTÃO NOVO PUBLICADOR */}
-            <button onClick={onNovoPublicador} className="p-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm transition-colors" title="Novo Publicador">
-                <Plus size={18} />
+            <button 
+                onClick={onNovoPublicador} 
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors" 
+                title="Novo Publicador"
+            >
+                <Plus size={15} />
+                <span>Novo Publicador</span>
             </button>
           </div>
         </div>

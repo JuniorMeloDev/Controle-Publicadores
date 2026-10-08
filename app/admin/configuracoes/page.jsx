@@ -600,7 +600,7 @@ export default function ConfiguracoesPage() {
                                     </div>
                                 </div>
                                 <div className="space-y-3 pt-2">
-                                    <Button onClick={handleSaveWeekdays} disabled={saving || !canEditConfig} className="w-full min-h-11 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50">
+                                    <Button onClick={handleSaveWeekdays} disabled={saving || !canEditConfig} className="w-full min-h-11 bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 shadow-xs">
                                         {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                                         Salvar Dias
                                     </Button>
@@ -828,7 +828,7 @@ export default function ConfiguracoesPage() {
                                                     onChange={e => setNewEvent({ ...newEvent, date: e.target.value })}
                                                     className="min-w-0 w-full bg-white text-gray-900 border-gray-300 flex-1"
                                                 />
-                                                <Button onClick={handleAddEvent} disabled={!canEditConfig} className="min-h-11 w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white shrink-0">
+                                                <Button onClick={handleAddEvent} disabled={!canEditConfig} className="min-h-11 w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white shrink-0 shadow-xs">
                                                     <Plus className="w-4 h-4" />
                                                     Adicionar
                                                 </Button>

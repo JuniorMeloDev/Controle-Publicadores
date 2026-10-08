@@ -26,6 +26,36 @@ const navigation = [
   { name: "Configurações", href: "/admin/configuracoes", icon: Settings },
 ];
 
+const routeTitleMap = {
+  "/admin/dashboard": "Visão Geral",
+  "/admin/gerenciar": "Publicadores",
+  "/admin/designacoes": "Designações",
+  "/admin/reunioes": "Reuniões",
+  "/admin/relatorios": "Relatórios",
+  "/admin/configuracoes": "Configurações",
+  "/admin/gestao-acessos": "Gestão de Acessos",
+  "/admin/relatorios/vida-e-ministerio": "Relatório Vida e Ministério",
+  "/admin/relatorios/discursos": "Relatório de Discursos Públicos",
+  "/admin/relatorios/privilegios-mecanicos": "Relatório de Privilégios Mecânicos",
+  "/admin/relatorios/limpeza": "Relatório de Limpeza Semanal",
+  "/admin/relatorios/assistencia": "Assistência às Reuniões",
+};
+
+function getPageBreadcrumbTitle(pathname) {
+  if (!pathname) return "Início";
+  if (routeTitleMap[pathname]) return routeTitleMap[pathname];
+  if (pathname.startsWith("/admin/reunioes/")) return "Detalhes da Reunião";
+  if (pathname.startsWith("/admin/editar/")) return "Editar Publicador";
+  
+  const lastSegment = pathname.split("/").filter(Boolean).pop();
+  if (lastSegment) {
+    return lastSegment
+      .replace(/-/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+  return "Painel";
+}
+
 export function DashboardLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -302,10 +332,10 @@ export function DashboardLayout({ children }) {
             >
                 <Menu className="w-5 h-5" />
             </button>
-            <div className="hidden md:flex text-sm text-gray-500 items-center">
-              <span className="font-medium text-gray-900">Painel</span> 
-              <ChevronRight className="w-4 h-4 mx-1" />
-              <span>{navigation.find(n => n.href === pathname)?.name || 'Página'}</span>
+            <div className="flex text-sm text-gray-500 items-center">
+              <span className="font-medium text-gray-900 hidden sm:inline">Painel</span> 
+              <ChevronRight className="w-4 h-4 mx-1 hidden sm:inline" />
+              <span className="font-semibold text-gray-800 text-base md:text-sm md:font-normal md:text-gray-500 truncate max-w-[160px] sm:max-w-none">{getPageBreadcrumbTitle(pathname)}</span>
             </div>
           </div>
 

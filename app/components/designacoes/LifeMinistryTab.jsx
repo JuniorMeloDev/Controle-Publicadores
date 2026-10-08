@@ -45,6 +45,12 @@ function getGroupLabel(dataSQL) {
   return `${nomeMes} ${ano}`;
 }
 
+function formatFullDateBR(dateStr) {
+  if (!dateStr) return '';
+  const str = new Date(`${dateStr}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: '2-digit' });
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 const mapSavedToAssignments = (savedRows, schedule) => {
   const newAssignments = {};
   if (!savedRows || savedRows.length === 0) return newAssignments;
@@ -1318,8 +1324,11 @@ export function LifeMinistryTab() {
         {/* CABEÇALHO + IMPORTAR */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Gerenciamento de Designações</h1>
-            <p className="text-gray-500 text-sm mt-1">As reuniões seguem o calendário. Importe os arquivos RTF para preencher a programação de {year || 'um ano selecionado'}.</p>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-purple-600" />
+              Programação Vida e Ministério
+            </h2>
+            <p className="text-gray-500 text-sm mt-1">As reuniões seguem o calendário. Importe arquivos RTF para preencher a programação de {year || 'um ano selecionado'}.</p>
           </div>
 
           <label className={`flex items-center gap-3 py-3 px-6 rounded-lg text-white transition font-bold shadow-md hover:shadow-lg transform active:translate-y-0 ${isParsing || !canImport ? 'bg-purple-400 cursor-not-allowed opacity-70' : 'bg-purple-600 hover:bg-purple-700 hover:-translate-y-0.5 cursor-pointer'}`}>
@@ -1516,7 +1525,7 @@ export function LifeMinistryTab() {
                       </div>
                       <div>
                         <h3 className="font-medium text-gray-900 group-hover:text-purple-700">{item.label}</h3>
-                        <p className="text-xs text-gray-500 capitalize">{new Date(`${item.date}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: '2-digit' })}</p>
+                        <p className="text-xs text-gray-500">{formatFullDateBR(item.date)}</p>
                         <p className={`text-xs mt-1 ${item.meeting.cancelado ? 'text-red-600' : 'text-purple-600'}`}>{item.subLabel}</p>
                       </div>
                     </div>

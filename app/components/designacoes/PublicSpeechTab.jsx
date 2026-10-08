@@ -30,6 +30,12 @@ const formatDate = (dateStr) => {
     return `${d}/${m}/${y}`;
 };
 
+const formatFullDateBR = (dateStr) => {
+    if (!dateStr) return '';
+    const str = new Date(`${dateStr}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: '2-digit' });
+    return str.charAt(0).toUpperCase() + str.slice(1);
+};
+
 const speechStatus = talk => talk.cancelado
     ? `Cancelada: ${talk.motivo_cancelamento}`
     : !talk.orador || !talk.tema || !talk.presidente_id ? 'Designações pendentes' : 'Completa';
@@ -384,7 +390,7 @@ export function PublicSpeechTab() {
                         title="Gerar PDF da escala de oradores para o quadro de anúncios"
                     >
                         <Printer size={18} className="text-purple-600" />
-                        <span className="hidden sm:inline">Exportar Escala</span> (PDF)
+                        <span>Exportar PDF</span>
                     </Button>
 
                     <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -535,8 +541,8 @@ export function PublicSpeechTab() {
                                                     <h3 className="font-medium text-gray-900 group-hover:text-purple-700 truncate" title={talk.tema || 'Reunião de fim de semana'}>
                                                         {talk.tema || 'Reunião de fim de semana'}
                                                     </h3>
-                                                    <p className="text-xs text-gray-500 capitalize">
-                                                        {new Date(`${talk.data}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: '2-digit' })}
+                                                    <p className="text-xs text-gray-500">
+                                                        {formatFullDateBR(talk.data)}
                                                     </p>
                                                     {(talk.orador || talk.nome_chamado || talk.nome_completo) && <p className="text-xs text-gray-500 mt-1 truncate">
                                                         {talk.orador && `Orador: ${talk.orador}`}
