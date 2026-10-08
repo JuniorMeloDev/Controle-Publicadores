@@ -139,6 +139,26 @@ de data, cancelamento e restauração sem modificar os registros persistentes.
 
 ## Executar os testes
 
+### Programação automática de Vida e Ministério
+
+Nos geradores de reuniões (Designações, Reuniões e Configurações), a opção
+**Buscar automaticamente a programação de Vida e Ministério no jw.org** vem
+marcada. Após criar o calendário, o app consulta a página semanal em português
+da Biblioteca On-line, valida as seções e salva as partes e cânticos sem participantes.
+O resultado informa importações, registros preservados e pendências por data.
+Programações e participantes já salvos são preservados. Não é necessária migração:
+a origem e o horário da importação ficam em `dados_json.source`.
+
+Em Vida e Ministério, abra uma reunião com **Programação pendente** e clique em
+**Buscar programação no jw.org** para tentar novamente, inclusive em reuniões
+criadas anteriormente. A importação RTF continua disponível. Uma falha de conexão,
+apostila ainda não publicada ou estrutura não reconhecida deixa a reunião criada,
+sem gravar uma programação incompleta. A busca usa duas requisições por semana,
+com limite de tempo e domínio fixo; não executa scripts das páginas nem usa IA.
+Cada programação salva é reutilizada ao abrir a reunião. Buscar pendências exige
+`designacoes_importar`; o servidor também aceita `configuracoes_editar` para o
+fluxo de geração. Não há sincronização periódica nem substituição automática.
+
 ```bash
 npm test
 ```

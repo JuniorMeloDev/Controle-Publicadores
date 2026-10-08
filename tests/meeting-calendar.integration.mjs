@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import nextEnv from '@next/env';
 import pg from 'pg';
 import { loadModule, loadRoute } from './helpers/load-source.mjs';
+import { importMeetingProgram } from '../app/lib/jw-program-service.js';
 
 nextEnv.loadEnvConfig(process.cwd());
 const calendar = await loadModule('../../app/lib/meeting-calendar.js');
@@ -72,6 +73,21 @@ try {
     assert.equal(cleaning.body.length, 9);
     assert.equal(cleaning.body.filter(m => !m.id).length, 8);
     assert.equal(speeches.body.find(m => m.id === 960001).tema, 'Tema fictício');
+    const pendingProgram = life.body.find(m => m.dataSQL === '2030-01-23');
+    let programmeRequests = 0;
+    const programDependencies = {
+        lockMeeting: serviceContext.service.lockAssignmentMeeting,
+        fetchProgram: async () => {
+            programmeRequests++;
+            return { weekDate: '21-27 DE JANEIRO DE 2030', treasures: [{ title: 'Parte fictícia (10 min)' }], ministry: [], living: [],
+                source: { provider: 'jw.org', url: 'https://wol.jw.org/pt/wol/d/r5/lp-t/999999', weekStart: '2030-01-21' } };
+        }, audit: async () => {}, userId: 990001
+    };
+    assert.equal((await importMeetingProgram(client, pendingProgram.reuniao_id, programDependencies)).status, 'imported');
+    assert.equal((await importMeetingProgram(client, pendingProgram.reuniao_id, programDependencies)).status, 'preserved');
+    assert.equal(programmeRequests, 1);
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM designacoes_reuniao WHERE reuniao_id = $1', [pendingProgram.reuniao_id])).rows[0].n, 0);
+    assert.equal((await route('get-reunioes').GET(request())).body.find(m => m.reuniao_id === pendingProgram.reuniao_id).tem_programacao, true);
     const moved = await route('reunioes/editar').POST(request({ id: 910001, nova_data: '2030-01-08' }));
     assert.equal(moved.status, 200);
     for (const table of ['reunioes_dados', 'designacoes_reuniao', 'limpeza_semanal']) {
@@ -116,7 +132,7 @@ try {
     const restored = await route('reunioes/remover-evento-especial').POST(request({ id: 910001 }));
     assert.equal(restored.status, 200);
     assert.equal((await route('get-reunioes').GET(request())).body.find(m => m.reuniao_id === 910001).cancelado, false);
-    console.log('SQL validado em tabelas temporárias: migração repetida, geração, quatro agendas, preenchimento, mudança de data, cancelamento e restauração.');
+    console.log('SQL validado em tabelas temporárias: migração repetida, geração, quatro agendas, importação automática sem participantes, preservação, preenchimento, mudança de data, cancelamento e restauração.');
 } finally {
     await db.query('ROLLBACK');
     db.release();

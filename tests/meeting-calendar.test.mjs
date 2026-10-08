@@ -59,7 +59,8 @@ function generatorFixture({ counts = [1, 0], failSecond = false, allow = true } 
         if (sql.includes('FROM eventos_especiais')) return { rows: [] };
         if (sql.includes('INSERT INTO reunioes_registro')) {
             if (failSecond && inserts === 1) throw new Error('Falha simulada');
-            return { rowCount: counts[inserts++] || 0, rows: [] };
+            const rowCount = counts[inserts++] || 0;
+            return { rowCount, rows: rowCount ? [{ id: 910000 + inserts }] : [] };
         }
         return { rows: [] };
     }, release() {} };
@@ -75,6 +76,8 @@ test('batch generation counts actual inserts and preserves existing meetings', a
     assert.equal(response.body.created, 1);
     assert.equal(response.body.existing, 1);
     assert.equal(response.body.totals.meio_semana, 1);
+    assert.equal(response.body.programMeetings[0].id, 910001);
+    assert.equal(response.body.programMeetings[0].data, '2030-01-09');
     assert.ok(route.calls.some(c => c.sql === 'COMMIT'));
 });
 

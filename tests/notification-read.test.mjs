@@ -56,18 +56,20 @@ test('mark all read persists across reloads and cannot mark another user notific
     assert.equal((await route.POST({ json: async () => ({ ids: fixture }) })).status, 401);
 });
 
-test('middleware authorizes a valid notification POST and rejects an expired session before any write', async () => {
+test('middleware authorizes notification and programme POSTs and rejects expired sessions', async () => {
     const secret = 'fictional-notification-test-secret';
     const source = readFileSync(new URL('../middleware.js', import.meta.url), 'utf8')
         .replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
     const context = vm.createContext({ process: { env: { JWT_SECRET: secret } }, verify: jwt.verify,
         NextResponse: { next: () => ({ status: 200 }), json: (body, options) => ({ body, ...options }) } });
     vm.runInContext(source + '\nglobalThis.handler = middleware;', context);
-    const request = token => ({ method: 'POST', nextUrl: { pathname: '/api/admin/notificacoes' },
+    const request = (token, pathname) => ({ method: 'POST', nextUrl: { pathname },
         cookies: { get: () => token ? { value: token } : undefined } });
     const valid = jwt.sign({ userId: 990001 }, secret, { expiresIn: '1h' });
     const expired = jwt.sign({ userId: 990001, exp: 1 }, secret);
-    assert.equal((await context.handler(request(valid))).status, 200);
-    assert.equal((await context.handler(request(expired))).status, 401);
-    assert.equal((await context.handler(request(null))).status, 401);
+    for (const pathname of ['/api/admin/notificacoes', '/api/admin/reunioes/importar-programacao']) {
+        assert.equal((await context.handler(request(valid, pathname))).status, 200);
+        assert.equal((await context.handler(request(expired, pathname))).status, 401);
+        assert.equal((await context.handler(request(null, pathname))).status, 401);
+    }
 });

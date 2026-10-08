@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Calendar, Loader2 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/app/components/ui/dialog';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
+import { importCreatedPrograms } from '@/app/lib/import-programs-client';
 
 export function MeetingGeneratorDialog({ year, month, onCreated }) {
     const { permissions } = usePermissions();
@@ -16,6 +18,10 @@ export function MeetingGeneratorDialog({ year, month, onCreated }) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [result, setResult] = useState('');
+    const [importPrograms, setImportPrograms] = useState(true);
+    const [progress, setProgress] = useState('');
+    const [pendingDetails, setPendingDetails] = useState([]);
+    const [sessionRequired, setSessionRequired] = useState(false);
 
     async function generate(action) {
         setBusy(true);
@@ -31,12 +37,15 @@ export function MeetingGeneratorDialog({ year, month, onCreated }) {
             if (!response.ok) throw new Error(data.message || 'Não foi possível gerar as reuniões.');
             if (action === 'preview') setPreview(data);
             else {
-                setResult(data.message);
+                const imported = importPrograms ? await importCreatedPrograms(data.programMeetings, setProgress) : null;
+                setResult(`${data.message} ${imported?.message || ''}`);
+                setPendingDetails(imported?.details || []);
+                setSessionRequired(Boolean(imported?.sessionRequired));
                 setPreview(null);
                 await onCreated(selectedYear, selectedMonth);
             }
         } catch (err) { setError(err.message); }
-        finally { setBusy(false); }
+        finally { setBusy(false); setProgress(''); }
     }
 
     const newMeetings = preview?.meetings.filter(m => !m.exists) || [];
@@ -44,18 +53,22 @@ export function MeetingGeneratorDialog({ year, month, onCreated }) {
     return <>
         <Button disabled={!canCreate} onClick={() => {
             setPeriod(`${year}-${String(month).padStart(2, '0')}`);
-            setPreview(null); setError(''); setResult(''); setOpen(true);
+            setPreview(null); setError(''); setResult(''); setPendingDetails([]); setSessionRequired(false); setOpen(true);
         }} className="bg-purple-600 hover:bg-purple-700 text-white gap-2"><Calendar size={16} /> Gerar reuniões do mês</Button>
         <Dialog open={open} onOpenChange={value => { if (!busy) setOpen(value); }}>
             <DialogContent className="bg-white text-gray-900 sm:max-w-2xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Gerar reuniões e preparar designações</DialogTitle></DialogHeader>
                 <label className="text-sm font-medium">Mês e ano
                     <input aria-label="Mês e ano da geração" type="month" value={period} disabled={busy}
-                        onChange={e => { setPeriod(e.target.value); setPreview(null); setResult(''); }} className="block w-full mt-2 border rounded-md p-2" />
+                        onChange={e => { setPeriod(e.target.value); setPreview(null); setResult(''); setPendingDetails([]); }} className="block w-full mt-2 border rounded-md p-2" />
                 </label>
                 <p className="text-sm text-gray-500">As datas seguem os dias configurados e os eventos especiais. As quatro abas de designações receberão as reuniões automaticamente.</p>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={importPrograms} disabled={busy} onChange={e => setImportPrograms(e.target.checked)} />Buscar automaticamente a programação de Vida e Ministério no jw.org</label>
+                {progress && <p role="status" className="text-sm text-purple-700">{progress}</p>}
                 {error && <p role="alert" className="bg-red-50 text-red-700 p-3 rounded-md">{error}</p>}
                 {result && <p role="status" className="bg-green-50 text-green-700 p-3 rounded-md">{result}</p>}
+                {pendingDetails.map(detail => <p key={detail} className="text-sm text-amber-800">{detail}</p>)}
+                {sessionRequired && <Link href="/" prefetch={false} className="text-purple-700 underline font-medium">Entrar novamente</Link>}
                 {preview && <div className="space-y-3">
                     <p className="text-sm font-medium">{newMeetings.length} novas reuniões · {preview.meetings.length - newMeetings.length} já existentes</p>
                     <p className="text-sm text-purple-700 bg-purple-50 rounded-md p-3">

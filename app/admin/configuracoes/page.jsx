@@ -8,6 +8,7 @@ import { SettingsEventsList } from '@/app/components/SettingsEventsList';
 import { useState, useEffect } from 'react';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
+import { importCreatedPrograms } from '@/app/lib/import-programs-client';
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card";
@@ -71,6 +72,8 @@ export default function ConfiguracoesPage() {
     const [genCustomDate, setGenCustomDate] = useState('');
     const [genCustomType, setGenCustomType] = useState('Meio de Semana');
     const [genLoading, setGenLoading] = useState(false);
+    const [genImportPrograms, setGenImportPrograms] = useState(true);
+    const [genImportProgress, setGenImportProgress] = useState('');
     const [previewData, setPreviewData] = useState({ meetings: [], warnings: [] });
 
     // Result Modal State
@@ -405,6 +408,8 @@ export default function ConfiguracoesPage() {
             });
 
             if (res.ok) {
+                const data = await res.json();
+                const imported = genImportPrograms ? await importCreatedPrograms(data.programMeetings, setGenImportProgress) : null;
                 setGenOpen(false);
                 setGenStep(1);
                 setGenCustomDate('');
@@ -412,7 +417,7 @@ export default function ConfiguracoesPage() {
                 setResultData({
                     success: true,
                     message: 'Reunião criada com sucesso!',
-                    details: [`Reunião do tipo "${genCustomType}" criada para ${new Date(genCustomDate).toLocaleDateString('pt-BR')}.`]
+                    details: [`Reunião do tipo "${genCustomType}" criada para ${new Date(genCustomDate).toLocaleDateString('pt-BR')}.`, ...(imported ? [imported.message, ...imported.details] : [])]
                 });
                 setResultOpen(true);
             } else {
@@ -424,6 +429,7 @@ export default function ConfiguracoesPage() {
             setToast({ message: 'Erro de conexão.', type: 'error' });
         } finally {
             setGenLoading(false);
+            setGenImportProgress('');
         }
     };
 
@@ -495,13 +501,14 @@ export default function ConfiguracoesPage() {
             const data = await res.json();
 
             if (res.ok) {
+                const imported = genImportPrograms ? await importCreatedPrograms(data.programMeetings, setGenImportProgress) : null;
                 setGenOpen(false);
                 setGenStep(1);
                 // Show success modal
                 setResultData({
                     success: true,
                     message: data.message,
-                    details: [`${data.created} reuniões criadas com sucesso.`, 'As datas já estão disponíveis nas quatro abas de designações.']
+                    details: [`${data.created} reuniões criadas com sucesso.`, 'As datas já estão disponíveis nas quatro abas de designações.', ...(imported ? [imported.message, ...imported.details] : [])]
                 });
                 setResultOpen(true);
             } else {
@@ -524,6 +531,7 @@ export default function ConfiguracoesPage() {
             setResultOpen(true);
         } finally {
             setGenLoading(false);
+            setGenImportProgress('');
         }
     };
 
@@ -661,6 +669,7 @@ export default function ConfiguracoesPage() {
                                                             </Select>
                                                         </div>}
                                                         <p className="text-sm text-purple-700">As reuniões criadas aparecerão automaticamente em Vida e Ministério, Discursos Públicos, Privilégios Mecânicos e Limpeza.</p>
+                                                        <label className="flex items-center gap-2 text-sm text-gray-900"><input type="checkbox" checked={genImportPrograms} disabled={genLoading} onChange={e => setGenImportPrograms(e.target.checked)} />Buscar automaticamente a programação de Vida e Ministério no jw.org</label>
                                                         {genPeriod === 'avulso' ? (
                                                             <div className="space-y-4 pt-4 border-t border-gray-200">
                                                                 <div className="space-y-2">
@@ -760,6 +769,7 @@ export default function ConfiguracoesPage() {
                                                 )}
                                             </div>
 
+                                            {genImportProgress && <p role="status" className="text-sm text-purple-700">{genImportProgress}</p>}
                                             <DialogFooter className="mt-4 border-t pt-4">
                                                 {genStep === 1 ? (
                                                     <Button 
@@ -771,7 +781,7 @@ export default function ConfiguracoesPage() {
                                                     </Button>
                                                 ) : (
                                                     <div className="flex gap-2 w-full justify-end">
-                                                        <Button variant="outline" onClick={() => setGenStep(1)}>Voltar</Button>
+                                                        <Button variant="outline" disabled={genLoading} onClick={() => setGenStep(1)}>Voltar</Button>
                                                         <Button onClick={handleConfirmGeneration} disabled={genLoading || previewData.meetings.filter(m => !m.exists).length === 0} className="bg-green-600 hover:bg-green-700 text-white">
                                                             {genLoading ? <Loader2 className="animate-spin w-4 h-4" /> : 'Confirmar e Criar'}
                                                         </Button>

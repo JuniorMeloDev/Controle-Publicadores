@@ -43,12 +43,13 @@ export async function POST(request) {
             }
 
             // Insere diretamente na base de dados
-            await client.query(`
+            const inserted = await client.query(`
                 INSERT INTO reunioes_registro (data, tipo) 
-                VALUES ($1, $2)
+                VALUES ($1, $2) RETURNING id
             `, [data, tipo]);
 
-            return NextResponse.json({ message: 'Reunião criada e disponível nas abas de designações.' }, { status: 201 });
+            return NextResponse.json({ message: 'Reunião criada e disponível nas abas de designações.',
+                programMeetings: tipo === 'Meio de Semana' ? [{ id: inserted.rows[0].id, data }] : [] }, { status: 201 });
         }
 
 
@@ -81,6 +82,7 @@ export async function POST(request) {
             let created = 0;
             let existing = 0;
             const totals = { meio_semana: 0, fim_semana: 0 };
+            const programMeetings = [];
             for (const m of selected) {
                 const visit = m.tipo === 'Meio de Semana' && findVisitInWeek(events, m.data);
                 const data = visit ? getVisitTuesday(visit.data) : m.data;
@@ -92,10 +94,11 @@ export async function POST(request) {
                 if (result.rowCount) {
                     created++;
                     totals[m.tipo === 'Meio de Semana' ? 'meio_semana' : 'fim_semana']++;
+                    if (m.tipo === 'Meio de Semana') programMeetings.push({ id: result.rows[0].id, data });
                 } else existing++;
             }
             await client.query('COMMIT');
-            return NextResponse.json({ message: `${created} reuniões criadas e disponíveis nas designações. ${existing} já existentes preservadas.`, created, existing, totals });
+            return NextResponse.json({ message: `${created} reuniões criadas e disponíveis nas designações. ${existing} já existentes preservadas.`, created, existing, totals, programMeetings });
         }
 
         // 2. Determine Date Range

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
 import { jsPDF } from "jspdf";
@@ -10,6 +11,7 @@ import { Button } from '@/app/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/app/components/ui/sheet';
 import { StatusToast } from '@/app/components/ui/status-toast';
 import { useDesignationPeriod } from './DesignationPeriodContext';
+import { requestMeetingProgram } from '@/app/lib/import-programs-client';
 
 // --- CONSTANTES ---
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -147,9 +149,6 @@ function getWeekCompletionStats(schedule, assignments = {}) {
     total += 1;
     if (assignments[`tesouro_${idx}`]) filled += 1;
   });
-  total += 1;
-  if (assignments.leitura_biblia) filled += 1;
-
   schedule.ministry?.forEach((part, idx) => {
     const isDiscurso = part.title?.toLowerCase().includes('discurso');
     if (isDiscurso) {
@@ -240,6 +239,7 @@ export function LifeMinistryTab() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isParsing, setIsParsing] = useState(false);
   const [error, setError] = useState('');
+  const [programSessionRequired, setProgramSessionRequired] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // New Filter state for Sidebar
@@ -307,6 +307,13 @@ export function LifeMinistryTab() {
   // Filter Logic centralized
   const filteredMeetings = useMemo(() => {
     let lista = [...savedMeetingsList];
+    meetingDates.forEach((date, idx) => {
+      if (!date || !schedules[idx]) return;
+      const existing = lista.findIndex(m => m.dataSQL === date);
+      const loaded = { dataSQL: date, reuniao_id: meetingIds[idx], descricao: weekDescriptions[idx], tem_programacao: true };
+      if (existing >= 0) lista[existing] = { ...lista[existing], ...loaded };
+      else lista.push(loaded);
+    });
     if (year) {
       lista = lista.filter(m => m.dataSQL.startsWith(year));
     }
@@ -318,7 +325,7 @@ export function LifeMinistryTab() {
     }
     // Sort Ascending (Oldest to Newest)
     return lista.sort((a, b) => a.dataSQL.localeCompare(b.dataSQL));
-  }, [savedMeetingsList, month, year]);
+  }, [savedMeetingsList, month, year, meetingDates, schedules, meetingIds, weekDescriptions]);
 
   // Sidebar Items
   const sidebarItems = useMemo(() => {
@@ -326,7 +333,7 @@ export function LifeMinistryTab() {
       id: m.dataSQL,
       date: m.dataSQL,
       label: m.descricao,
-      subLabel: m.cancelado ? 'Reunião cancelada' : !m.tem_programacao ? 'Programação pendente' : m.dataFormatada,
+      subLabel: m.cancelado ? 'Reunião cancelada' : !m.tem_programacao ? 'Programação pendente' : 'Programação disponível',
       meeting: m
     }));
   }, [filteredMeetings]);
@@ -349,9 +356,15 @@ export function LifeMinistryTab() {
       setToastData({ message: meeting.motivo_cancelamento, type: 'error' });
       return;
     }
+    const loadedIndex = meetingDates.findIndex((date, idx) => date === meeting.dataSQL && schedules[idx]);
+    if (loadedIndex >= 0) {
+      setPendingMeeting(null);
+      setCurrentIndex(loadedIndex);
+      setIsMobileModalOpen(true);
+      return;
+    }
     if (meeting.tem_programacao === false) {
       setPendingMeeting(meeting);
-      setSchedules([]);
       setIsMobileModalOpen(false);
       return;
     }
@@ -370,21 +383,48 @@ export function LifeMinistryTab() {
 
       const reconstructedAssignments = mapSavedToAssignments(savedRows, scheduleData);
 
-      setSchedules([scheduleData]);
-      setWeekDescriptions([meeting.descricao]);
-      setMeetingDates([meeting.dataSQL]);
-      setMeetingIds([meeting.reuniao_id]);
-      setAssignmentsList([reconstructedAssignments]);
-      setCurrentIndex(0);
-
-      if (window.innerWidth < 768) {
-        setIsMobileModalOpen(true);
-      }
+      setSchedules(prev => [...prev, scheduleData]);
+      setWeekDescriptions(prev => [...prev, meeting.descricao]);
+      setMeetingDates(prev => [...prev, meeting.dataSQL]);
+      setMeetingIds(prev => [...prev, meeting.reuniao_id]);
+      setAssignmentsList(prev => [...prev, reconstructedAssignments]);
+      setCurrentIndex(schedules.length);
+      setIsMobileModalOpen(true);
     } catch (err) {
       setError(err.message);
     } finally {
       setIsParsing(false);
     }
+  };
+
+  const handleFetchProgram = async () => {
+    if (!pendingMeeting || isParsing) return;
+    setIsParsing(true);
+    setError('');
+    setProgramSessionRequired(false);
+    try {
+      const result = await requestMeetingProgram(pendingMeeting.reuniao_id);
+      const listResponse = await fetch('/api/admin/get-reunioes');
+      if (!listResponse.ok) throw new Error('Programação salva. Atualize a página para carregar a reunião.');
+      const list = await listResponse.json();
+      setSavedMeetingsList(list);
+      const meeting = list.find(m => m.reuniao_id === pendingMeeting.reuniao_id);
+      if (meeting?.tem_programacao) {
+        // Load the fresh entry rather than the old pending entry in state.
+        const struct = await fetch(`/api/admin/get-reuniao-dados?date=${meeting.dataSQL}`);
+        const assigned = await fetch(`/api/recuperar-designacoes?date=${meeting.dataSQL}`);
+        if (!struct.ok || !assigned.ok) throw new Error('Programação salva. Atualize a página para carregar a reunião.');
+        const schedule = await struct.json();
+        const assignments = mapSavedToAssignments(await assigned.json(), schedule);
+        setSchedules(prev => [...prev, schedule]); setWeekDescriptions(prev => [...prev, meeting.descricao]);
+        setMeetingDates(prev => [...prev, meeting.dataSQL]); setMeetingIds(prev => [...prev, meeting.reuniao_id]);
+        setAssignmentsList(prev => [...prev, assignments]);
+        setCurrentIndex(schedules.length); setPendingMeeting(null);
+        setIsMobileModalOpen(true);
+      }
+      setToastData({ message: result.message, type: 'success' });
+    } catch (err) { setError(err.message); setProgramSessionRequired(err.status === 401); }
+    finally { setIsParsing(false); }
   };
 
   const handleFilesParse = async (event) => {
@@ -1244,8 +1284,9 @@ export function LifeMinistryTab() {
   return (
     <div className="p-6 max-w-5xl mx-auto w-full">
       <StatusToast message={toastData.message} type={toastData.type} onClose={() => setToastData({ message: '', type: '' })} />
-      {error && <p role="alert" className="mb-4 bg-red-50 text-red-700 border border-red-200 rounded-lg p-3 text-sm">{error}</p>}
-
+      {error && <p role="alert" className="mb-4 bg-red-50 text-red-700 border border-red-200 rounded-lg p-3 text-sm">{error}
+        {programSessionRequired && <Link href="/" prefetch={false} className="block mt-2 font-semibold underline">Entrar novamente</Link>}
+      </p>}
       {/* MODAL DE EMAIL */}
       {isEmailModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -1338,131 +1379,12 @@ export function LifeMinistryTab() {
           </label>
         </div>
 
-        {/* CARDS DE PRÉVIA DAS SEMANAS IMPORTADAS */}
-        {schedules.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-purple-100 p-5 sm:p-6 flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
-              <div>
-                <h2 className="font-bold text-gray-900 text-base sm:text-lg flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-purple-600" />
-                  Semanas Carregadas nesta Sessão
-                  <span className="text-xs bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full">
-                    {schedules.length} {schedules.length === 1 ? 'semana' : 'semanas'}
-                  </span>
-                </h2>
-                <p className="text-xs text-gray-500">
-                  Visão geral do preenchimento das designações de cada reunião. Clique em Abrir para editar.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {schedules.map((schedule, idx) => {
-                const assignments = assignmentsList[idx] || {};
-                const weekText = weekDescriptions[idx] || `Semana ${idx + 1}`;
-                const stats = getWeekCompletionStats(schedule, assignments);
-                const isComplete = stats.percentage === 100;
-
-                return (
-                  <div
-                    key={idx}
-                    className={`border rounded-xl p-4 flex flex-col justify-between transition-all hover:shadow-md bg-white ${
-                      currentIndex === idx && isMobileModalOpen
-                        ? 'border-purple-500 ring-2 ring-purple-100'
-                        : 'border-gray-200 hover:border-purple-300'
-                    }`}
-                  >
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-bold text-gray-900 text-sm line-clamp-1" title={weekText}>
-                            {weekText}
-                          </h3>
-                          <p className="text-xs text-gray-500 truncate">
-                            {schedule?.weekDate || 'Reunião do Meio de Semana'}
-                          </p>
-                        </div>
-                        <span
-                          className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                            isComplete
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border border-amber-200'
-                          }`}
-                        >
-                          {stats.percentage}%
-                        </span>
-                      </div>
-
-                      {/* Barra de progresso */}
-                      <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-300 ${
-                            isComplete ? 'bg-emerald-500' : 'bg-purple-600'
-                          }`}
-                          style={{ width: `${stats.percentage}%` }}
-                        />
-                      </div>
-
-                      {/* Informações rápidas */}
-                      <div className="text-xs text-gray-600 space-y-1.5 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-gray-400">Presidente:</span>
-                          <span className="font-medium text-gray-800 truncate max-w-[130px]">
-                            {assignments.presidente || <span className="text-gray-400 italic">Pendente</span>}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-gray-400">Leitor Bíblia:</span>
-                          <span className="font-medium text-gray-800 truncate max-w-[130px]">
-                            {assignments.leitura_biblia || <span className="text-gray-400 italic">Pendente</span>}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-[11px] text-gray-400 pt-1 border-t border-gray-200/50">
-                          <span>Partes preenchidas:</span>
-                          <span className="font-semibold text-gray-700">{stats.filled} de {stats.total}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Ações do Card */}
-                    <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCurrentIndex(idx);
-                          setIsMobileModalOpen(true);
-                        }}
-                        className="flex-1 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
-                      >
-                        Abrir / Editar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleShareWhatsApp(idx)}
-                        title="Compartilhar no WhatsApp"
-                        className="p-2 text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 rounded-lg transition-colors border border-emerald-200 shrink-0"
-                      >
-                        <MessageCircle size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleGeneratePDF(idx)}
-                        title="Gerar PDF"
-                        className="p-2 text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 rounded-lg transition-colors border border-gray-200 shrink-0"
-                      >
-                        <FileText size={16} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {pendingMeeting && <div role="status" className="bg-purple-50 border border-purple-200 rounded-xl p-5 text-purple-900">
           <p className="font-semibold">{pendingMeeting.dataFormatada} — Programação pendente</p>
-          <p className="text-sm mt-1">A reunião já está criada. Importe o RTF da semana usando o botão acima para preencher as partes.</p>
+          <p className="text-sm mt-1">Busque a programação no jw.org ou importe o RTF da semana usando o botão acima.</p>
+          <Button className="mt-3 bg-purple-600 text-white" disabled={isParsing || !canImport} onClick={handleFetchProgram}>
+            {isParsing ? <Loader2 className="animate-spin mr-2" size={16} /> : <RefreshCw className="mr-2" size={16} />}Buscar programação no jw.org
+          </Button>
         </div>}
 
         {/* HISTÓRICO DE REUNIÕES */}
@@ -1511,29 +1433,59 @@ export function LifeMinistryTab() {
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {sidebarItems.map((item) => (
+                {sidebarItems.map((item) => {
+                  const idx = meetingDates.findIndex((date, index) => date === item.date && schedules[index]);
+                  const schedule = idx >= 0 ? schedules[idx] : null;
+                  const assignments = idx >= 0 ? assignmentsList[idx] || {} : {};
+                  const stats = schedule ? getWeekCompletionStats(schedule, assignments) : null;
+                  const readingIndex = schedule?.treasures?.findIndex(part =>
+                    part.title?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('leitura da biblia')) ?? -1;
+                  const bibleReader = readingIndex >= 0 ? assignments[`tesouro_${readingIndex}`] : '';
+                  return (
                   <div
                     key={item.id}
-                    onClick={() => {
-                      handleLoadSavedMeeting(item.meeting);
-                    }}
-                    className="p-4 hover:bg-purple-50 cursor-pointer flex items-center justify-between group transition-colors"
+                    className="hover:bg-purple-50 flex flex-col sm:flex-row sm:items-center group transition-colors"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-sm">
+                    <button type="button" disabled={isParsing || item.meeting.cancelado}
+                      onClick={() => handleLoadSavedMeeting(item.meeting)}
+                      aria-label={`Abrir / Editar ${item.label}`}
+                      className="p-4 flex-1 min-w-0 flex items-center gap-4 text-left disabled:cursor-default focus-visible:outline-purple-600">
+                      <div className="w-10 h-10 shrink-0 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-sm">
                         {item.date?.split('-')[2]}
                       </div>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-gray-900 group-hover:text-purple-700">{item.label}</h3>
                         <p className="text-xs text-gray-500">{formatFullDateBR(item.date)}</p>
-                        <p className={`text-xs mt-1 ${item.meeting.cancelado ? 'text-red-600' : 'text-purple-600'}`}>{item.subLabel}</p>
+                        <p className={`text-xs mt-1 ${item.meeting.cancelado ? 'text-red-600' : 'text-purple-600'}`}>
+                          {item.meeting.cancelado || !stats ? item.subLabel : `${stats.filled} de ${stats.total} partes preenchidas · ${stats.percentage}%`}
+                        </p>
+                        {stats && !item.meeting.cancelado && <>
+                          <div className="max-w-xs h-1.5 mt-2 rounded-full bg-gray-100 overflow-hidden" role="progressbar"
+                            aria-label="Preenchimento das designações" aria-valuenow={stats.percentage} aria-valuemin={0} aria-valuemax={100}>
+                            <div className={`h-full ${stats.percentage === 100 ? 'bg-emerald-500' : 'bg-purple-600'}`} style={{ width: `${stats.percentage}%` }} />
+                          </div>
+                          <p className="text-xs mt-2 text-gray-500">Presidente: {assignments.presidente || 'Pendente'} · Leitor Bíblia: {bibleReader || 'Pendente'}</p>
+                        </>}
                       </div>
-                    </div>
-                    <div className="text-gray-400 group-hover:text-purple-500">
+                      <span className="text-gray-400 group-hover:text-purple-500 shrink-0">
                       <ChevronRight size={20} />
-                    </div>
+                      </span>
+                    </button>
+                    {schedule && !item.meeting.cancelado && <div className="flex gap-2 px-4 pb-4 sm:pb-0 sm:pl-0">
+                      <button type="button" onClick={() => handleShareWhatsApp(idx)} title="Compartilhar no WhatsApp"
+                        aria-label={`Compartilhar ${item.label} no WhatsApp`}
+                        className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200">
+                        <MessageCircle size={16} />
+                      </button>
+                      <button type="button" onClick={() => handleGeneratePDF(idx)} title="Gerar PDF"
+                        aria-label={`Gerar PDF de ${item.label}`}
+                        className="p-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg border border-gray-200">
+                        <FileText size={16} />
+                      </button>
+                    </div>}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
