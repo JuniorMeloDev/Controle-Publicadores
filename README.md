@@ -79,8 +79,18 @@ sucesso/falha por destinatário e por antecedência, evita repetir envios confir
 e tenta novamente falhas nas próximas execuções até a data da designação.
 Limpeza pode ser incluída separadamente. Não há envio de relatório atrasado por
 e-mail nesta versão. A configuração mostra os totais de envios e falhas pendentes.
-As três tabelas `alertas_*` são criadas automaticamente no primeiro uso; não é
+As tabelas `alertas_*` são criadas automaticamente no primeiro uso; não é
 necessário executar um SQL manual. Os testes simulam também o servidor de e-mail.
+
+O recebimento por e-mail é ativado por padrão para cada pessoa, inclusive novos
+cadastros. Quem não quiser receber pode desmarcar **Receber lembretes das minhas
+designações por e-mail** em Configurações → Alertas → Meus lembretes por e-mail.
+O menu do usuário também oferece **Minhas configurações**, disponível mesmo sem
+permissão para acessar as configurações gerais. Essa preferência altera somente
+o próprio recebimento; o sininho permanece funcionando.
+O envio depende também da opção geral **Ativar envio automático para a congregação**.
+O cron respeita as preferências pessoais tanto nos novos envios quanto nas tentativas
+de reenvio, e quem nunca salvou uma preferência continua habilitado.
 
 ## Executar os testes
 

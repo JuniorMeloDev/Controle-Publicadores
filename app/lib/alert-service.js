@@ -9,6 +9,7 @@ export async function ensureAlertTables(client) {
             atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         CREATE TABLE IF NOT EXISTS alertas_lidos (
+            -- Read state is independent of each user's email preference.
             publicador_id INTEGER REFERENCES publicadores(id) ON DELETE CASCADE,
             notificacao_id TEXT NOT NULL, lida_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             PRIMARY KEY (publicador_id, notificacao_id)
@@ -18,6 +19,11 @@ export async function ensureAlertTables(client) {
             data_designacao DATE NOT NULL, antecedencia INTEGER NOT NULL,
             status TEXT NOT NULL, tentativas INTEGER NOT NULL DEFAULT 1,
             atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(), enviado_em TIMESTAMPTZ
+        );
+        CREATE TABLE IF NOT EXISTS alertas_preferencias (
+            publicador_id INTEGER PRIMARY KEY REFERENCES publicadores(id) ON DELETE CASCADE,
+            email_designacoes BOOLEAN NOT NULL DEFAULT TRUE,
+            atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
     `);
 }

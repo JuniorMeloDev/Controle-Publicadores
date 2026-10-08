@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Bell, CheckCheck, Calendar, ClipboardList, SprayCan, RefreshCw } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/app/components/ui/dialog';
 import { isAllowed } from '@/app/lib/access-control';
+import { requestNotifications } from '@/app/lib/notification-client';
 
 export function NotificationBell({ userId, permissions }) {
     const [open, setOpen] = useState(false);
@@ -13,16 +14,26 @@ export function NotificationBell({ userId, permissions }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [marking, setMarking] = useState(false);
+    const [sessionExpired, setSessionExpired] = useState(false);
+    const requestVersion = useRef(0);
+    const markingRef = useRef(false);
+    const handleError = useCallback(e => {
+        if (e.status === 401) {
+            setSessionExpired(true);
+            setData({ notifications: [], unread: 0 });
+        }
+        setError(e.message || 'Falha ao carregar notificações.');
+    }, []);
     const load = useCallback(async (signal) => {
-        if (!userId) return;
+        if (!userId || markingRef.current) return;
+        const version = ++requestVersion.current;
         try {
-            const response = await fetch('/api/admin/notificacoes', { cache: 'no-store', signal });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.message);
-            setData(result); setError('');
-        } catch (e) { if (e.name !== 'AbortError') setError(e.message || 'Falha ao carregar notificações.'); }
-        finally { if (!signal?.aborted) setLoading(false); }
-    }, [userId]);
+            const result = await requestNotifications({ signal });
+            if (version !== requestVersion.current || signal?.aborted) return;
+            setData(result); setError(''); setSessionExpired(false);
+        } catch (e) { if (e.name !== 'AbortError' && version === requestVersion.current) handleError(e); }
+        finally { if (!signal?.aborted && version === requestVersion.current) setLoading(false); }
+    }, [userId, handleError]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -37,14 +48,15 @@ export function NotificationBell({ userId, permissions }) {
     }, [load]);
 
     async function markRead(ids) {
+        if (markingRef.current || sessionExpired || !ids.length) return;
+        markingRef.current = true;
+        ++requestVersion.current;
         setMarking(true);
         try {
-            const response = await fetch('/api/admin/notificacoes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.message);
+            const result = await requestNotifications({ ids });
             setData(result); setError('');
-        } catch (e) { setError(e.message); }
-        finally { setMarking(false); }
+        } catch (e) { handleError(e); }
+        finally { markingRef.current = false; setMarking(false); setLoading(false); }
     }
 
     return <Dialog open={open} onOpenChange={value => { setOpen(value); if (value) load(); }}>
@@ -59,14 +71,15 @@ export function NotificationBell({ userId, permissions }) {
                 <DialogTitle className="flex gap-2 items-center"><Bell className="w-5 h-5 text-purple-600" /> Suas notificações</DialogTitle>
                 <DialogDescription>Designações, limpeza e relatório mensal, conforme os alertas da congregação.</DialogDescription>
             </DialogHeader>
-            <div className="flex justify-between items-center gap-2 text-sm">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-sm">
                 <span className="text-gray-500">{data.unread} não lidas</span>
                 <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => load()} aria-label="Atualizar notificações"><RefreshCw className="w-4 h-4" /></Button>
-                    <Button variant="outline" size="sm" disabled={!data.unread || marking} onClick={() => markRead(data.notifications.filter(n => !n.read).map(n => n.id))}><CheckCheck className="w-4 h-4 mr-1" />Marcar todas como lidas</Button>
+                    <Button variant="ghost" size="sm" disabled={marking || sessionExpired} onClick={() => load()} aria-label="Atualizar notificações"><RefreshCw className="w-4 h-4" /></Button>
+                    <Button variant="outline" size="sm" className="h-auto min-h-9 whitespace-normal" disabled={!data.unread || marking || sessionExpired} onClick={() => markRead(data.notifications.filter(n => !n.read).map(n => n.id))}><CheckCheck className="w-4 h-4 mr-1" />Marcar todas como lidas</Button>
                 </div>
             </div>
             {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+            {sessionExpired && <Link href="/" onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700">Entrar novamente</Link>}
             <div className="max-h-[60vh] overflow-y-auto space-y-2">
                 {loading ? <p className="text-center py-8 text-gray-500">Carregando notificações...</p> : !data.notifications.length && !error ? <p className="text-center py-8 text-gray-500">Nenhum alerta no momento.</p> : data.notifications.map(n => {
                     const Icon = n.category === 'limpeza' ? SprayCan : n.category === 'relatorio' ? ClipboardList : Calendar;
@@ -86,13 +99,13 @@ export function NotificationBell({ userId, permissions }) {
                     </div>;
                 })}
             </div>
-            {isAllowed(permissions, 'configuracoes', 'pages') && <Link className="text-sm text-purple-700 hover:underline" href="/admin/configuracoes#alertas" onClick={event => {
-                if (window.location.pathname === '/admin/configuracoes') {
+            <Link className="text-sm text-purple-700 hover:underline" href={isAllowed(permissions, 'configuracoes', 'pages') ? '/admin/configuracoes#alertas' : '/admin/configuracoes/preferencias'} onClick={event => {
+                if (window.location.pathname === '/admin/configuracoes' && isAllowed(permissions, 'configuracoes', 'pages')) {
                     event.preventDefault();
                     window.location.hash = 'alertas';
                 }
                 setOpen(false);
-            }}>Configurar alertas</Link>}
+            }}>Configurar meus alertas</Link>
         </DialogContent>
     </Dialog>;
 }

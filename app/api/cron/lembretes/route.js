@@ -22,9 +22,12 @@ export async function GET(request) {
         }
         const today = todayInBrazil();
         const assignments = await getActiveAssignments(client, { today });
-        const { rows: publishers } = await client.query(`SELECT p.id, p.nome_completo, p.nome_chamado, p.email
+        const { rows: publishers } = await client.query(`SELECT p.id, p.nome_completo, p.nome_chamado, p.email,
+            COALESCE(pref.email_designacoes, TRUE) AS email_reminders_enabled
             FROM publicadores p LEFT JOIN grupos g ON g.id = p.grupo_id
-            WHERE NULLIF(trim(p.email), '') IS NOT NULL AND (g.id IS NULL OR g.ativo = TRUE)`);
+            LEFT JOIN alertas_preferencias pref ON pref.publicador_id = p.id
+            WHERE NULLIF(trim(p.email), '') IS NOT NULL AND (g.id IS NULL OR g.ativo = TRUE)
+                AND COALESCE(pref.email_designacoes, TRUE)`);
         const { rows: retries } = await client.query(`SELECT publicador_id, data_designacao, antecedencia
             FROM alertas_email_envios WHERE data_designacao >= $1 AND
             (status = 'falhou' OR (status = 'processando' AND atualizado_em < NOW() - INTERVAL '15 minutes'))

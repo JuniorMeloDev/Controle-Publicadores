@@ -2,6 +2,7 @@
 
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { AlertSettingsCard } from '@/app/components/AlertSettingsCard';
+import { PersonalAlertSettingsCard } from '@/app/components/PersonalAlertSettingsCard';
 import { SettingsTabs, SettingsPanel } from '@/app/components/SettingsTabs';
 import { SettingsEventsList } from '@/app/components/SettingsEventsList';
 import { useState, useEffect } from 'react';
@@ -966,6 +967,7 @@ export default function ConfiguracoesPage() {
                         </Card>
                         </SettingsPanel>
                         <SettingsPanel value="alertas">
+                            <PersonalAlertSettingsCard />
                             <AlertSettingsCard />
                         </SettingsPanel>
                         <SettingsPanel value="backup">

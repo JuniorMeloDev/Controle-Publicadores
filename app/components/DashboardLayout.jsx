@@ -102,7 +102,7 @@ export function DashboardLayout({ children }) {
   };
 
   const pageKey = getPageKeyForPath(pathname);
-  const canAccessPage = !pageKey || isAllowed(permissions, pageKey, 'pages');
+  const canAccessPage = pathname === '/admin/configuracoes/preferencias' || !pageKey || isAllowed(permissions, pageKey, 'pages');
 
   const filteredNavigation = isPermsLoading
     ? []
@@ -354,6 +354,10 @@ export function DashboardLayout({ children }) {
                         Meus Dados
                       </Link>
 
+                      <Link href="/admin/configuracoes/preferencias" onClick={() => setIsUserMenuOpen(false)}
+                        className="flex min-h-11 items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 rounded-md transition-colors">
+                        <Settings className="w-4 h-4" />Minhas configurações
+                      </Link>
                       {usuario.isAnciao && (
                         <Link
                           href="/admin/gestao-acessos"

@@ -87,7 +87,7 @@ export function buildEmailReminders({ assignments, publishers, settings, today, 
         if (daysUntil < 0 || (!scheduled && !retry)) continue;
         const days = scheduled ? daysUntil : Number(retry.antecedencia);
         const publisher = recipients.get(Number(a.publicador_id));
-        if (!publisher?.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(publisher.email.trim())) continue;
+        if (publisher?.email_reminders_enabled === false || !publisher?.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(publisher.email.trim())) continue;
         const key = `${publisher.id}:${date}:${days}`;
         if (!groups.has(key)) groups.set(key, { key, publisherId: publisher.id, email: publisher.email.trim(),
             name: publisher.nome_chamado || publisher.nome_completo, date, days, assignments: [] });

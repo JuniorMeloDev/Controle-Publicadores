@@ -250,3 +250,56 @@ test('cron builds personalized messages using a simulated mail transport only', 
     assert.match(outgoing[0].html, /Volante/); assert.match(outgoing[0].html, /Parte fictícia/);
     assert.ok(!outgoing[0].html.includes('Pessoa Fictícia Beta'));
 });
+
+test('email is opted in by default but explicit opt-out blocks scheduled messages and retries', () => {
+    const settings = { ...defaults, emailEnabled: true };
+    assert.equal(buildEmailReminders({ assignments, publishers, settings, today }).length, 1);
+    const optedOut = publishers.map(p => ({ ...p, email_reminders_enabled: false }));
+    assert.equal(buildEmailReminders({ assignments, publishers: optedOut, settings, today }).length, 0);
+    const retries = [{ publicador_id: 990001, data_designacao: '2030-01-09', antecedencia: 2 }];
+    assert.equal(buildEmailReminders({ assignments, publishers: optedOut, settings, today: '2030-01-08', retries }).length, 0);
+    assert.equal(buildEmailReminders({ assignments, publishers: publishers.map(p => ({ ...p, email_reminders_enabled: true })), settings, today }).length, 1);
+});
+
+function preferenceRoute(userId = 990001) {
+    let enabled = true;
+    const calls = [];
+    const route = loadRoute('../../app/api/admin/alertas/preferencias/route.js', {
+        getUserIdFromRequest: () => userId,
+        getAlertSettings: async () => defaults,
+        Pool: class { connect() { return { query: async (sql, values) => {
+            calls.push({ sql, values });
+            assert.equal(values[0], userId);
+            if (sql.includes('INSERT')) { enabled = values[1]; return { rows: [] }; }
+            assert.match(sql, /COALESCE\(pref.email_designacoes, TRUE\)/);
+            return { rows: [{ email: 'alfa@example.test', enabled }] };
+        }, release() {} }; } },
+    });
+    return { ...route, calls };
+}
+
+test('personal preferences work without admin permissions and only alter the authenticated identity', async () => {
+    const route = preferenceRoute();
+    const initial = await route.GET({});
+    assert.equal(initial.body.emailRemindersEnabled, true);
+    const result = await route.POST({ json: async () => ({ emailRemindersEnabled: false, publicador_id: 990002, emailEnabled: true }) });
+    assert.equal(result.status, 200);
+    assert.equal(result.body.emailRemindersEnabled, false);
+    assert.equal(result.body.automaticEmailActive, false);
+    const insert = route.calls.find(c => c.sql.includes('INSERT'));
+    assert.deepEqual([...insert.values], [990001, false]);
+    assert.match(insert.sql, /alertas_preferencias/);
+    assert.ok(!route.calls.some(c => /UPDATE alertas_configuracao/.test(c.sql)));
+    assert.equal((await route.POST({ json: async () => ({ emailRemindersEnabled: true }) })).body.emailRemindersEnabled, true);
+});
+
+test('personal preferences reject unauthenticated and malformed writes before querying', async () => {
+    const unauthenticated = preferenceRoute(null);
+    assert.equal((await unauthenticated.GET({})).status, 401);
+    assert.equal(unauthenticated.calls.length, 0);
+    const route = preferenceRoute();
+    for (const value of [null, {}, { emailRemindersEnabled: 'false' }]) {
+        assert.equal((await route.POST({ json: async () => value })).status, 400);
+    }
+    assert.equal(route.calls.length, 0);
+});
