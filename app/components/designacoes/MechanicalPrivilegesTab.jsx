@@ -7,6 +7,7 @@ import { PrivilegeTypesModal } from '@/app/components/designacoes/PrivilegeTypes
 import { MechanicalWeekModal } from '@/app/components/designacoes/MechanicalWeekModal';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
+import { useDesignationPeriod } from './DesignationPeriodContext';
 import { addDateDays, getWeekStart, isMechanicalTypeApplicable } from '@/app/lib/mechanical-assignments';
 
 const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -22,8 +23,7 @@ export function MechanicalPrivilegesTab() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [month, setMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
-    const [year, setYear] = useState(String(new Date().getFullYear()));
+    const { month, setMonth, year, setYear } = useDesignationPeriod();
     const [typesOpen, setTypesOpen] = useState(false);
     const [selectedWeek, setSelectedWeek] = useState(null);
     const [reload, setReload] = useState(0);

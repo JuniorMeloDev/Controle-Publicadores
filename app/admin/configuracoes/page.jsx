@@ -67,6 +67,7 @@ export default function ConfiguracoesPage() {
     const [genOpen, setGenOpen] = useState(false);
     const [genStep, setGenStep] = useState(1); // 1 = Select, 2 = Preview
     const [genPeriod, setGenPeriod] = useState('mensal');
+    const [genMonth, setGenMonth] = useState(String(new Date().getMonth() + 1));
     const [genCustomDate, setGenCustomDate] = useState('');
     const [genCustomType, setGenCustomType] = useState('Meio de Semana');
     const [genLoading, setGenLoading] = useState(false);
@@ -439,7 +440,8 @@ export default function ConfiguracoesPage() {
                 body: JSON.stringify({
                     action: 'preview',
                     period: genPeriod,
-                    year: year
+                    year: year,
+                    month: Number(genMonth)
                 })
             });
 
@@ -499,7 +501,7 @@ export default function ConfiguracoesPage() {
                 setResultData({
                     success: true,
                     message: data.message,
-                    details: [`${toCreate.length} reuniões criadas com sucesso.`]
+                    details: [`${data.created} reuniões criadas com sucesso.`, 'As datas já estão disponíveis nas quatro abas de designações.']
                 });
                 setResultOpen(true);
             } else {
@@ -642,6 +644,7 @@ export default function ConfiguracoesPage() {
                                                                 </SelectTrigger>
                                                                 <SelectContent>
                                                                     <SelectItem value="mensal">Próximo Mês</SelectItem>
+                                                                    <SelectItem value="mes_especifico">Mês Específico ({year})</SelectItem>
                                                                     <SelectItem value="trimestral">Próximo Trimestre</SelectItem>
                                                                     <SelectItem value="semestral">Próximo Semestre</SelectItem>
                                                                     <SelectItem value="anual">Até o final do ano ({year})</SelectItem>
@@ -650,6 +653,14 @@ export default function ConfiguracoesPage() {
                                                             </Select>
                                                         </div>
 
+                                                        {genPeriod === 'mes_especifico' && <div className="space-y-2">
+                                                            <Label>Mês de {year}</Label>
+                                                            <Select value={genMonth} onValueChange={setGenMonth}>
+                                                                <SelectTrigger className="text-gray-900"><SelectValue /></SelectTrigger>
+                                                                <SelectContent>{['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((name, index) => <SelectItem key={name} value={String(index + 1)}>{name}</SelectItem>)}</SelectContent>
+                                                            </Select>
+                                                        </div>}
+                                                        <p className="text-sm text-purple-700">As reuniões criadas aparecerão automaticamente em Vida e Ministério, Discursos Públicos, Privilégios Mecânicos e Limpeza.</p>
                                                         {genPeriod === 'avulso' ? (
                                                             <div className="space-y-4 pt-4 border-t border-gray-200">
                                                                 <div className="space-y-2">

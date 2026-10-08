@@ -7,6 +7,7 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Loader2, Search, Filter, AlertCircle, Plus, Trash2, Calendar, X } from 'lucide-react';
 import Link from 'next/link';
+import { MeetingGeneratorDialog } from '@/app/components/reunioes/MeetingGeneratorDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { StatusToast } from '@/app/components/ui/status-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/app/components/ui/dialog';
@@ -104,7 +105,8 @@ export default function ReunioesPage() {
             });
 
             if (res.ok) {
-                setToast({ message: `${ids.length} reunião(ões) deletada(s) com sucesso!`, type: 'success' });
+                const data = await res.json();
+                setToast({ message: data.message, type: 'success' });
                 setSelectedMeetings(new Set());
                 setIsDeleteConfirmOpen(false);
                 fetchMeetings();
@@ -164,7 +166,8 @@ export default function ReunioesPage() {
             });
 
             if (res.ok) {
-                setToast({ message: 'Restrição removida com sucesso!', type: 'success' });
+                const data = await res.json();
+                setToast({ message: data.message, type: 'success' });
                 fetchMeetings();
             } else {
                 const errorData = await res.json();
@@ -248,6 +251,10 @@ export default function ReunioesPage() {
                     </div>
 
                     {/* Modal para Reunião Avulsa */}
+                    <MeetingGeneratorDialog year={year} month={month} onCreated={async (createdYear, createdMonth) => {
+                        setYear(createdYear); setMonth(String(Number(createdMonth)));
+                        if (createdYear === year && Number(createdMonth) === Number(month)) await fetchMeetings();
+                    }} />
                     <Dialog open={isCustomModalOpen} onOpenChange={setIsCustomModalOpen}>
                         <DialogTrigger asChild>
                             <Button className="gap-2 bg-purple-600 hover:bg-purple-700 text-white shadow-sm">
@@ -332,24 +339,24 @@ export default function ReunioesPage() {
                                 </Dialog>
                             )}
                             <Button variant="destructive" size="sm" className="gap-1 bg-red-600 text-white hover:bg-red-700" onClick={() => setIsDeleteConfirmOpen(true)}>
-                                <Trash2 className="w-4 h-4 text-white" /> Deletar ({selectedMeetings.size})
+                                <Trash2 className="w-4 h-4 text-white" /> Cancelar reuniões ({selectedMeetings.size})
                             </Button>
                             <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
                                 <DialogContent className="bg-white text-gray-900 shadow-xl rounded-2xl border border-gray-200">
                                     <DialogHeader>
-                                        <DialogTitle>Confirmar Exclusão</DialogTitle>
+                                        <DialogTitle>Cancelar reuniões</DialogTitle>
                                     </DialogHeader>
                                     <p className="py-4 text-gray-700">
-                                        Tem certeza que deseja deletar {selectedMeetings.size} reunião(ões)? Esta ação não pode ser desfeita.
+                                        Cancelar {selectedMeetings.size} reunião(ões)? As designações e o histórico serão preservados.
                                     </p>
                                     <DialogFooter className="flex flex-wrap gap-2">
-                                        <Button variant="outline" onClick={() => setIsDeleteConfirmOpen(false)}>Cancelar</Button>
+                                        <Button variant="outline" onClick={() => setIsDeleteConfirmOpen(false)}>Voltar</Button>
                                         <Button 
                                             onClick={handleDeleteSelected} 
                                             disabled={isProcessing}
                                             className="bg-red-600 hover:bg-red-700 text-white"
                                         >
-                                            {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Deletar'}
+                                            {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar cancelamento'}
                                         </Button>
                                     </DialogFooter>
                                 </DialogContent>
@@ -471,7 +478,7 @@ export default function ReunioesPage() {
                                                     <div className="flex flex-col gap-2 items-end">
                                                         <div className="relative inline-block">
                                                             <span className="cursor-help flex items-center justify-end gap-1 text-xs font-medium text-red-600 italic px-3 py-2 bg-red-100/50 rounded-md border border-red-200">
-                                                                <AlertCircle className="w-3 h-3" /> Evento Especial
+                                                                <AlertCircle className="w-3 h-3" /> {meeting.cancelada ? 'Cancelada' : 'Evento Especial'}
                                                             </span>
                                                             {/* Custom Tooltip */}
                                                             <div className="absolute bottom-full right-0 mb-2 w-max max-w-xs z-50 hidden group-hover:block animate-in fade-in zoom-in-95 duration-200">
@@ -496,7 +503,7 @@ export default function ReunioesPage() {
                                                             className="text-xs gap-1 text-orange-600 border-orange-200 hover:bg-orange-50"
                                                         >
                                                             {isProcessing ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-                                                            Remover
+                                                            {meeting.cancelada ? 'Restaurar' : 'Remover'}
                                                         </Button>
                                                     </div>
                                                 ) : (
@@ -562,7 +569,7 @@ export default function ReunioesPage() {
                                                 <div className="space-y-3">
                                                     <div className="rounded-lg border border-red-200 bg-white/70 p-3">
                                                         <p className="flex items-center gap-1 text-xs font-semibold text-red-600 uppercase tracking-wide">
-                                                            <AlertCircle className="w-3 h-3" /> Evento Especial
+                                                            <AlertCircle className="w-3 h-3" /> {meeting.cancelada ? 'Cancelada' : 'Evento Especial'}
                                                         </p>
                                                         {meeting.evento_nome && (
                                                             <p className="mt-1 text-sm font-medium text-orange-700">{meeting.evento_nome}</p>
@@ -579,7 +586,7 @@ export default function ReunioesPage() {
                                                             className="text-xs gap-1 text-orange-600 border-orange-200 hover:bg-orange-50"
                                                         >
                                                             {isProcessing ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-                                                            Remover
+                                                            {meeting.cancelada ? 'Restaurar' : 'Remover'}
                                                         </Button>
                                                     </div>
                                                 </div>

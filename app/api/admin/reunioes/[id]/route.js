@@ -62,12 +62,10 @@ export async function GET(request, { params }) {
                 SELECT d.*, COALESCE(p.nome_chamado, p.nome_completo) as presidente_nome
                 FROM discursos_publicos d
                 LEFT JOIN publicadores p ON d.presidente_id = p.id
-                WHERE d.data = $1
-                   OR (d.data >= date_trunc('week', $1::date)::date 
-                       AND d.data <= (date_trunc('week', $1::date) + interval '6 days')::date)
+                WHERE d.reuniao_id = $2 OR (d.reuniao_id IS NULL AND d.data = $1)
                 ORDER BY d.data ASC
                 LIMIT 1
-            `, [dateStr]);
+            `, [dateStr, id]);
             if (discRes.rows.length > 0) {
                 discurso = discRes.rows[0];
             }
@@ -80,11 +78,9 @@ export async function GET(request, { params }) {
                 SELECT d.nome_parte, COALESCE(p.nome_chamado, p.nome_completo) as nome_completo
                 FROM designacoes_reuniao d
                 JOIN publicadores p ON d.publicador_id = p.id
-                WHERE d.data_reuniao = $1
-                   OR (d.data_reuniao >= date_trunc('week', $1::date)::date 
-                       AND d.data_reuniao <= (date_trunc('week', $1::date) + interval '6 days')::date)
+                WHERE d.reuniao_id = $2 OR (d.reuniao_id IS NULL AND d.data_reuniao = $1)
                 ORDER BY d.id ASC
-            `, [dateStr]);
+            `, [dateStr, id]);
             vidaMinisterio = vmRes.rows;
         } catch (_) {}
 

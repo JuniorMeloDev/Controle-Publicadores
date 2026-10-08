@@ -3,6 +3,8 @@ import { Pool } from '@neondatabase/serverless';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
 import { isAllowed } from '@/app/lib/access-control';
 import { registerAuditLog } from '@/app/lib/audit-log';
+import { resolveProgramMeeting } from '@/app/lib/meeting-calendar';
+import { getCalendarContext, withCalendarState } from '@/app/lib/meeting-calendar-service';
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
@@ -48,7 +50,7 @@ function parseRTFMeeting(rtf) {
   // Extrair data da semana e leitura da Bíblia do cabeçalho
   for (const line of lines.slice(0, 15)) {
     const cleaned = cleanLine(line);
-    const match = cleaned.match(/(\d{1,2}(?:\s+de\s+[a-zá-úãõ]+)?\s*(?:a|-)\s*\d{1,2}\s+de\s+[a-zá-úãõ]+)\s*\(([^)]+)\)/i);
+    const match = cleaned.match(/(\d{1,2}(?:\s+de\s+[a-zá-úãõ]+)?\s*(?:a|-)\s*\d{1,2}\s+de\s+[a-zá-úãõ]+(?:\s+de\s+\d{4})?)\s*\(([^)]+)\)/i);
     if (match) {
       weekDate = match[1].trim().toUpperCase();
       bibleReading = cleanLine(match[2]).trim().toUpperCase();
@@ -150,7 +152,7 @@ export async function POST(req) {
       return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
     }
 
-    const { textContent } = await req.json();
+    const { textContent, year } = await req.json();
 
     if (!textContent) {
       return NextResponse.json({ message: 'Nenhum conteúdo de texto fornecido.' }, { status: 400 });
@@ -166,6 +168,11 @@ export async function POST(req) {
       );
     }
 
+    const [calendar, context] = await Promise.all([
+      client.query("SELECT * FROM reunioes_registro WHERE tipo = 'Meio de Semana'"),
+      getCalendarContext(client)
+    ]);
+    const meeting = resolveProgramMeeting(parsedData.weekDate, year, calendar.rows.map(row => withCalendarState(row, context)));
     await registerAuditLog(client, {
       userId,
       action: 'rtf_importado',
@@ -173,11 +180,11 @@ export async function POST(req) {
       details: { weekDate: parsedData.weekDate, method: 'local_parser' }
     });
 
-    return NextResponse.json(parsedData, { status: 200 });
+    return NextResponse.json({ ...parsedData, meetingDate: meeting.data, reuniao_id: meeting.id }, { status: 200 });
 
   } catch (error) {
     console.error('Erro na API /api/admin/parse-rtf:', error);
-    return NextResponse.json({ message: error.message || 'Falha ao processar o arquivo no servidor.' }, { status: 500 });
+    return NextResponse.json({ message: error.code ? 'Falha ao processar o arquivo no servidor.' : error.message }, { status: error.code ? 500 : 400 });
   } finally {
     client.release();
   }

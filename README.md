@@ -92,6 +92,51 @@ O envio depende também da opção geral **Ativar envio automático para a congr
 O cron respeita as preferências pessoais tanto nos novos envios quanto nas tentativas
 de reenvio, e quem nunca salvou uma preferência continua habilitado.
 
+## Calendário compartilhado de reuniões e designações
+
+Execute uma vez no banco de cada ambiente antes de usar esta versão:
+
+```bash
+npm run migrate:calendar
+```
+
+A migração acrescenta vínculos por `reuniao_id` e associa os registros existentes
+quando a data e o tipo correspondem. Ela pode ser repetida. Registros sem reunião
+correspondente ou com duplicidades permanecem preservados para revisão.
+
+Em **Reuniões → Gerar reuniões do mês**, escolha o mês e confira a prévia.
+As datas aparecem automaticamente nas quatro abas de Designações: meio de semana
+em Vida e Ministério, fim de semana em Discursos Públicos, e todas as reuniões
+em Privilégios Mecânicos e Limpeza. A criação prepara a agenda; os responsáveis
+continuam sendo escolhidos em cada aba. A limpeza tem uma designação por reunião,
+permitindo repetir o grupo nas duas reuniões da semana.
+
+Em Vida e Ministério, as reuniões sem conteúdo aparecem como **Programação
+pendente**. Selecione o ano da apostila antes de importar o RTF. A semana do arquivo
+é vinculada à data real da reunião, incluindo visitas na terça-feira. Sem reunião
+ativa ou com mais de uma reunião na semana, a importação solicita revisão do calendário.
+
+O mês e o ano selecionados são mantidos ao trocar as abas. Limpeza também permite
+consultar um intervalo de datas. Reuniões já existentes não são duplicadas pela
+geração; “Próximo Mês” agora cobre o próximo mês civil inteiro. Períodos que cruzam
+o ano exigem os dias de reunião configurados também para o ano seguinte.
+
+Alterar a data de uma reunião atualiza a programação, as designações e a limpeza
+vinculadas, incluindo as datas usadas pelos relatórios e lembretes. **Cancelar
+reuniões** preserva o histórico e interrompe os lembretes. O botão **Restaurar**
+reativa uma reunião cancelada manualmente; eventos especiais continuam sendo respeitados.
+
+Além dos testes simulados, há uma verificação opcional do SQL:
+
+```bash
+npm run verify:calendar
+```
+
+Esse comando requer conexão ao PostgreSQL configurado em `.env.local`, usa uma
+conexão direta e cria somente tabelas temporárias com dados fictícios. Verifica
+migração repetida, geração, agendas pendentes, importação, preenchimento, mudança
+de data, cancelamento e restauração sem modificar os registros persistentes.
+
 ## Executar os testes
 
 ```bash

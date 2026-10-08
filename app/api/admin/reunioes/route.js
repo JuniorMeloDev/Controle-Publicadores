@@ -1,6 +1,9 @@
 
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { meetingCancellation } from '@/app/lib/meeting-calendar';
+import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
+import { isAllowed } from '@/app/lib/access-control';
 import { findVisitInWeek, getVisitTuesday, isSuperintendentVisit } from '@/app/lib/meeting-visits';
 
 export const dynamic = 'force-dynamic';
@@ -233,79 +236,7 @@ export async function GET(request) {
             virtual: false
         };
 
-        if (!config) return result;
-
-        // A visit moves the midweek meeting; it does not cancel the Tuesday meeting.
-        const eventOnDay = specialEvents.find(e => e.dateStr === dateStr && !isSuperintendentVisit(e));
-        if (eventOnDay) {
-            result.cancelado = true;
-            result.motivo_cancelamento = `${eventOnDay.tipo}: ${eventOnDay.nome}`;
-            result.evento_nome = eventOnDay.nome;
-        }
-
-        // 2. Complex Rules for Midweek meetings (only if not already cancelled)
-        if (!result.cancelado && row.tipo === 'Meio de Semana') {
-            const current = new Date(meetingDate);
-            const startOfWeek = new Date(current);
-            startOfWeek.setDate(current.getUTCDate() - current.getUTCDay() + 1); // Monday
-            const endOfWeek = new Date(startOfWeek);
-            endOfWeek.setDate(startOfWeek.getUTCDate() + 6); // Sunday
-
-            const visitInWeek = findVisitInWeek(specialEvents, dateStr);
-            if (visitInWeek && dateStr !== getVisitTuesday(visitInWeek.data)) {
-                result.cancelado = true;
-                result.motivo_cancelamento = 'Semana de visita: reunião transferida para terça-feira.';
-                result.evento_nome = visitInWeek.nome;
-            }
-
-            // 2a. Check for Celebração in the same week
-            const celInWeek = specialEvents.find(e =>
-                e.tipo === 'Celebração' &&
-                e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
-            );
-            if (!result.cancelado && celInWeek) {
-                result.cancelado = true;
-                result.motivo_cancelamento = `Celebração na semana: ${celInWeek.nome} (${celInWeek.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})})`;
-                result.evento_nome = celInWeek.nome;
-            }
-
-            // 2b. Check for Assembleia/Congresso on the weekend of the SAME week
-            if (!result.cancelado) {
-                const assemblyInWeek = specialEvents.find(e =>
-                    ['Assembleia', 'Congresso'].includes(e.tipo) &&
-                    e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
-                );
-                if (assemblyInWeek) {
-                    result.cancelado = true;
-                    result.motivo_cancelamento = `${assemblyInWeek.tipo}: ${assemblyInWeek.nome} (${assemblyInWeek.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})})`;
-                    result.evento_nome = assemblyInWeek.nome;
-                }
-            }
-
-            // 2c. Check for Assembly/Congress on UPCOMING weekend of next week (Antecede)
-            if (!result.cancelado) {
-                const targetDayIdx = daysMap[config.dia_fim_semana];
-                if (targetDayIdx !== undefined) {
-                    for (let i = 1; i <= 6; i++) {
-                        const d = new Date(current);
-                        d.setDate(d.getUTCDate() + i);
-                        if (d.getUTCDay() === targetDayIdx) {
-                            const dateStrWe = toDateStr(d);
-                            const weekendEvent = specialEvents.find(e =>
-                                e.dateStr === dateStrWe &&
-                                ['Assembleia', 'Congresso'].includes(e.tipo)
-                            );
-                            if (weekendEvent) {
-                                result.cancelado = true;
-                                result.motivo_cancelamento = `Antecede ${weekendEvent.tipo}: ${weekendEvent.nome} (${weekendEvent.dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC', day: '2-digit', month: '2-digit'})})`;
-                                result.evento_nome = weekendEvent.nome;
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        Object.assign(result, meetingCancellation(row, specialEvents, config));
 
         return result;
     });
@@ -432,6 +363,8 @@ export async function GET(request) {
 export async function POST(request) {
   const client = await pool.connect();
   try {
+    const permissions = await getUserPermissions(client, getUserIdFromRequest(request));
+    if (!isAllowed(permissions, 'configuracoes_editar', 'actions')) return NextResponse.json({ message: 'Acesso negado.' }, { status: 403 });
     const body = await request.json();
     const { 
         data, tipo, 

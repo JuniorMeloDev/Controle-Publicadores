@@ -4,6 +4,8 @@ import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-acces
 import { isAllowed } from '@/app/lib/access-control';
 import { registerAuditLog } from '@/app/lib/audit-log';
 import { getWeekStart } from '@/app/lib/mechanical-assignments';
+import { getCalendarContext } from '@/app/lib/meeting-calendar-service';
+import { dateOnly, meetingCancellation } from '@/app/lib/meeting-calendar';
 
 export const dynamic = 'force-dynamic';
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
@@ -66,7 +68,13 @@ export async function POST(request) {
         await client.query('BEGIN');
         transaction = true;
         const ids = meetings.map(m => m.reuniao_id);
-        const meetingRes = await client.query('SELECT id, data FROM reunioes_registro WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE', [ids]);
+        const meetingRes = await client.query('SELECT id, data, tipo, cancelada FROM reunioes_registro WHERE id = ANY($1::int[]) AND cancelada = FALSE ORDER BY id FOR UPDATE', [ids]);
+        const context = await getCalendarContext(client);
+        if (meetingRes.rows.some(m => meetingCancellation(m, context.events, context.configs.get(dateOnly(m.data).slice(0, 4))).cancelado)) {
+            await client.query('ROLLBACK');
+            transaction = false;
+            return NextResponse.json({ message: 'Uma reunião foi cancelada. Atualize a agenda antes de designar.' }, { status: 400 });
+        }
         const typeRes = await client.query('SELECT id, nome FROM privilegios_tipos');
         const types = new Map(typeRes.rows.map(t => [t.id, t.nome]));
         const publisherIds = meetings.flatMap(m => m.assignments.map(a => a.publicador_id).filter(Boolean));

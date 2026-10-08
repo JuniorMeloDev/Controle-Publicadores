@@ -1,6 +1,9 @@
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { findVisitInWeek, getVisitTuesday } from '@/app/lib/meeting-visits';
+import { dateOnly, generationRange, isCalendarDate, meetingCancellation } from '@/app/lib/meeting-calendar';
+import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
+import { isAllowed } from '@/app/lib/access-control';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,13 +22,17 @@ export async function POST(request) {
     const client = await pool.connect();
     try {
         const body = await request.json();
-        const { action, period, year, options } = body; 
+        const { action, period = 'mensal', year, month, options } = body;
+        const permissions = await getUserPermissions(client, getUserIdFromRequest(request));
+        if (!isAllowed(permissions, 'configuracoes_editar', 'actions')) {
+            return NextResponse.json({ message: 'Você não tem permissão para criar reuniões.' }, { status: 403 });
+        }
         
         // NOVO: Tratamento direto para criação de reunião avulsa/personalizada
         if (action === 'create_custom') {
             const { data, tipo } = body;
             
-            if (!data || !tipo) {
+            if (!isCalendarDate(data) || !['Meio de Semana', 'Fim de Semana'].includes(tipo)) {
                 return NextResponse.json({ message: 'A data e o tipo são obrigatórios.' }, { status: 400 });
             }
 
@@ -41,15 +48,16 @@ export async function POST(request) {
                 VALUES ($1, $2)
             `, [data, tipo]);
 
-            return NextResponse.json({ message: 'Reunião personalizada criada com sucesso!' }, { status: 201 });
+            return NextResponse.json({ message: 'Reunião criada e disponível nas abas de designações.' }, { status: 201 });
         }
 
 
         // LOGICA PADRÃO EM LOTE (Mensal, Trimestral, etc...)
         
         // 1. Fetch Configuration & Events
-        const configRes = await client.query('SELECT * FROM configuracoes_gerais WHERE ano = $1', [year]);
-        const config = configRes.rows[0];
+        const configRes = await client.query('SELECT * FROM configuracoes_gerais WHERE ano BETWEEN $1::int AND $1::int + 1', [year]);
+        const configs = new Map(configRes.rows.map(c => [String(c.ano || year), c]));
+        let config = configs.get(String(year));
         
         if (!config || !config.dia_meio_semana || !config.dia_fim_semana) {
             return NextResponse.json({ message: 'Configure os dias de reunião primeiro.' }, { status: 400 });
@@ -57,34 +65,44 @@ export async function POST(request) {
 
         const eventsRes = await client.query(`SELECT * FROM eventos_especiais
             WHERE data BETWEEN make_date($1::int, 1, 1) - 7
-                AND make_date($1::int, 12, 31) + 7`, [year]);
+                AND make_date($1::int + 1, 12, 31) + 7`, [year]);
         const events = eventsRes.rows.map(e => ({
             ...e,
             dateObj: new Date(`${new Date(e.data).toISOString().slice(0, 10)}T00:00:00Z`)
         }));
 
-        // 2. Determine Date Range
-        const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
-        // Start from tomorrow to avoid issues with "today"
-        let startDate = new Date(`${today}T00:00:00Z`);
-        startDate.setUTCDate(startDate.getUTCDate() + 1);
-        
-        // Adjust start date if we are in a different year context
-        if (startDate.getUTCFullYear() < year) {
-             startDate = new Date(Date.UTC(year, 0, 1));
-        } else if (startDate.getUTCFullYear() > year) {
-             return NextResponse.json({ message: 'O ano selecionado já passou.' }, { status: 400 });
+        if (action === 'create') {
+            const selected = options?.meetings_to_create;
+            if (!Array.isArray(selected) || !selected.length || selected.length > 500 ||
+                selected.some(m => !isCalendarDate(m.data) || !['Meio de Semana', 'Fim de Semana'].includes(m.tipo))) {
+                return NextResponse.json({ message: 'Selecione reuniões com datas e tipos válidos.' }, { status: 400 });
+            }
+            await client.query('BEGIN');
+            let created = 0;
+            let existing = 0;
+            const totals = { meio_semana: 0, fim_semana: 0 };
+            for (const m of selected) {
+                const visit = m.tipo === 'Meio de Semana' && findVisitInWeek(events, m.data);
+                const data = visit ? getVisitTuesday(visit.data) : m.data;
+                const meetingConfig = configs.get(data.slice(0, 4));
+                if (!meetingConfig) throw new Error(`Configure os dias de reunião de ${data.slice(0, 4)} antes de gerar.`);
+                if (meetingCancellation({ ...m, data }, events, meetingConfig).cancelado) throw new Error(`A reunião de ${data} conflita com um evento especial. Gere a prévia novamente.`);
+                const result = await client.query(`INSERT INTO reunioes_registro (data, tipo)
+                    VALUES ($1, $2) ON CONFLICT (data) DO NOTHING RETURNING id`, [data, m.tipo]);
+                if (result.rowCount) {
+                    created++;
+                    totals[m.tipo === 'Meio de Semana' ? 'meio_semana' : 'fim_semana']++;
+                } else existing++;
+            }
+            await client.query('COMMIT');
+            return NextResponse.json({ message: `${created} reuniões criadas e disponíveis nas designações. ${existing} já existentes preservadas.`, created, existing, totals });
         }
 
-        let endDate = new Date(startDate);
-        if (period === 'mensal') endDate.setUTCMonth(endDate.getUTCMonth() + 1);
-        else if (period === 'trimestral') endDate.setUTCMonth(endDate.getUTCMonth() + 3);
-        else if (period === 'semestral') endDate.setUTCMonth(endDate.getUTCMonth() + 6);
-        else if (period === 'anual') endDate = new Date(Date.UTC(year, 11, 31));
-        
-        // Cap at end of year
-        if (endDate.getUTCFullYear() > year) endDate = new Date(Date.UTC(year, 11, 31));
-
+        // 2. Determine Date Range
+        const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+        const range = generationRange({ period, year, month, today });
+        const startDate = new Date(`${range.start}T00:00:00Z`);
+        const endDate = new Date(`${range.end}T00:00:00Z`);
 
         // 3. Simulation Logic
         const proposedMeetings = [];
@@ -94,101 +112,20 @@ export async function POST(request) {
         
         // Iterate day by day
         while (current <= endDate) {
-            const dateStr = current.toISOString().split('T')[0];
+            const dateStr = dateOnly(current);
+            config = configs.get(dateStr.slice(0, 4));
+            if (!config?.dia_meio_semana || !config?.dia_fim_semana) throw new Error(`Configure os dias de reuni\u00e3o de ${dateStr.slice(0, 4)} antes de gerar.`);
             const weekday = getWeekdayName(current);
-            const eventOnDay = events.find(e => e.dateObj.toISOString().split('T')[0] === dateStr);
-
             let type = null;
-            let skip = false;
-            let reason = '';
-
-            // Helper for formatting date to BR standard in warnings
-            const formatDateBR = (dateStr) => {
-                const [y, m, d] = dateStr.split('-');
-                return `${d}-${m}-${y}`;
-            };
-
-            // Check if it's a meeting day
             if (weekday === config.dia_meio_semana) type = 'Meio de Semana';
             if (weekday === config.dia_fim_semana) type = 'Fim de Semana';
-
-            const visitInWeek = findVisitInWeek(events, dateStr);
-            const visitTuesday = visitInWeek && getVisitTuesday(visitInWeek.data);
-            if (visitInWeek && dateStr === visitTuesday) {
-                type = 'Meio de Semana';
-                reason = 'Reunião de visita na terça-feira';
-            }
-
+            const visit = findVisitInWeek(events, dateStr);
+            if (visit && dateStr === getVisitTuesday(visit.data)) type = 'Meio de Semana';
             if (type) {
-                // RULE 1: Special Events on the day itself
-                if (eventOnDay) {
-                    if (eventOnDay.tipo === 'Celebração') {
-                       skip = true;
-                       reason = `Celebração neste dia (${eventOnDay.nome})`;
-                    } 
-                    else if (['Assembleia', 'Congresso'].includes(eventOnDay.tipo)) {
-                        skip = true;
-                        reason = `${eventOnDay.tipo} neste dia`;
-                    }
-                }
-            }
-
-            // RULE 2: Complex Interactions
-            if (type === 'Meio de Semana' && !skip) {
-                const startOfWeek = new Date(current);
-                startOfWeek.setUTCDate(current.getUTCDate() - (current.getUTCDay() + 6) % 7); // Monday
-                const endOfWeek = new Date(startOfWeek);
-                endOfWeek.setUTCDate(startOfWeek.getUTCDate() + 6); // Sunday
-
-                const celebracaoInWeek = events.find(e => 
-                    e.tipo === 'Celebração' && 
-                    e.dateObj >= startOfWeek && e.dateObj <= endOfWeek
-                );
-
-                if (celebracaoInWeek) {
-                    skip = true;
-                    const celDate = celebracaoInWeek.dateObj.toISOString().split('T')[0];
-                    reason = `Celebração nesta semana (${formatDateBR(celDate)})`;
-                }
-
-                if (!skip) {
-                    let nextWeekend = new Date(current);
-                    for(let i=1; i<=6; i++) {
-                        nextWeekend.setUTCDate(nextWeekend.getUTCDate() + 1);
-                        if (getWeekdayName(nextWeekend) === config.dia_fim_semana) break;
-                    }
-                    
-                    const weekendEvent = events.find(e => 
-                        e.dateObj.toISOString().split('T')[0] === nextWeekend.toISOString().split('T')[0] &&
-                        ['Assembleia', 'Congresso'].includes(e.tipo)
-                    );
-
-                    if (weekendEvent) {
-                        skip = true;
-                        const weDate = weekendEvent.dateObj.toISOString().split('T')[0];
-                        reason = `Antecede ${weekendEvent.tipo} no fim de semana (${formatDateBR(weDate)})`;
-                    }
-                    
-                    if (!skip && visitInWeek && dateStr !== visitTuesday) {
-                        skip = true;
-                        reason = 'Semana de Visita: Reunião movida para Terça-feira';
-                    }
-                }
-            }
-
-            // General Generation logic for Configured Days
-            if (type && !skip) {
-                proposedMeetings.push({
-                    data: dateStr,
-                    tipo: type,
-                    weekday: weekday,
-                    reason: reason || 'Agenda Regular'
-                });
-                if (visitInWeek && dateStr === visitTuesday) {
-                    warnings.push(`Reunião de Visita gerada na Terça-feira (${formatDateBR(dateStr)})`);
-                }
-            } else if (skip && type) {
-                warnings.push(`Reunião de ${type} em ${formatDateBR(dateStr)} pulada: ${reason}`);
+                const state = meetingCancellation({ data: dateStr, tipo: type }, events, config);
+                if (state.cancelado) warnings.push(`${dateStr}: ${state.motivo_cancelamento}`);
+                else proposedMeetings.push({ data: dateStr, tipo: type, weekday,
+                    reason: visit && type === 'Meio de Semana' ? 'Reuni\u00e3o de visita na ter\u00e7a-feira' : 'Agenda Regular' });
             }
 
             current.setUTCDate(current.getUTCDate() + 1);
@@ -199,7 +136,7 @@ export async function POST(request) {
             if (proposedMeetings.length > 0) {
                 const dates = proposedMeetings.map(m => m.data);
                 const existingRes = await client.query(`SELECT data FROM reunioes_registro WHERE data = ANY($1::date[])`, [dates]);
-                const existingDates = new Set(existingRes.rows.map(r => r.data.toISOString().split('T')[0]));
+                const existingDates = new Set(existingRes.rows.map(r => dateOnly(r.data)));
                 
                 proposedMeetings.forEach(m => {
                     if (existingDates.has(m.data)) m.exists = true;
@@ -211,37 +148,13 @@ export async function POST(request) {
                 warnings 
             });
         } 
-        else if (action === 'create') {
-            const { meetings_to_create } = options || {};
-            
-            if (!meetings_to_create || !Array.isArray(meetings_to_create)) {
-                 return NextResponse.json({ message: 'Nenhuma reunião selecionada.' }, { status: 400 });
-            }
-
-            let createdCount = 0;
-            for (const m of meetings_to_create) {
-                try {
-                     const visit = m.tipo === 'Meio de Semana' && findVisitInWeek(events, m.data);
-                     const meetingDate = visit ? getVisitTuesday(visit.data) : m.data;
-                     await client.query(`
-                        INSERT INTO reunioes_registro (data, tipo) 
-                        VALUES ($1, $2)
-                        ON CONFLICT (data) DO NOTHING
-                     `, [meetingDate, m.tipo]);
-                     createdCount++;
-                } catch (e) {
-                    console.error("Insert error for " + m.data, e);
-                }
-            }
-            
-            return NextResponse.json({ message: `Configuração concluída. ${createdCount} reuniões criadas.` });
-        }
 
         return NextResponse.json({ message: 'Ação inválida.' }, { status: 400 });
 
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Erro na geração:', err);
-        return NextResponse.json({ message: 'Erro interno.' }, { status: 500 });
+        return NextResponse.json({ message: err.code ? 'Erro interno.' : err.message }, { status: err.code ? 500 : 400 });
     } finally {
         client.release();
     }

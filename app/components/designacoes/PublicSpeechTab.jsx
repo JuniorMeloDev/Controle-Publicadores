@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
-import { Loader2, Calendar, User, BookOpen, Music, Users, Plus, Trash2, Edit, Menu, AlertTriangle, Printer, FileText } from 'lucide-react';
+import { Loader2, Calendar, User, BookOpen, Music, Users, Plus, Trash2, Edit, Menu, AlertTriangle, Printer, FileText, ChevronRight } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -21,6 +21,7 @@ import {
 import { PublisherCombobox } from '@/app/components/reunioes/PublisherCombobox';
 import { ThemeCombobox } from '@/app/components/designacoes/ThemeCombobox';
 import { HistorySidebar } from '@/app/components/designacoes/HistorySidebar';
+import { useDesignationPeriod } from './DesignationPeriodContext';
 
 // Helper to format date consistent with backend
 const formatDate = (dateStr) => {
@@ -28,6 +29,10 @@ const formatDate = (dateStr) => {
     const [y, m, d] = dateStr.split('-');
     return `${d}/${m}/${y}`;
 };
+
+const speechStatus = talk => talk.cancelado
+    ? `Cancelada: ${talk.motivo_cancelamento}`
+    : !talk.orador || !talk.tema || !talk.presidente_id ? 'Designações pendentes' : 'Completa';
 
 const getThemeNumber = (themeStr) => {
     if (!themeStr) return null;
@@ -45,12 +50,12 @@ export function PublicSpeechTab() {
     const canEdit = isAllowed(permissions, 'discursos_publicos_editar', 'actions');
     const [talks, setTalks] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [publishers, setPublishers] = useState([]);
     const [themes, setThemes] = useState([]);
 
     // Filter states
-    const [month, setMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
-    const [year, setYear] = useState('');
+    const { month, setMonth, year, setYear } = useDesignationPeriod();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     // Dialog State
@@ -74,11 +79,13 @@ export function PublicSpeechTab() {
 
     async function fetchTalks() {
         setLoading(true);
+        setError('');
         try {
             const res = await fetch('/api/admin/discursos');
             if (res.ok) setTalks(await res.json());
+            else throw new Error('Não foi possível carregar as reuniões de fim de semana.');
         } catch (error) {
-            console.error(error);
+            setError(error.message);
         } finally {
             setLoading(false);
         }
@@ -105,10 +112,10 @@ export function PublicSpeechTab() {
         // Calculate display items based on filter, BUT sidebar usually shows filtered list too?
         // Using filteredTalks for the list display.
         return filteredTalks.map(t => ({
-            id: t.id,
+            id: t.id || `reuniao-${t.reuniao_id}`,
             date: t.data,
             label: formatDate(t.data),
-            subLabel: t.orador || t.tema || 'Sem orador'
+            subLabel: t.cancelado ? 'Reunião cancelada' : t.orador || t.tema || 'Designações pendentes'
         }));
     }, [filteredTalks, talks]);
 
@@ -321,7 +328,8 @@ export function PublicSpeechTab() {
                 setFormData({ id: null, data: '', orador: '', tema: '', cantico: '', congregacao: '', presidente_id: null });
                 fetchTalks();
             } else {
-                alert('Erro ao salvar');
+                const error = await res.json();
+                alert(error.message || 'Erro ao salvar');
             }
         } catch (e) { console.error(e); }
         finally { setSaving(false); }
@@ -339,6 +347,7 @@ export function PublicSpeechTab() {
     const handleEdit = (talk) => {
         setFormData({
             id: talk.id,
+            reuniao_id: talk.reuniao_id,
             data: talk.data,
             orador: talk.orador || '',
             tema: talk.tema || '',
@@ -351,6 +360,7 @@ export function PublicSpeechTab() {
 
     return (
         <div className="p-6 max-w-7xl mx-auto w-full flex flex-col gap-8">
+            {error && <p role="alert" className="bg-red-50 text-red-700 rounded-md p-3">{error} <button onClick={fetchTalks} className="underline">Tentar novamente</button></p>}
 
             {/* HEADER: TITLE + ACTION */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
@@ -395,7 +405,7 @@ export function PublicSpeechTab() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label className="text-gray-700">Data</Label>
-                                        <Input className="text-gray-900" type="date" value={formData.data} onChange={e => setFormData({ ...formData, data: e.target.value })} />
+                                        <Input className="text-gray-900" type="date" disabled={Boolean(formData.reuniao_id)} value={formData.data} onChange={e => setFormData({ ...formData, data: e.target.value })} />
                                     </div>
                                     <div className="space-y-2">
                                         <Label className="text-gray-700">Cântico</Label>
@@ -483,7 +493,7 @@ export function PublicSpeechTab() {
                             className="text-sm border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-purple-500 outline-none text-gray-700"
                         >
                             <option value="">Todos os Anos</option>
-                            {Array.from(new Set(talks.map(t => t.data.split('-')[0]))).sort().reverse().map(y => (
+                            {Array.from(new Set([String(new Date().getFullYear()), ...talks.map(t => t.data.split('-')[0])])).sort().reverse().map(y => (
                                 <option key={y} value={y}>{y}</option>
                             ))}
                         </select>
@@ -496,11 +506,11 @@ export function PublicSpeechTab() {
                     </div>
                 </div>
 
-                <div className="flex-1 p-6 md:p-8 bg-gray-50/30">
+                <div className="flex-1">
                     {loading ? (
                         <div className="flex justify-center p-12"><Loader2 className="animate-spin text-purple-600" /></div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="md:divide-y md:divide-gray-100">
                             {filteredTalks.length === 0 && (
                                 <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
                                     <Calendar size={48} className="mb-4 opacity-20" />
@@ -508,7 +518,44 @@ export function PublicSpeechTab() {
                                 </div>
                             )}
                             {filteredTalks.map(talk => (
-                                <Card key={talk.id} id={`talk-${talk.id}`} className="hover:shadow-md transition-all group border-gray-200">
+                                <div key={talk.id || `reuniao-${talk.reuniao_id}`} id={`talk-${talk.id || `reuniao-${talk.reuniao_id}`}`} className="p-4 md:p-0">
+                                    <div className="hidden md:flex items-center group transition-colors hover:bg-purple-50">
+                                        <button
+                                            type="button"
+                                            disabled={!canEdit || talk.cancelado}
+                                            onClick={() => handleEdit(talk)}
+                                            aria-label={`Editar designações do discurso de ${formatDate(talk.data)}`}
+                                            className="flex-1 min-w-0 p-4 flex items-center justify-between gap-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500 disabled:cursor-default"
+                                        >
+                                            <div className="flex items-center gap-4 min-w-0">
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${talk.cancelado ? 'bg-gray-100 text-gray-500' : 'bg-purple-100 text-purple-600'}`}>
+                                                    {talk.data.split('-')[2]}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <h3 className="font-medium text-gray-900 group-hover:text-purple-700 truncate" title={talk.tema || 'Reunião de fim de semana'}>
+                                                        {talk.tema || 'Reunião de fim de semana'}
+                                                    </h3>
+                                                    <p className="text-xs text-gray-500 capitalize">
+                                                        {new Date(`${talk.data}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: '2-digit' })}
+                                                    </p>
+                                                    {(talk.orador || talk.nome_chamado || talk.nome_completo) && <p className="text-xs text-gray-500 mt-1 truncate">
+                                                        {talk.orador && `Orador: ${talk.orador}`}
+                                                        {talk.orador && (talk.nome_chamado || talk.nome_completo) && ' · '}
+                                                        {(talk.nome_chamado || talk.nome_completo) && `Presidente: ${talk.nome_chamado || talk.nome_completo}`}
+                                                    </p>}
+                                                    <p className={`text-xs mt-1 ${talk.cancelado ? 'text-red-600' : 'text-purple-600'}`}>{speechStatus(talk)}</p>
+                                                </div>
+                                            </div>
+                                            <ChevronRight size={20} className="shrink-0 text-gray-400 group-hover:text-purple-500" />
+                                        </button>
+                                        {talk.id && !talk.cancelado && <button
+                                            type="button" disabled={!canEdit} onClick={() => handleDelete(talk.id)}
+                                            aria-label={`Excluir designações do discurso de ${formatDate(talk.data)}`}
+                                            title="Excluir designações"
+                                            className="p-2 mr-4 rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        ><Trash2 size={16} /></button>}
+                                    </div>
+                                <Card className="md:hidden hover:shadow-md transition-all group border-gray-200">
                                     <CardHeader className="pb-3 border-b border-gray-100 bg-white rounded-t-xl">
                                         <div className="flex justify-between items-start">
                                             <div className="flex items-center gap-2">
@@ -517,9 +564,9 @@ export function PublicSpeechTab() {
                                                 </div>
                                                 <CardTitle className="text-base font-bold text-gray-900">{formatDate(talk.data)}</CardTitle>
                                             </div>
-                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button disabled={!canEdit} onClick={() => handleEdit(talk)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Editar"><Edit size={16} /></button>
-                                                <button disabled={!canEdit} onClick={() => handleDelete(talk.id)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Excluir"><Trash2 size={16} /></button>
+                                            <div className="flex gap-1">
+                                                <button disabled={!canEdit || talk.cancelado} onClick={() => handleEdit(talk)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Editar"><Edit size={16} /></button>
+                                                <button disabled={!canEdit || !talk.id || talk.cancelado} onClick={() => handleDelete(talk.id)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Excluir"><Trash2 size={16} /></button>
                                             </div>
                                         </div>
                                         <CardDescription className="flex items-center gap-1.5 mt-2 text-gray-500 font-medium bg-gray-50 py-1 px-2 rounded w-fit">
@@ -527,6 +574,9 @@ export function PublicSpeechTab() {
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-4 pt-4">
+                                        <p className={`text-xs font-medium ${talk.cancelado ? 'text-red-600' : 'text-purple-600'}`}>
+                                            {speechStatus(talk)}
+                                        </p>
                                         <div>
                                             <h4 className="text-xs uppercase tracking-wider font-bold text-gray-400 mb-1 flex items-center gap-1"><User className="w-3 h-3" /> Orador</h4>
                                             <p className="text-gray-900 font-medium text-base line-clamp-1" title={talk.orador}>{talk.orador || 'A definir'}</p>
@@ -547,8 +597,12 @@ export function PublicSpeechTab() {
                                                 </div>
                                             </div>
                                         </div>
+                                        {!talk.cancelado && <Button disabled={!canEdit} onClick={() => handleEdit(talk)} variant="outline" className="w-full text-purple-700">
+                                            {talk.id ? 'Editar designações' : 'Designar discurso'}
+                                        </Button>}
                                     </CardContent>
                                 </Card>
+                                </div>
                             ))}
                         </div>
                     )}

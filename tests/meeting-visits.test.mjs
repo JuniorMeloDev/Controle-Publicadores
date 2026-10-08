@@ -6,6 +6,7 @@ import vm from 'node:vm';
 // Exercise the route handlers with database fixtures, without writing to a real database.
 const helperSource = readFileSync(new URL('../app/lib/meeting-visits.js', import.meta.url), 'utf8')
     .replace(/export /g, '');
+const calendarSource = readFileSync(new URL('../app/lib/meeting-calendar.js', import.meta.url), 'utf8').replace(/export /g, '');
 const visit = { data: '2030-01-15T03:00:00Z', ano: 2030, tipo: 'Visita do Superintendente', nome: 'Visita' };
 const config = { dia_meio_semana: 'Quarta-feira', dia_fim_semana: 'Domingo' };
 
@@ -29,11 +30,12 @@ function loadRoute(file, { events = [visit], weekdays = config, meetings = [] } 
         Pool: class { connect() { return client; } },
         NextResponse: { json: data => data },
         URL, Intl, console, process: { env: {} },
+        getUserIdFromRequest: () => 990001, getUserPermissions: async () => ({}), isAllowed: () => true,
         Date: class extends Date {
             constructor(...args) { super(...(args.length ? args : ['2030-01-02T12:00:00Z'])); }
         }
     });
-    vm.runInContext(helperSource + '\n' + source + '\nglobalThis.handlers = { POST, ' +
+    vm.runInContext(helperSource + '\n' + calendarSource + '\n' + source + '\nglobalThis.handlers = { POST, ' +
         (file.includes('/gerar/') ? '' : 'GET, ') + '};', context);
     return { ...context.handlers, writes };
 }
@@ -73,7 +75,7 @@ test('another event on Tuesday still cancels the meeting', async () => {
 
 test('generation substitutes Tuesday for Wednesday only during the visit week', async () => {
     const route = loadRoute('../app/api/admin/reunioes/gerar/route.js');
-    const result = await route.POST(request({ action: 'preview', period: 'mensal', year: 2030 }));
+    const result = await route.POST(request({ action: 'preview', period: 'mes_especifico', year: 2030, month: 1 }));
     assert.equal(result.meetings.filter(m => m.data === '2030-01-15').length, 1);
     assert.equal(result.meetings.some(m => m.data === '2030-01-16'), false);
     assert.equal(result.meetings.some(m => m.data === '2030-01-09'), true);
@@ -84,7 +86,7 @@ test('visit on Sunday affects the preceding Tuesday, including across a month bo
     const route = loadRoute('../app/api/admin/reunioes/gerar/route.js', {
         events: [{ ...visit, data: '2030-02-03T03:00:00Z' }]
     });
-    const result = await route.POST(request({ action: 'preview', period: 'mensal', year: 2030 }));
+    const result = await route.POST(request({ action: 'preview', period: 'mes_especifico', year: 2030, month: 1 }));
     assert.equal(result.meetings.some(m => m.data === '2030-01-29'), true);
     assert.equal(result.meetings.some(m => m.data === '2030-01-30'), false);
 });
@@ -93,7 +95,7 @@ test('visit does not duplicate the meeting when the regular day is Tuesday', asy
     const route = loadRoute('../app/api/admin/reunioes/gerar/route.js', {
         weekdays: { ...config, dia_meio_semana: 'Terça-feira' }
     });
-    const result = await route.POST(request({ action: 'preview', period: 'mensal', year: 2030 }));
+    const result = await route.POST(request({ action: 'preview', period: 'mes_especifico', year: 2030, month: 1 }));
     assert.equal(result.meetings.filter(m => m.data === '2030-01-15').length, 1);
 });
 
@@ -101,7 +103,7 @@ test('a conflicting celebration prevents generation of the visit meeting', async
     const route = loadRoute('../app/api/admin/reunioes/gerar/route.js', {
         events: [visit, { ...visit, tipo: 'Celebração' }]
     });
-    const result = await route.POST(request({ action: 'preview', period: 'mensal', year: 2030 }));
+    const result = await route.POST(request({ action: 'preview', period: 'mes_especifico', year: 2030, month: 1 }));
     assert.equal(result.meetings.some(m => m.data === '2030-01-15'), false);
 });
 

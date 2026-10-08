@@ -3,10 +3,11 @@ import test from 'node:test';
 import { loadModule, loadRoute } from './helpers/load-source.mjs';
 
 const { getWeekStart } = await loadModule('../../app/lib/mechanical-assignments.js');
-const fixtureMeetings = [{ id: 910001, data: '2030-01-09' }, { id: 910002, data: '2030-01-13' }];
+const calendar = await loadModule('../../app/lib/meeting-calendar.js');
+const fixtureMeetings = [{ id: 910001, data: '2030-01-09', tipo: 'Meio de Semana' }, { id: 910002, data: '2030-01-13', tipo: 'Fim de Semana' }];
 const body = { reunioes: fixtureMeetings.map(m => ({ reuniao_id: m.id, assignments: [{ tipo_id: 920001, publicador_id: 900001 }] })) };
 
-function routeFixture({ failSecond = false, permitted = true } = {}) {
+function routeFixture({ failSecond = false, permitted = true, events = [] } = {}) {
     const calls = [];
     const client = {
         async query(sql, params) {
@@ -21,7 +22,8 @@ function routeFixture({ failSecond = false, permitted = true } = {}) {
     const handlers = loadRoute('../../app/api/admin/privilegios/atribuicoes/route.js', {
         Pool: class { connect() { return client; } },
         getUserIdFromRequest: () => 990001, getUserPermissions: async () => ({}),
-        isAllowed: () => permitted, registerAuditLog: async () => {}, getWeekStart
+        isAllowed: () => permitted, registerAuditLog: async () => {}, getWeekStart, ...calendar,
+        getCalendarContext: async () => ({ configs: new Map(), events })
     });
     return { ...handlers, calls };
 }
@@ -34,6 +36,14 @@ test('week saves both meetings atomically and preserves non-submitted privilege 
     assert.ok(route.calls.filter(c => c.sql.startsWith('DELETE')).every(c => c.sql.includes('privilegio_tipo_id = ANY')));
     assert.equal(route.calls.filter(c => c.sql.startsWith('UPDATE reunioes_registro SET volante_id')).length, 2);
     assert.ok(route.calls.some(c => c.sql === 'COMMIT'));
+});
+
+test('a visit added after opening the form blocks a stale Wednesday save', async () => {
+    const route = routeFixture({ events: [{ data: '2030-01-08', tipo: 'Visita do Superintendente' }] });
+    const result = await route.POST({ json: async () => body });
+    assert.equal(result.status, 400);
+    assert.equal(route.calls.some(c => c.sql.startsWith('DELETE') || c.sql.startsWith('INSERT')), false);
+    assert.ok(route.calls.some(c => c.sql === 'ROLLBACK'));
 });
 
 test('a failure on the second meeting rolls back the whole week', async () => {

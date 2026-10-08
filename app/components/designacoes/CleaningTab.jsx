@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -11,8 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
+import { useDesignationPeriod } from './DesignationPeriodContext';
 
 export function CleaningTab() {
+  const { month, year } = useDesignationPeriod();
   const { permissions } = usePermissions();
   const canEdit = isAllowed(permissions, 'limpeza_semanal_editar', 'actions');
   const [loading, setLoading] = useState(false);
@@ -22,9 +24,10 @@ export function CleaningTab() {
   
   // Filters
   const getCurrentMonthDates = () => {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    if (!year) return { start: '', end: '' };
+    const selectedYear = Number(year || new Date().getFullYear());
+    const start = `${selectedYear}-${month || '01'}-01`;
+    const end = new Date(Date.UTC(selectedYear, month ? Number(month) : 12, 0)).toISOString().slice(0, 10);
     return { start, end };
   };
 
@@ -39,9 +42,10 @@ export function CleaningTab() {
   const [group, setGroup] = useState('');
   const [responsibles, setResponsibles] = useState('');
   const [editId, setEditId] = useState(null);
+  const [meetingId, setMeetingId] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchItems();
     fetchGroups();
   }, []); 
 
@@ -57,24 +61,32 @@ export function CleaningTab() {
       }
   };
 
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async ({ signal } = {}) => {
     setLoading(true);
+    setError('');
     try {
       let url = `/api/admin/limpeza?start=${filterStartDate}`;
       if (filterEndDate) url += `&end=${filterEndDate}`;
+      if (!filterStartDate && !filterEndDate && month) url += `&month=${Number(month)}`;
       if (filterGroup && filterGroup !== 'all') url += `&group=${encodeURIComponent(filterGroup)}`;
       
-      const res = await fetch(url);
+      const res = await fetch(url, { signal });
       if (res.ok) {
         const data = await res.json();
         setItems(data);
-      }
+      } else throw new Error('Não foi possível carregar a agenda de limpeza.');
     } catch (error) {
-        console.error("Failed to fetch cleaning items", error);
+        if (error.name !== 'AbortError') setError(error.message);
     } finally {
-        setLoading(false);
+        if (!signal?.aborted) setLoading(false);
     }
-  };
+  }, [filterStartDate, filterEndDate, filterGroup, month]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchItems({ signal: controller.signal });
+    return () => controller.abort();
+  }, [fetchItems]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -83,7 +95,7 @@ export function CleaningTab() {
 
     try {
       const method = editId ? 'PUT' : 'POST';
-      const body = { data: date, tarefas: tasks, grupo: group, responsaveis: responsibles };
+      const body = { data: date, tarefas: tasks, grupo: group, responsaveis: responsibles, reuniao_id: meetingId };
       if (editId) body.id = editId;
 
       const res = await fetch('/api/admin/limpeza', {
@@ -95,15 +107,16 @@ export function CleaningTab() {
       if (res.ok) {
         fetchItems();
         closeModal();
-      }
+      } else { const result = await res.json(); throw new Error(result.error || result.message || 'Erro ao salvar limpeza.'); }
     } catch (error) {
-      console.error(error);
+      setError(error.message);
     }
   };
 
   const openNewModal = () => {
       if (!canEdit) return;
       setEditId(null);
+      setMeetingId(null);
       setDate('');
       setTasks('');
       setGroup('');
@@ -114,9 +127,10 @@ export function CleaningTab() {
   const openEditModal = (item) => {
       if (!canEdit) return;
       setEditId(item.id);
+      setMeetingId(item.reuniao_id);
       setDate(new Date(item.data).toISOString().split('T')[0]);
-      setTasks(item.tarefas);
-      setGroup(item.grupo);
+      setTasks(item.tarefas || '');
+      setGroup(item.grupo || '');
       setResponsibles(item.responsaveis || '');
       setIsModalOpen(true);
   };
@@ -124,6 +138,7 @@ export function CleaningTab() {
   const closeModal = () => {
       setIsModalOpen(false);
       setEditId(null);
+      setMeetingId(null);
       setDate('');
       setTasks('');
       setGroup('');
@@ -143,6 +158,7 @@ export function CleaningTab() {
 
   return (
     <div className="space-y-6 text-gray-900 font-medium">
+      {error && <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-lg p-3">{error}</p>}
       <div className="flex flex-col md:flex-row gap-4 items-end justify-between bg-gray-50 p-4 rounded-lg border border-gray-200">
           <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
              <div>
@@ -196,7 +212,7 @@ export function CleaningTab() {
            ) : (
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                {items.map((item) => (
-                 <Card key={item.id} className="hover:shadow-md transition-all group border-gray-200">
+                 <Card key={item.id || `reuniao-${item.reuniao_id}`} className="hover:shadow-md transition-all group border-gray-200">
                     <CardHeader className="pb-3 border-b border-gray-100 bg-white rounded-t-xl">
                         <div className="flex justify-between items-start">
                              <div className="flex items-center gap-2">
@@ -204,19 +220,22 @@ export function CleaningTab() {
                                     <CalendarIcon className="w-4 h-4" />
                                 </div>
                                 <CardTitle className="text-base font-bold text-gray-900">
-                                    {new Date(item.data).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }).toUpperCase()}
+                                    {new Date(`${item.data.slice(0, 10)}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: '2-digit' }).toUpperCase()}
                                 </CardTitle>
                             </div>
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button disabled={!canEdit} onClick={() => openEditModal(item)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Editar"><Edit size={16} /></button>
-                                <button disabled={!canEdit} onClick={() => handleDelete(item.id)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Excluir"><Trash2 size={16} /></button>
+                                <button disabled={!canEdit || item.cancelado} onClick={() => openEditModal(item)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Editar"><Edit size={16} /></button>
+                                <button disabled={!canEdit || !item.id || item.cancelado} onClick={() => handleDelete(item.id)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Excluir"><Trash2 size={16} /></button>
                             </div>
                         </div>
                     </CardHeader>
                     <CardContent className="space-y-4 pt-4">
+                        <p className={`text-xs font-medium ${item.cancelado ? 'text-red-600' : 'text-purple-600'}`}>
+                          {item.cancelado ? `Cancelada: ${item.motivo_cancelamento}` : !item.grupo || !item.tarefas ? 'Designações pendentes' : 'Completa'}
+                        </p>
                         <div>
                              <h4 className="text-xs uppercase tracking-wider font-bold text-gray-400 mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Grupo</h4>
-                             <p className="text-gray-900 font-medium text-base line-clamp-1">{item.grupo}</p>
+                             <p className="text-gray-900 font-medium text-base line-clamp-1">{item.grupo || 'Grupo a definir'}</p>
                         </div>
                         {item.responsaveis && (
                              <div>
@@ -224,6 +243,9 @@ export function CleaningTab() {
                                  <p className="text-gray-600 text-sm line-clamp-2">{item.responsaveis}</p>
                              </div>
                         )}
+                        {!item.cancelado && <Button disabled={!canEdit} onClick={() => openEditModal(item)} variant="outline" className="w-full text-purple-700">
+                          {item.id ? 'Editar designação' : 'Designar limpeza'}
+                        </Button>}
                     </CardContent>
                  </Card>
                ))}
@@ -242,7 +264,7 @@ export function CleaningTab() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Data da Reunião (ou Semana)</Label>
-                    <Input className="text-gray-900 font-medium" type="date" value={date} onChange={e => setDate(e.target.value)} required />
+                    <Input className="text-gray-900 font-medium" type="date" disabled={Boolean(meetingId)} value={date} onChange={e => setDate(e.target.value)} required />
                   </div>
                    <div className="space-y-2">
                     <Label>Grupo Designado</Label>

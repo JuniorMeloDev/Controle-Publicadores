@@ -6,6 +6,7 @@ import { loadModule, loadRoute } from './helpers/load-source.mjs';
 
 const alerts = await loadModule('../../app/lib/alerts.js');
 const visits = await loadModule('../../app/lib/meeting-visits.js');
+const calendar = await loadModule('../../app/lib/meeting-calendar.js');
 const { DEFAULT_ALERT_SETTINGS: defaults, buildNotifications, buildEmailReminders, previousReportPeriod, reminderMessage } = alerts;
 const today = '2030-01-07';
 const publishers = [
@@ -89,7 +90,7 @@ test('email skips unknown recipients and escapes all HTML from names and assignm
 
 function serviceFixture(dependencies = {}) {
     const source = readFileSync(new URL('../app/lib/alert-service.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
-    const context = vm.createContext({ ...alerts, ...visits, ...dependencies });
+    const context = vm.createContext({ ...alerts, ...visits, ...calendar, ...dependencies });
     vm.runInContext(source + '\nglobalThis.result = { getPersonalNotifications, getActiveAssignments, deliverReminders };', context);
     return context.result;
 }
@@ -120,6 +121,16 @@ test('cancelled meetings and moved visit Wednesdays do not trigger reminders', a
     assert.equal(rows.length, 2); assert.ok(rows.some(a => a.origem === 'limpeza_semanal'));
     const cancelled = await service.getActiveAssignments({ query: async () => ({ rows: [{ data: '2030-01-13', tipo: 'Assembleia' }] }) }, { today });
     assert.equal(cancelled.length, 1); assert.equal(cancelled[0].origem, 'limpeza_semanal');
+});
+
+test('manual meeting cancellation suppresses reminders in all four assignment sources', async () => {
+    const service = serviceFixture({ getPublisherAssignments: async () => assignments });
+    const client = { query: async sql => ({ rows: sql.includes('FROM reunioes_registro')
+        ? [{ id: 910001, data: '2030-01-09', tipo: 'Meio de Semana', cancelada: true }]
+        : [] }) };
+    const rows = await service.getActiveAssignments(client, { today });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].id, 'presidente-990104');
 });
 
 test('delivery retries only failures and never repeats a confirmed recipient', async () => {

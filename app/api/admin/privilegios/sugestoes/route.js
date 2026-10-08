@@ -4,6 +4,8 @@ import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-acces
 import { isAllowed } from '@/app/lib/access-control';
 import { getPublisherAssignments } from '@/app/lib/publisher-assignments';
 import { getWeekStart, addDateDays, suggestMechanicalAssignments } from '@/app/lib/mechanical-assignments';
+import { getCalendarContext } from '@/app/lib/meeting-calendar-service';
+import { dateOnly, meetingCancellation } from '@/app/lib/meeting-calendar';
 
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 
@@ -24,7 +26,7 @@ export async function POST(request) {
         const start = getWeekStart(semana);
         const [meetingRes, typeRes, publisherRes, history] = await Promise.all([
             client.query(`SELECT id, data, tipo FROM reunioes_registro
-                WHERE data >= $1::date AND data < $2::date AND id = ANY($3::int[]) ORDER BY data`,
+                WHERE data >= $1::date AND data < $2::date AND id = ANY($3::int[]) AND cancelada = FALSE ORDER BY data`,
                 [start, addDateDays(start, 7), reuniao_ids]),
             client.query('SELECT * FROM privilegios_tipos WHERE ativo = TRUE ORDER BY ordem, id'),
             client.query(`SELECT p.id, p.nome_completo, p.sexo, p.data_batismo, p.privilegios
@@ -34,6 +36,10 @@ export async function POST(request) {
         ]);
         if (meetingRes.rows.length !== new Set(reuniao_ids).size) {
             return NextResponse.json({ message: 'As reuniões devem pertencer à semana selecionada.' }, { status: 400 });
+        }
+        const context = await getCalendarContext(client);
+        if (meetingRes.rows.some(m => meetingCancellation(m, context.events, context.configs.get(dateOnly(m.data).slice(0, 4))).cancelado)) {
+            return NextResponse.json({ message: 'Uma reunião foi cancelada. Atualize a agenda antes de gerar sugestões.' }, { status: 400 });
         }
         const types = new Set(typeRes.rows.map(t => t.id));
         const publishers = new Set(publisherRes.rows.map(p => p.id));

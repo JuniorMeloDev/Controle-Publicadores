@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
 import { isAllowed } from '@/app/lib/access-control';
 import { registerAuditLog } from '@/app/lib/audit-log';
+import { lockAssignmentMeeting } from '@/app/lib/meeting-calendar-service';
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
@@ -77,7 +78,8 @@ function getPartTitles(scheduleData) {
 
 export async function POST(request) {
   const body = await request.json();
-  const { scheduleData, assignments, meetingDate } = body;
+  const { scheduleData, assignments, reuniao_id } = body;
+  let { meetingDate } = body;
 
   if (!scheduleData || !assignments || !meetingDate) {
     return NextResponse.json({ message: 'Dados incompletos.' }, { status: 400 });
@@ -93,6 +95,12 @@ export async function POST(request) {
     }
 
     await client.query('BEGIN');
+    let meetingId = reuniao_id;
+    if (!meetingId) {
+      const existing = await client.query("SELECT id FROM reunioes_registro WHERE data = $1 AND tipo = 'Meio de Semana'", [meetingDate]);
+      meetingId = existing.rows[0]?.id;
+    }
+    if (meetingId) meetingDate = (await lockAssignmentMeeting(client, meetingId, 'Meio de Semana')).data;
 
     const partTitles = getPartTitles(scheduleData);
     const pubRes = await client.query('SELECT id, nome_completo FROM publicadores');
@@ -112,11 +120,11 @@ export async function POST(request) {
 
     // 1. Salva o Programa
     await client.query(`
-      INSERT INTO reunioes_dados (data_reuniao, dados_json, descricao_texto)
-      VALUES ($1, $2, $3)
+      INSERT INTO reunioes_dados (data_reuniao, dados_json, descricao_texto, reuniao_id)
+      VALUES ($1, $2, $3, $4)
       ON CONFLICT (data_reuniao) 
-      DO UPDATE SET dados_json = $2, descricao_texto = $3
-    `, [meetingDate, JSON.stringify({ ...scheduleData, participantes_externos: participantesExternos }), scheduleData.weekDate]);
+      DO UPDATE SET dados_json = $2, descricao_texto = $3, reuniao_id = COALESCE($4, reunioes_dados.reuniao_id)
+    `, [meetingDate, JSON.stringify({ ...scheduleData, participantes_externos: participantesExternos }), scheduleData.weekDate, meetingId || null]);
 
     // 2. Salva as Designações
     const weekDateString = scheduleData.weekDate || 'Semana';
@@ -125,8 +133,8 @@ export async function POST(request) {
     await client.query('DELETE FROM designacoes_reuniao WHERE data_reuniao = $1', [meetingDate]);
 
     const insertQuery = `
-      INSERT INTO designacoes_reuniao (publicador_id, data_reuniao, descricao_semana, nome_parte)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO designacoes_reuniao (publicador_id, data_reuniao, descricao_semana, nome_parte, reuniao_id)
+      VALUES ($1, $2, $3, $4, $5)
     `;
 
     for (const [partId, nomeCompleto] of Object.entries(assignments)) {
@@ -139,13 +147,13 @@ export async function POST(request) {
               publicadorId,
               meetingDate,
               weekDateString,
-              nomeParte
+              nomeParte,
+              meetingId || null
             ]);
         }
       }
     }
 
-    await client.query('COMMIT');
     await registerAuditLog(client, {
       userId,
       action: 'designacoes_salvas',
@@ -153,12 +161,13 @@ export async function POST(request) {
       entityId: meetingDate,
       details: { descricao: scheduleData.weekDate }
     });
+    await client.query('COMMIT');
     return NextResponse.json({ message: 'Salvo com sucesso!' }, { status: 201 });
 
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Erro ao salvar:', err);
-    return NextResponse.json({ message: 'Erro interno ao salvar.' }, { status: 500 });
+    return NextResponse.json({ message: err.code ? 'Erro interno ao salvar.' : err.message }, { status: err.code ? 500 : 400 });
   } finally {
     client.release();
   }

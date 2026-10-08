@@ -9,7 +9,10 @@ export async function getPublisherAssignments(client, { publisherId, futureOnly 
         params.push(publisherId);
         filters.push(`a.publicador_id = $${params.length}`);
     }
-    if (futureOnly) filters.push("a.data_reuniao >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date");
+    if (futureOnly) {
+        filters.push("a.data_reuniao >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date");
+        filters.push('NOT EXISTS (SELECT 1 FROM reunioes_registro cancelled WHERE cancelled.id = a.reuniao_id AND cancelled.cancelada = TRUE)');
+    }
     if (since) {
         params.push(since);
         filters.push(`a.data_reuniao >= $${params.length}::date`);
@@ -19,7 +22,7 @@ export async function getPublisherAssignments(client, { publisherId, futureOnly 
         WITH assignments AS (
             SELECT 'vida-' || d.id AS id, d.publicador_id, d.data_reuniao,
                 d.nome_parte, d.descricao_semana, 'Vida e Ministério'::text AS categoria,
-                'vida_ministerio'::text AS origem, NULL::integer AS reuniao_id
+                'vida_ministerio'::text AS origem, d.reuniao_id
             FROM designacoes_reuniao d
 
             UNION ALL
@@ -32,13 +35,13 @@ export async function getPublisherAssignments(client, { publisherId, futureOnly 
 
             UNION ALL
             SELECT 'presidente-' || d.id, d.presidente_id, d.data,
-                'Presidente do discurso público', d.tema, 'Discursos Públicos', 'discursos_publicos', NULL
+                'Presidente do discurso público', d.tema, 'Discursos Públicos', 'discursos_publicos', d.reuniao_id
             FROM discursos_publicos d WHERE d.presidente_id IS NOT NULL
 
             UNION ALL
             SELECT 'orador-' || d.id, p.id, d.data,
                 'Orador: ' || COALESCE(NULLIF(d.tema, ''), 'Discurso público'), d.congregacao,
-                'Discursos Públicos', 'discursos_publicos', NULL
+                'Discursos Públicos', 'discursos_publicos', d.reuniao_id
             FROM discursos_publicos d
             JOIN publicadores p ON ${normalizeName('d.orador')} = ${normalizeName('p.nome_completo')}
                 OR (${normalizeName('d.orador')} = ${normalizeName('p.nome_chamado')}
@@ -51,7 +54,7 @@ export async function getPublisherAssignments(client, { publisherId, futureOnly 
             UNION ALL
             SELECT 'limpeza-' || l.id || '-' || p.id, p.id, l.data,
                 'Limpeza semanal', concat_ws(' — ', l.grupo, l.tarefas),
-                'Limpeza Semanal', 'limpeza_semanal', NULL
+                'Limpeza Semanal', 'limpeza_semanal', l.reuniao_id
             FROM limpeza_semanal l
             JOIN publicadores p ON EXISTS (
                 SELECT 1 FROM grupos g WHERE g.id = p.grupo_id

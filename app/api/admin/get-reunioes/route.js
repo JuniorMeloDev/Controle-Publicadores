@@ -1,6 +1,7 @@
 // app/api/admin/get-reunioes/route.js
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { getCalendarContext, withCalendarState } from '@/app/lib/meeting-calendar-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,17 +12,25 @@ const pool = new Pool({
 export async function GET() {
   const client = await pool.connect();
   try {
-    // Busca as reuniões salvas, ordenadas da mais recente para a mais antiga
+    const context = await getCalendarContext(client);
     const res = await client.query(`
-      SELECT data_reuniao, descricao_texto 
-      FROM reunioes_dados 
-      ORDER BY data_reuniao DESC
+      SELECT r.id AS reuniao_id, COALESCE(r.data, d.data_reuniao) AS data_reuniao,
+        r.tipo, r.cancelada, r.motivo_cancelamento, d.descricao_texto,
+        d.dados_json IS NOT NULL AS tem_programacao
+      FROM (SELECT * FROM reunioes_registro WHERE tipo = 'Meio de Semana') r
+      FULL OUTER JOIN (
+        SELECT d.*, COALESCE(d.reuniao_id, legacy.id) AS calendario_id
+        FROM reunioes_dados d LEFT JOIN reunioes_registro legacy
+          ON legacy.data = d.data_reuniao AND legacy.tipo = 'Meio de Semana'
+      ) d ON d.calendario_id = r.id
+      ORDER BY COALESCE(r.data, d.data_reuniao) DESC
     `);
     
     // Formata a data para exibição
     const reunioes = res.rows.map(row => ({
-      dataSQL: row.data_reuniao.toISOString().split('T')[0], // YYYY-MM-DD
-      descricao: row.descricao_texto || 'Sem descrição',
+      ...withCalendarState({ ...row, data: row.data_reuniao }, context),
+      dataSQL: new Date(row.data_reuniao).toISOString().split('T')[0],
+      descricao: row.descricao_texto || 'Reunião de meio de semana',
       dataFormatada: new Date(row.data_reuniao).toLocaleDateString('pt-BR', {
         timeZone: 'UTC'
       })

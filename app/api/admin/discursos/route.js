@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
 import { isAllowed } from '@/app/lib/access-control';
 import { registerAuditLog } from '@/app/lib/audit-log';
+import { getCalendarContext, withCalendarState, lockAssignmentMeeting } from '@/app/lib/meeting-calendar-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,25 +36,32 @@ export async function GET(request) {
     
     await ensureTable(client);
 
+    const context = await getCalendarContext(client);
     let queryText = `
-        SELECT d.*, p.nome_chamado, p.nome_completo 
-        FROM discursos_publicos d
+        SELECT d.*, COALESCE(r.data, d.data) AS data, r.id AS reuniao_id,
+            r.tipo, r.cancelada, r.motivo_cancelamento, p.nome_chamado, p.nome_completo
+        FROM (SELECT * FROM reunioes_registro WHERE tipo = 'Fim de Semana') r
+        FULL OUTER JOIN (
+            SELECT d.*, COALESCE(d.reuniao_id, legacy.id) AS calendario_id
+            FROM discursos_publicos d LEFT JOIN reunioes_registro legacy
+                ON legacy.data = d.data AND legacy.tipo = 'Fim de Semana'
+        ) d ON d.calendario_id = r.id
         LEFT JOIN publicadores p ON d.presidente_id = p.id
     `;
     const params = [];
 
     if (month) {
-        queryText += ` WHERE to_char(d.data, 'YYYY-MM') = $1`;
+        queryText += ` WHERE to_char(COALESCE(r.data, d.data), 'YYYY-MM') = $1`;
         params.push(month);
     }
 
-    queryText += ` ORDER BY d.data ASC`;
+    queryText += ` ORDER BY COALESCE(r.data, d.data) ASC`;
 
     const res = await client.query(queryText, params);
     
     // Format for frontend
     const discursos = res.rows.map(row => ({
-        ...row,
+        ...withCalendarState(row, context),
         // Convert Date to YYYY-MM-DD string
         data: new Date(row.data).toISOString().split('T')[0]
     }));
@@ -76,7 +84,8 @@ export async function POST(request) {
       return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
     }
     const body = await request.json();
-    const { id, data, orador, tema, cantico, congregacao, presidente_id } = body;
+    const { id, orador, tema, cantico, congregacao, presidente_id } = body;
+    let { data, reuniao_id } = body;
     
     if (!data) {
         return NextResponse.json({ message: 'Data é obrigatória.' }, { status: 400 });
@@ -84,15 +93,32 @@ export async function POST(request) {
 
     await ensureTable(client);
 
+    await client.query('BEGIN');
+    if (id) {
+        const existing = await client.query('SELECT * FROM discursos_publicos WHERE id = $1', [id]);
+        if (!existing.rows.length) throw new Error('Discurso não encontrado.');
+        reuniao_id = existing.rows[0].reuniao_id || reuniao_id;
+    }
+    if (!reuniao_id) {
+        const match = await client.query("SELECT id FROM reunioes_registro WHERE data = $1 AND tipo = 'Fim de Semana'", [data]);
+        reuniao_id = match.rows[0]?.id;
+    }
+    if (reuniao_id) {
+        const meeting = await lockAssignmentMeeting(client, reuniao_id, 'Fim de Semana');
+        data = meeting.data;
+        const existing = await client.query('SELECT id FROM discursos_publicos WHERE reuniao_id = $1 OR (reuniao_id IS NULL AND data = $2)', [reuniao_id, data]);
+        if (existing.rows.length > 1) throw new Error('Há discursos duplicados nesta data. Revise os registros antes de designar.');
+        if (!id && existing.rows.length) throw new Error('Este discurso já foi preenchido. Atualize a lista antes de editar.');
+    }
     let res;
     if (id) {
         // Update
         res = await client.query(`
             UPDATE discursos_publicos 
-            SET data=$1, orador=$2, tema=$3, cantico=$4, congregacao=$5, presidente_id=$6
+            SET data=$1, orador=$2, tema=$3, cantico=$4, congregacao=$5, presidente_id=$6, reuniao_id=$8
             WHERE id=$7
             RETURNING *
-        `, [data, orador, tema, cantico, congregacao, presidente_id, id]);
+        `, [data, orador, tema, cantico || null, congregacao, presidente_id || null, id, reuniao_id || null]);
         await registerAuditLog(client, {
           userId,
           action: 'discurso_atualizado',
@@ -103,10 +129,10 @@ export async function POST(request) {
     } else {
         // Create
         res = await client.query(`
-            INSERT INTO discursos_publicos (data, orador, tema, cantico, congregacao, presidente_id)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO discursos_publicos (data, orador, tema, cantico, congregacao, presidente_id, reuniao_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING *
-        `, [data, orador, tema, cantico, congregacao, presidente_id]);
+        `, [data, orador, tema, cantico || null, congregacao, presidente_id || null, reuniao_id || null]);
         await registerAuditLog(client, {
           userId,
           action: 'discurso_criado',
@@ -116,10 +142,12 @@ export async function POST(request) {
         });
     }
 
+    await client.query('COMMIT');
     return NextResponse.json(res.rows[0], { status: 201 });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Erro ao salvar discurso:', err);
-    return NextResponse.json({ message: 'Erro interno.' }, { status: 500 });
+    return NextResponse.json({ message: err.code ? 'Erro ao salvar discurso.' : err.message }, { status: err.code ? 500 : 400 });
   } finally {
     client.release();
   }

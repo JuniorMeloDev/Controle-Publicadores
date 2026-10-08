@@ -3,6 +3,7 @@ import test from 'node:test';
 import { loadModule, loadRoute } from './helpers/load-source.mjs';
 
 const helpers = await loadModule('../../app/lib/mechanical-assignments.js');
+const calendar = await loadModule('../../app/lib/meeting-calendar.js');
 const fixtureMeetings = [
     { id: 910001, data: new Date('2030-01-09T03:00:00Z'), tipo: 'Meio de Semana' },
     { id: 910002, data: new Date('2030-01-13T03:00:00Z'), tipo: 'Fim de Semana' }
@@ -13,7 +14,7 @@ const fixturePublishers = [
     { id: 900002, nome_completo: 'Publicador Fictício Beta', sexo: 'Masculino', data_batismo: '2000-01-01', privilegios: [] }
 ];
 
-function routeFixture(permitted = true) {
+function routeFixture(permitted = true, events = []) {
     const calls = [];
     const handlers = loadRoute('../../app/api/admin/privilegios/sugestoes/route.js', {
         Pool: class { connect() { return {
@@ -26,7 +27,8 @@ function routeFixture(permitted = true) {
         }; } },
         getUserIdFromRequest: () => 990001,
         getUserPermissions: async () => ({}), isAllowed: () => permitted,
-        getPublisherAssignments: async () => [], ...helpers
+        getPublisherAssignments: async () => [], ...helpers, ...calendar,
+        getCalendarContext: async () => ({ configs: new Map(), events })
     });
     return { ...handlers, calls };
 }
@@ -38,6 +40,12 @@ test('suggestion endpoint handles SQL Date objects chronologically and performs 
     assert.equal(result.body.assignments[0].reuniao_id, 910001);
     assert.equal(new Set(result.body.assignments.map(a => a.publicador_id)).size, 2);
     assert.ok(route.calls.every(sql => sql.trim().startsWith('SELECT')));
+});
+
+test('suggestions refuse meetings cancelled by a newly configured event', async () => {
+    const route = routeFixture(true, [{ data: '2030-01-13', tipo: 'Assembleia' }]);
+    const result = await route.POST({ json: async () => ({ semana: '2030-01-07', reuniao_ids: [910001, 910002] }) });
+    assert.equal(result.status, 400);
 });
 
 test('suggestion endpoint requires edit permissions', async () => {

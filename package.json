@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "migrate:calendar": "node scripts/migrate-meeting-calendar.mjs",
+    "verify:calendar": "node tests/meeting-calendar.integration.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

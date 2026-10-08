@@ -1,5 +1,7 @@
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
+import { isAllowed } from '@/app/lib/access-control';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,16 +20,23 @@ export async function POST(request) {
   const client = await pool.connect();
 
   try {
+    const permissions = await getUserPermissions(client, getUserIdFromRequest(request));
+    if (!isAllowed(permissions, 'configuracoes_editar', 'actions')) return NextResponse.json({ message: 'Acesso negado.' }, { status: 403 });
     await client.query('BEGIN');
 
     let eventDate;
     if (id) {
-      const meetingRes = await client.query('SELECT data FROM reunioes_registro WHERE id = $1', [id]);
+      const meetingRes = await client.query('SELECT data, cancelada FROM reunioes_registro WHERE id = $1 FOR UPDATE', [id]);
       if (meetingRes.rows.length === 0) {
         await client.query('ROLLBACK');
         return NextResponse.json({ message: 'Reunião não encontrada.' }, { status: 404 });
       }
       eventDate = meetingRes.rows[0].data;
+      if (meetingRes.rows[0].cancelada) {
+        await client.query('UPDATE reunioes_registro SET cancelada = FALSE, motivo_cancelamento = NULL WHERE id = $1', [id]);
+        await client.query('COMMIT');
+        return NextResponse.json({ message: 'Reunião restaurada. As designações foram mantidas.' });
+      }
     } else {
       eventDate = data;
     }

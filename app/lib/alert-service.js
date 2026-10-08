@@ -1,5 +1,6 @@
 import { getPublisherAssignments } from './publisher-assignments';
 import { findVisitInWeek, getVisitTuesday } from './meeting-visits';
+import { meetingCancellation } from './meeting-calendar';
 import { DEFAULT_ALERT_SETTINGS, dateKey, previousReportPeriod, buildNotifications } from './alerts';
 
 export async function ensureAlertTables(client) {
@@ -38,9 +39,17 @@ export async function getActiveAssignments(client, { publisherId, today }) {
     const assignments = await getPublisherAssignments(client, { publisherId, since: today });
     // Keep cancellation and visit rules consistent with the meetings page.
     const { rows: events } = await client.query('SELECT data, tipo FROM eventos_especiais WHERE data >= $1::date - 7', [today]);
+    const [calendarRes, configRes] = await Promise.all([
+        client.query('SELECT id, data, tipo, cancelada, motivo_cancelamento FROM reunioes_registro WHERE data >= $1::date', [today]),
+        client.query('SELECT ano, dia_fim_semana FROM configuracoes_gerais')
+    ]);
+    const calendar = calendarRes.rows.filter(m => m.id);
+    const configs = new Map(configRes.rows.map(c => [String(c.ano), c]));
     return assignments.filter(a => {
-        if (a.origem === 'limpeza_semanal') return true;
         const date = dateKey(a.data_reuniao);
+        const meeting = calendar.find(m => a.reuniao_id ? String(m.id) === String(a.reuniao_id) : dateKey(m.data) === date);
+        if (meeting && meetingCancellation(meeting, events, configs.get(date.slice(0, 4))).cancelado) return false;
+        if (a.origem === 'limpeza_semanal') return true;
         const midweek = a.origem === 'vida_ministerio' || (a.origem === 'privilegios_mecanicos' && a.descricao_semana === 'Meio de Semana');
         const visit = findVisitInWeek(events, date);
         if (midweek && visit && date !== getVisitTuesday(visit.data)) return false;

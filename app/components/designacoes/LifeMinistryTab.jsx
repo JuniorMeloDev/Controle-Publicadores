@@ -9,6 +9,7 @@ import TabelaDesignacoes from '@/app/componentes/TabelaDesignacoes';
 import { Button } from '@/app/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/app/components/ui/sheet';
 import { StatusToast } from '@/app/components/ui/status-toast';
+import { useDesignationPeriod } from './DesignationPeriodContext';
 
 // --- CONSTANTES ---
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -35,39 +36,6 @@ function getShortName(fullName) {
   const parts = fullName.split(' ').filter(Boolean);
   if (parts.length === 1) return fullName;
   return `${parts[0]} ${parts[parts.length - 1]}`;
-}
-
-function parseDateFromWeekString(weekString) {
-  try {
-    if (!weekString) return '';
-    const cleanStr = weekString.trim().toUpperCase();
-    let mesIndex = -1;
-    for (let i = 0; i < MESES.length; i++) {
-      if (cleanStr.includes(MESES[i].toUpperCase())) {
-        mesIndex = i;
-        break;
-      }
-    }
-    if (mesIndex === -1) return '';
-    const matchDia = cleanStr.match(/(\d{1,2})/);
-    if (!matchDia) return '';
-    const dia = parseInt(matchDia[1], 10);
-    const matchAno = cleanStr.match(/(\d{4})/);
-    let ano;
-    if (matchAno) {
-      ano = parseInt(matchAno[1], 10);
-    } else {
-      const hoje = new Date();
-      ano = hoje.getFullYear();
-      if (hoje.getMonth() >= 10 && mesIndex <= 1) ano = ano + 1;
-      else if (hoje.getMonth() <= 1 && mesIndex >= 10) ano = ano - 1;
-    }
-    const data = new Date(ano, mesIndex, dia);
-    const yyyy = data.getFullYear();
-    const mm = String(data.getMonth() + 1).padStart(2, '0');
-    const dd = String(data.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  } catch (e) { return ''; }
 }
 
 function getGroupLabel(dataSQL) {
@@ -260,6 +228,8 @@ export function LifeMinistryTab() {
   const [assignmentsList, setAssignmentsList] = useState([]);
   const [weekDescriptions, setWeekDescriptions] = useState([]);
   const [meetingDates, setMeetingDates] = useState([]);
+  const [meetingIds, setMeetingIds] = useState([]);
+  const [pendingMeeting, setPendingMeeting] = useState(null);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isParsing, setIsParsing] = useState(false);
@@ -267,8 +237,7 @@ export function LifeMinistryTab() {
   const [isSaving, setIsSaving] = useState(false);
 
   // New Filter state for Sidebar
-  const [month, setMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
-  const [year, setYear] = useState('');
+  const { month, setMonth, year, setYear } = useDesignationPeriod();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobileModalOpen, setIsMobileModalOpen] = useState(false);
 
@@ -351,7 +320,8 @@ export function LifeMinistryTab() {
       id: m.dataSQL,
       date: m.dataSQL,
       label: m.descricao,
-      subLabel: m.dataFormatada
+      subLabel: m.cancelado ? 'Reunião cancelada' : !m.tem_programacao ? 'Programação pendente' : m.dataFormatada,
+      meeting: m
     }));
   }, [filteredMeetings]);
 
@@ -368,6 +338,18 @@ export function LifeMinistryTab() {
   };
 
   const handleLoadSavedMeeting = async (meeting) => {
+    meeting = savedMeetingsList.find(m => m.dataSQL === meeting.dataSQL) || meeting;
+    if (meeting.cancelado) {
+      setToastData({ message: meeting.motivo_cancelamento, type: 'error' });
+      return;
+    }
+    if (meeting.tem_programacao === false) {
+      setPendingMeeting(meeting);
+      setSchedules([]);
+      setIsMobileModalOpen(false);
+      return;
+    }
+    setPendingMeeting(null);
     setIsParsing(true);
     setError('');
 
@@ -385,6 +367,7 @@ export function LifeMinistryTab() {
       setSchedules([scheduleData]);
       setWeekDescriptions([meeting.descricao]);
       setMeetingDates([meeting.dataSQL]);
+      setMeetingIds([meeting.reuniao_id]);
       setAssignmentsList([reconstructedAssignments]);
       setCurrentIndex(0);
 
@@ -433,6 +416,7 @@ export function LifeMinistryTab() {
     const newAssignments = [];
     const newDescriptions = [];
     const newDates = [];
+    const newMeetingIds = [];
 
     try {
       for (const file of files) {
@@ -447,7 +431,7 @@ export function LifeMinistryTab() {
           response = await fetch('/api/admin/parse-rtf', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ textContent }),
+            body: JSON.stringify({ textContent, year: year || new Date().getFullYear() }),
             signal: controller.signal
           });
         } finally {
@@ -473,11 +457,14 @@ export function LifeMinistryTab() {
 
         newSchedules.push(parsedData);
 
-        const autoDateSQL = parseDateFromWeekString(parsedData.weekDate);
+        const autoDateSQL = parsedData.meetingDate;
+        if (files.length === 1 && pendingMeeting && pendingMeeting.reuniao_id !== parsedData.reuniao_id) {
+          throw new Error('O arquivo pertence a outra semana. Selecione a reunião correspondente antes de importar.');
+        }
         newDates.push(autoDateSQL);
+        newMeetingIds.push(parsedData.reuniao_id);
 
-        let yearStr = '';
-        if (autoDateSQL) yearStr = ` ${autoDateSQL.split('-')[0]}`;
+        const yearStr = /\b\d{4}\b/.test(parsedData.weekDate) ? '' : ` ${year || new Date().getFullYear()}`;
         newDescriptions.push((parsedData.weekDate || 'Semana') + yearStr);
 
         let retrievedAssignments = {};
@@ -503,6 +490,8 @@ export function LifeMinistryTab() {
       setAssignmentsList(newAssignments);
       setWeekDescriptions(newDescriptions);
       setMeetingDates(newDates);
+      setMeetingIds(newMeetingIds);
+      setPendingMeeting(null);
       setCurrentIndex(0);
 
       // Setup Queue for Sequential Opening
@@ -559,27 +548,8 @@ export function LifeMinistryTab() {
     });
   };
 
-  const handleDescriptionChange = async (newText) => {
-    setWeekDescriptions(prev => { const n = [...prev]; n[currentIndex] = newText; return n; });
-    const newDateSQL = parseDateFromWeekString(newText);
-    setMeetingDates(prev => { const n = [...prev]; n[currentIndex] = newDateSQL; return n; });
-
-    if (newDateSQL && newDateSQL.length === 10) {
-      try {
-        const dbRes = await fetch(`/api/recuperar-designacoes?date=${newDateSQL}`);
-        if (dbRes.ok) {
-          const savedRows = await dbRes.json();
-          if (savedRows && savedRows.length > 0) {
-            const mergedAssignments = mapSavedToAssignments(savedRows, schedules[currentIndex]);
-            setAssignmentsList(prev => {
-              const n = [...prev];
-              n[currentIndex] = { ...n[currentIndex], ...mergedAssignments };
-              return n;
-            });
-          }
-        }
-      } catch (e) { console.error(e); }
-    }
+  const handleDescriptionChange = (newText) => {
+    setWeekDescriptions(prev => { const next = [...prev]; next[currentIndex] = newText; return next; });
   };
 
   const handleSaveCurrent = async () => {
@@ -595,15 +565,20 @@ export function LifeMinistryTab() {
 
     setIsSaving(true);
     try {
-      await fetch('/api/admin/salvar-designacoes', {
+      const response = await fetch('/api/admin/salvar-designacoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           scheduleData: { ...currentSchedule, weekDate: currentDescription },
           assignments: currentAssignments,
-          meetingDate: currentDateSQL
+          meetingDate: currentDateSQL,
+          reuniao_id: meetingIds[currentIndex]
         })
       });
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.message || 'Erro ao salvar designações.');
+      }
       setToastData({ message: 'Salvo com sucesso!', type: 'success' });
       refreshSavedMeetings();
     } catch (err) {
@@ -1263,6 +1238,7 @@ export function LifeMinistryTab() {
   return (
     <div className="p-6 max-w-5xl mx-auto w-full">
       <StatusToast message={toastData.message} type={toastData.type} onClose={() => setToastData({ message: '', type: '' })} />
+      {error && <p role="alert" className="mb-4 bg-red-50 text-red-700 border border-red-200 rounded-lg p-3 text-sm">{error}</p>}
 
       {/* MODAL DE EMAIL */}
       {isEmailModalOpen && (
@@ -1343,7 +1319,7 @@ export function LifeMinistryTab() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Gerenciamento de Designações</h1>
-            <p className="text-gray-500 text-sm mt-1">Importe um ou vários arquivos RTF para começar ou selecione uma semana do histórico.</p>
+            <p className="text-gray-500 text-sm mt-1">As reuniões seguem o calendário. Importe os arquivos RTF para preencher a programação de {year || 'um ano selecionado'}.</p>
           </div>
 
           <label className={`flex items-center gap-3 py-3 px-6 rounded-lg text-white transition font-bold shadow-md hover:shadow-lg transform active:translate-y-0 ${isParsing || !canImport ? 'bg-purple-400 cursor-not-allowed opacity-70' : 'bg-purple-600 hover:bg-purple-700 hover:-translate-y-0.5 cursor-pointer'}`}>
@@ -1475,6 +1451,11 @@ export function LifeMinistryTab() {
           </div>
         )}
 
+        {pendingMeeting && <div role="status" className="bg-purple-50 border border-purple-200 rounded-xl p-5 text-purple-900">
+          <p className="font-semibold">{pendingMeeting.dataFormatada} — Programação pendente</p>
+          <p className="text-sm mt-1">A reunião já está criada. Importe o RTF da semana usando o botão acima para preencher as partes.</p>
+        </div>}
+
         {/* HISTÓRICO DE REUNIÕES */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden min-h-[500px]">
           <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -1500,7 +1481,7 @@ export function LifeMinistryTab() {
               >
                 <option value="">Todos os Anos</option>
                 {/* Compute years from sidebarItems just for display options if needed, or static list */}
-                {Array.from(new Set(sidebarItems.map(i => i.date?.split('-')[0]).filter(Boolean))).sort().reverse().map(y => (
+                {Array.from(new Set([String(new Date().getFullYear()), ...savedMeetingsList.map(m => m.dataSQL.slice(0, 4))])).sort().reverse().map(y => (
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>
@@ -1525,8 +1506,7 @@ export function LifeMinistryTab() {
                   <div
                     key={item.id}
                     onClick={() => {
-                      handleLoadSavedMeeting({ dataSQL: item.id, descricao: item.label });
-                      setIsMobileModalOpen(true);
+                      handleLoadSavedMeeting(item.meeting);
                     }}
                     className="p-4 hover:bg-purple-50 cursor-pointer flex items-center justify-between group transition-colors"
                   >
@@ -1536,7 +1516,8 @@ export function LifeMinistryTab() {
                       </div>
                       <div>
                         <h3 className="font-medium text-gray-900 group-hover:text-purple-700">{item.label}</h3>
-                        <p className="text-xs text-gray-500 capitalize">{new Date(item.date).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long' })}</p>
+                        <p className="text-xs text-gray-500 capitalize">{new Date(`${item.date}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: '2-digit' })}</p>
+                        <p className={`text-xs mt-1 ${item.meeting.cancelado ? 'text-red-600' : 'text-purple-600'}`}>{item.subLabel}</p>
                       </div>
                     </div>
                     <div className="text-gray-400 group-hover:text-purple-500">
