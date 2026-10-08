@@ -39,9 +39,9 @@ export function AlertSettingsCard() {
     const checkbox = (key, label, disabled = !canEdit) => <label className="flex items-start gap-2 text-sm text-gray-800"><input type="checkbox" className="accent-purple-600 mt-0.5 h-4 w-4 shrink-0" checked={data.settings[key]} disabled={disabled || saving} onChange={e => change(key, e.target.checked)} /><span className="min-w-0">{label}</span></label>;
     const number = (key, label, max = 30, disabled = !canEdit) => <label className="flex justify-between items-center gap-3 text-sm text-gray-600"><span className="min-w-0">{label}</span><input type="number" required min="1" max={max} className="border rounded-md px-2 py-2 w-20 shrink-0 text-gray-900" value={data.settings[key]} disabled={disabled || saving} onChange={e => change(key, e.target.value === '' ? '' : Number(e.target.value))} /></label>;
 
-    return <Card id="alertas-gerais" className="min-w-0 border-purple-200 bg-white text-gray-900 scroll-mt-24">
-        <CardHeader className="p-4 sm:p-6"><CardTitle className="flex gap-2 items-center text-gray-900"><Bell className="w-5 h-5 shrink-0 text-purple-600" />Regras da congregação</CardTitle><CardDescription className="text-gray-600">Estas regras se aplicam à congregação. Cada pessoa vê apenas seus próprios alertas.</CardDescription></CardHeader>
-        <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+    return <Card id="alertas-gerais" className="min-w-0 border-gray-200 bg-white shadow-sm text-gray-900 scroll-mt-24">
+        <CardHeader className="p-4 border-b border-gray-100 bg-gray-50/50"><CardTitle className="text-base font-bold leading-snug flex gap-2 items-center text-gray-900"><Bell className="w-5 h-5 shrink-0 text-purple-600" />Regras da congregação</CardTitle><CardDescription className="text-gray-600">Estas regras se aplicam à congregação. Cada pessoa vê apenas seus próprios alertas.</CardDescription></CardHeader>
+        <CardContent className="p-4">
             {error && <p role="alert" className="text-sm text-red-600 mb-3">{error}</p>}
             {!data ? !error && <p className="text-gray-500">Carregando configurações...</p> : <form onSubmit={save} className="space-y-5">
                 <div className="grid lg:grid-cols-2 gap-6">
@@ -69,7 +69,7 @@ export function AlertSettingsCard() {
                     </div>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    <Button type="submit" className="min-h-11 w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white" disabled={!canEdit || saving}>{saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}Salvar alertas</Button>
+                    <Button type="submit" className="h-10 w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white" disabled={!canEdit || saving}>{saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}Salvar alertas</Button>
                     {message && <p role="status" className="text-sm text-green-700">{message}</p>}
                 </div>
             </form>}

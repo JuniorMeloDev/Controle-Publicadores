@@ -8,9 +8,9 @@ import { MechanicalWeekModal } from '@/app/components/designacoes/MechanicalWeek
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
 import { useDesignationPeriod } from './DesignationPeriodContext';
+import { DesignationPeriodFilters, designationToolbarClass, designationActionClass, designationListHeaderClass } from './DesignationLayout';
 import { addDateDays, getWeekStart, isMechanicalTypeApplicable } from '@/app/lib/mechanical-assignments';
 
-const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 export const formatMechanicalDate = value => String(value).slice(0, 10).split('-').reverse().join('/');
 
 export function MechanicalPrivilegesTab() {
@@ -23,7 +23,7 @@ export function MechanicalPrivilegesTab() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const { month, setMonth, year, setYear } = useDesignationPeriod();
+    const { month, year } = useDesignationPeriod();
     const [typesOpen, setTypesOpen] = useState(false);
     const [selectedWeek, setSelectedWeek] = useState(null);
     const [reload, setReload] = useState(0);
@@ -97,14 +97,14 @@ export function MechanicalPrivilegesTab() {
     }
 
     return (
-        <div className="p-4 sm:p-6 max-w-5xl mx-auto w-full space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sm:p-6 flex flex-col sm:flex-row justify-between gap-4">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Privilégios Mecânicos</h2>
+        <div className="w-full min-w-0 space-y-4">
+            <div className={designationToolbarClass}>
+                <div className="flex-1 min-w-0 basis-64">
+                    <h2 className="text-lg font-bold text-gray-900">Privilégios Mecânicos</h2>
                     <p className="text-sm text-gray-500 mt-1">Escolha uma semana para organizar as designações das reuniões.</p>
                 </div>
-                <Button variant="outline" disabled={!canEdit} onClick={() => setTypesOpen(true)} className="gap-2">
-                    <Settings className="w-4 h-4" /> Gerenciar Tipos de Privilégios
+                <Button variant="outline" disabled={!canEdit} onClick={() => setTypesOpen(true)} className={designationActionClass}>
+                    <Settings className="w-4 h-4" /> Tipos de privilégios
                 </Button>
             </div>
             {!canEdit && <p className="text-sm text-gray-600 bg-gray-50 border rounded-lg p-3">Você pode consultar as designações, mas não tem permissão para editá-las.</p>}
@@ -113,18 +113,9 @@ export function MechanicalPrivilegesTab() {
                 <span>{error}</span><Button variant="outline" size="sm" onClick={() => setReload(value => value + 1)}>Tentar novamente</Button>
             </div>}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-between gap-4">
+                <div className={designationListHeaderClass}>
                     <h3 className="font-bold text-gray-800 flex items-center gap-2"><Calendar size={20} className="text-purple-600" /> Semanas de reuniões</h3>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <select aria-label="Mês" value={month} onChange={e => setMonth(e.target.value)} className="text-sm border rounded-md px-3 py-2 bg-white text-gray-700">
-                            <option value="">Todos os meses</option>
-                            {months.map((name, index) => <option key={name} value={String(index + 1).padStart(2, '0')}>{name}</option>)}
-                        </select>
-                        <select aria-label="Ano" value={year} onChange={e => setYear(e.target.value)} className="text-sm border rounded-md px-3 py-2 bg-white text-gray-700">
-                            <option value="">Todos os anos</option>
-                            {years.map(value => <option key={value} value={value}>{value}</option>)}
-                        </select>
-                    </div>
+                    <DesignationPeriodFilters years={years} />
                 </div>
                 {loading ? <div className="flex justify-center p-12"><Loader2 className="animate-spin text-purple-600" aria-label="Carregando semanas" /></div>
                     : !weeks.length ? <div className="flex flex-col items-center py-16 text-gray-500 gap-3"><AlertCircle className="text-gray-300" size={36} /><p>Nenhuma semana encontrada com os filtros atuais.</p></div>
@@ -136,7 +127,7 @@ export function MechanicalPrivilegesTab() {
                             return (
                                 <button key={week.start} type="button" disabled={!activeMeetings.length}
                                     onClick={() => { setSuccess(''); setSelectedWeek(week); }}
-                                    className="w-full text-left p-4 sm:p-5 hover:bg-purple-50 focus-visible:outline-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between gap-4 group">
+                                    className="w-full text-left px-4 py-3 hover:bg-purple-50 focus-visible:outline-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between gap-4 group">
                                     <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                                         <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center shrink-0"><Calendar size={20} /></div>
                                         <div className="min-w-0">

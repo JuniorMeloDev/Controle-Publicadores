@@ -27,26 +27,26 @@ function DesignacoesContent() {
   };
 
   return (
-      <div className="p-2 space-y-4">
+      <div className="p-2 sm:p-3 space-y-4 min-w-0">
          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-gray-100">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Gerenciamento de Designações</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Gerenciamento de Designações</h1>
               <p className="text-gray-500 text-sm mt-0.5">Planeje e organize as reuniões e privilégios da congregação.</p>
             </div>
             <Link 
               href="/admin/reunioes" 
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors w-fit"
+              className="inline-flex h-10 items-center justify-center gap-2 px-4 rounded-md text-sm font-medium bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors w-full sm:w-auto shrink-0"
             >
               📅 Abrir calendário de reuniões
             </Link>
          </div>
 
          <DesignationPeriodProvider><Tabs defaultValue="vida-ministerio" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto max-w-4xl mb-4 gap-2 p-1.5 bg-gray-100/80 rounded-xl">
-              <TabsTrigger value="vida-ministerio" className="text-xs sm:text-sm py-2">Vida e Ministério</TabsTrigger>
-              <TabsTrigger value="discursos-publicos" className="text-xs sm:text-sm py-2">Discursos Públicos</TabsTrigger>
-              <TabsTrigger value="privilegios-mecanicos" className="text-xs sm:text-sm py-2">Privilégios Mecânicos</TabsTrigger>
-              <TabsTrigger value="limpeza-semanal" className="text-xs sm:text-sm py-2">Limpeza Semanal</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 h-auto gap-1 p-1 bg-gray-100/80 rounded-xl">
+              <TabsTrigger value="vida-ministerio" className="h-10 min-w-0 px-2 text-xs sm:text-sm">Vida e Ministério</TabsTrigger>
+              <TabsTrigger value="discursos-publicos" className="h-10 min-w-0 px-2 text-xs sm:text-sm">Discursos Públicos</TabsTrigger>
+              <TabsTrigger value="privilegios-mecanicos" className="h-10 min-w-0 px-2 text-xs sm:text-sm">Privilégios Mecânicos</TabsTrigger>
+              <TabsTrigger value="limpeza-semanal" className="h-10 min-w-0 px-2 text-xs sm:text-sm">Limpeza Semanal</TabsTrigger>
             </TabsList>
             
             <TabsContent value="vida-ministerio">
@@ -77,7 +77,7 @@ function DesignacoesContent() {
 
 export default function DesignacoesPage() {
   return (
-    <DashboardLayout>
+    <DashboardLayout contentClassName="[scrollbar-gutter:stable]">
       <Suspense fallback={<div className="flex justify-center p-8"><Loader2 className="animate-spin text-purple-600" /></div>}>
         <DesignacoesContent />
       </Suspense>

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { 
   Search, Home, Users, Calendar,
-  LogOut, Menu, ChevronRight, Workflow,
+  LogOut, Menu, ChevronRight, Building2,
   User, Key, ChevronDown, X, Loader2,
   Clock, BarChart3, Settings
 } from 'lucide-react';
@@ -56,7 +56,7 @@ function getPageBreadcrumbTitle(pathname) {
   return "Painel";
 }
 
-export function DashboardLayout({ children }) {
+export function DashboardLayout({ children, contentClassName = '' }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -276,7 +276,7 @@ export function DashboardLayout({ children }) {
           <div className="p-6 border-b border-gray-100 flex items-center justify-between">
              <div className="flex items-center gap-2 font-bold text-xl text-gray-900 overflow-hidden">
                 <div className="w-8 h-8 shrink-0 bg-linear-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center text-white">
-                   <Workflow className="w-4 h-4" />
+                   <Building2 className="w-5 h-5" aria-hidden="true" />
                 </div>
                 <span className="truncate" title={nomeCongregacao}>
                   {nomeCongregacao}
@@ -427,7 +427,7 @@ export function DashboardLayout({ children }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-2 md:p-2 print:p-0 print:overflow-visible print:bg-white">
+        <main className={`flex-1 overflow-y-auto bg-gray-50 p-2 md:p-2 print:p-0 print:overflow-visible print:bg-white ${contentClassName}`}>
             <PermissionsProvider permissions={permissions} isLoading={isPermsLoading}>
               {!isPermsLoading && permissions && !canAccessPage ? (
                 <div className="max-w-xl mx-auto mt-10 bg-white border border-gray-200 rounded-xl p-6 text-center shadow-sm">

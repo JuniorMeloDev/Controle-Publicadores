@@ -1,17 +1,19 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
+import { ConfirmationDialog } from '@/app/components/ui/confirmation-dialog';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea'; 
-import { Plus, Trash2, Calendar as CalendarIcon, Loader2, Pencil, X, Search, Users, Edit } from 'lucide-react';
+import { Plus, Trash2, Calendar as CalendarIcon, Loader2, ChevronRight, Users } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
 import { useDesignationPeriod } from './DesignationPeriodContext';
+import { designationToolbarClass, designationActionClass, designationListHeaderClass, DesignationPeriodFilters } from './DesignationLayout';
 
 export function CleaningTab() {
   const { month, year } = useDesignationPeriod();
@@ -19,6 +21,7 @@ export function CleaningTab() {
   const canEdit = isAllowed(permissions, 'limpeza_semanal_editar', 'actions');
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
+  const [pendingDelete, setPendingDelete] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [availableGroups, setAvailableGroups] = useState([]);
   
@@ -31,9 +34,7 @@ export function CleaningTab() {
     return { start, end };
   };
 
-  const { start: initialStart, end: initialEnd } = getCurrentMonthDates();
-  const [filterStartDate, setFilterStartDate] = useState(initialStart);
-  const [filterEndDate, setFilterEndDate] = useState(initialEnd);
+  const { start: filterStartDate, end: filterEndDate } = getCurrentMonthDates();
   const [filterGroup, setFilterGroup] = useState('all');
 
   // Form State
@@ -147,114 +148,112 @@ export function CleaningTab() {
 
   const handleDelete = async (id) => {
     if (!canEdit) return;
-    if (!confirm('Tem certeza que deseja excluir?')) return;
-    try {
-      await fetch(`/api/admin/limpeza?id=${id}`, { method: 'DELETE' });
-      fetchItems();
-    } catch (error) {
-      console.error(error);
+    const response = await fetch(`/api/admin/limpeza?id=${id}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.error || result.message || 'Não foi possível excluir a designação de limpeza.');
     }
+    await fetchItems();
   };
 
   return (
-    <div className="space-y-6 text-gray-900 font-medium">
+    <div className="w-full min-w-0 space-y-4 text-gray-900 font-medium">
       {error && <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-lg p-3">{error}</p>}
-      <div className="flex flex-col md:flex-row gap-4 items-end justify-between bg-gray-50 p-4 rounded-lg border border-gray-200">
-          <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
-             <div>
-                <Label className="text-xs font-bold text-gray-900 mb-1.5 block">Data Inicial</Label>
-                <Input type="date" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} className="bg-white" />
-             </div>
-             <div>
-                <Label className="text-xs font-bold text-gray-900 mb-1.5 block">Data Final</Label>
-                <Input type="date" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)} className="bg-white" />
-             </div>
-             <div className="w-[200px]">
-                <Label className="text-xs font-bold text-gray-900 mb-1.5 block">Grupo</Label>
-                <Select value={filterGroup} onValueChange={setFilterGroup}>
-                    <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="Todos os Grupos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">Todos os Grupos</SelectItem>
-                        {availableGroups.map((g, i) => (
-                            <SelectItem key={i} value={g}>{g}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-             </div>
-             <div className="flex items-end">
-                <Button onClick={fetchItems} className="bg-purple-600 hover:bg-purple-700 text-white">
-                    <Search className="w-4 h-4" />
-                </Button>
-             </div>
-          </div>
-          
-          <Button onClick={openNewModal} disabled={!canEdit} className="bg-green-600 hover:bg-green-700 text-white gap-2 shrink-0 disabled:opacity-50">
-              <Plus className="w-4 h-4" /> Nova Designação
-          </Button>
+      <div className={designationToolbarClass}>
+        <div className="flex-1 min-w-0 basis-64">
+          <h2 className="text-lg font-bold text-gray-900">Limpeza Semanal</h2>
+          <p className="text-sm text-gray-500 mt-1">Organize os grupos e as tarefas de cada reunião.</p>
+        </div>
+        <Button onClick={openNewModal} disabled={!canEdit} className={`${designationActionClass} bg-purple-600 hover:bg-purple-700 text-white`}>
+          <Plus className="w-4 h-4" /> Nova designação
+        </Button>
       </div>
-
       {!canEdit && (
         <div className="text-xs text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-md">
           Você não tem permissão para editar a limpeza semanal.
         </div>
       )}
 
-      <div className="bg-white rounded-xl flex flex-col min-h-[500px]">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className={designationListHeaderClass}>
+          <h3 className="flex items-center gap-2 text-base font-bold">
+            <CalendarIcon className="w-5 h-5 text-gray-500" /> Programação de limpeza
+          </h3>
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto min-w-0">
+            <DesignationPeriodFilters years={items.map(item => item.data.slice(0, 4))} onClear={() => setFilterGroup('all')} hasAdditionalFilters={filterGroup !== 'all'} />
+            <select aria-label="Grupo da limpeza" value={filterGroup} onChange={e => setFilterGroup(e.target.value)}
+              className="h-10 w-full sm:w-40 min-w-0 border border-gray-300 rounded-md px-3 bg-white text-sm text-gray-700 focus:ring-2 focus:ring-purple-500 outline-none">
+              <option value="all">Todos os grupos</option>
+              {availableGroups.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
+        </div>
         {loading ? (
-             <div className="text-center py-12"><Loader2 className="animate-spin mx-auto text-purple-600 w-8 h-8" /></div>
-           ) : items.length === 0 ? (
-             <div className="text-center py-20 text-gray-500">
-                 <CalendarIcon size={48} className="mx-auto mb-4 opacity-20" />
-                 <p>Nenhuma designação encontrada para este período.</p>
-             </div>
-           ) : (
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-               {items.map((item) => (
-                 <Card key={item.id || `reuniao-${item.reuniao_id}`} className="hover:shadow-md transition-all group border-gray-200">
-                    <CardHeader className="pb-3 border-b border-gray-100 bg-white rounded-t-xl">
-                        <div className="flex justify-between items-start">
-                             <div className="flex items-center gap-2">
-                                <div className="bg-purple-100 text-purple-700 p-1.5 rounded-md">
-                                    <CalendarIcon className="w-4 h-4" />
-                                </div>
-                                <CardTitle className="text-base font-bold text-gray-900">
-                                    {new Date(`${item.data.slice(0, 10)}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: '2-digit' }).toUpperCase()}
-                                </CardTitle>
-                            </div>
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button disabled={!canEdit || item.cancelado} onClick={() => openEditModal(item)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Editar"><Edit size={16} /></button>
-                                <button disabled={!canEdit || !item.id || item.cancelado} onClick={() => handleDelete(item.id)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Excluir"><Trash2 size={16} /></button>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4 pt-4">
-                        <p className={`text-xs font-medium ${item.cancelado ? 'text-red-600' : 'text-purple-600'}`}>
-                          {item.cancelado ? `Cancelada: ${item.motivo_cancelamento}` : !item.grupo || !item.tarefas ? 'Designações pendentes' : 'Completa'}
-                        </p>
-                        <div>
-                             <h4 className="text-xs uppercase tracking-wider font-bold text-gray-400 mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Grupo</h4>
-                             <p className="text-gray-900 font-medium text-base line-clamp-1">{item.grupo || 'Grupo a definir'}</p>
-                        </div>
-                        {item.responsaveis && (
-                             <div>
-                                 <h4 className="text-xs uppercase tracking-wider font-bold text-gray-400 mb-1 flex items-center gap-1">Responsáveis</h4>
-                                 <p className="text-gray-600 text-sm line-clamp-2">{item.responsaveis}</p>
-                             </div>
-                        )}
-                        {!item.cancelado && <Button disabled={!canEdit} onClick={() => openEditModal(item)} variant="outline" className="w-full text-purple-700">
-                          {item.id ? 'Editar designação' : 'Designar limpeza'}
-                        </Button>}
-                    </CardContent>
-                 </Card>
-               ))}
-             </div>
-           )}
+          <div role="status" aria-label="Carregando limpeza" className="py-12"><Loader2 className="animate-spin mx-auto text-purple-600 w-8 h-8" /></div>
+        ) : items.length === 0 ? (
+          <p className="text-center py-12 px-4 text-sm text-gray-500">Nenhuma designação encontrada para este período.</p>
+        ) : (
+          <div className="p-4 space-y-3 md:p-0 md:space-y-0 md:divide-y md:divide-gray-100">
+            {items.map(item => {
+              const meetingDate = new Date(`${item.data.slice(0, 10)}T12:00:00Z`);
+              const dateLabel = meetingDate.toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+              const status = item.cancelado ? `Cancelada: ${item.motivo_cancelamento || 'Reunião cancelada'}` : !item.grupo || !item.tarefas ? 'Designações pendentes' : 'Designação completa';
+              const statusClass = `text-xs ${item.cancelado ? 'text-red-600' : 'text-purple-600'}`;
+              const deleteButton = canEdit && item.id && !item.cancelado && (
+                <button type="button" onClick={() => setPendingDelete(item)} aria-label={`Excluir limpeza de ${dateLabel}`}
+                  className="shrink-0 h-10 w-10 inline-flex items-center justify-center rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              );
+              return <div key={item.id || `reuniao-${item.reuniao_id}`}>
+                <div className="hidden md:flex items-center pr-4">
+                  <button type="button" onClick={() => openEditModal(item)} disabled={!canEdit || item.cancelado}
+                    aria-label={`Designar limpeza de ${dateLabel}`}
+                    className="flex flex-1 min-w-0 items-center gap-4 px-4 py-3 text-left hover:bg-purple-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500 disabled:cursor-default">
+                    <span className="flex items-center justify-center shrink-0 w-10 h-10 rounded-full bg-purple-100 text-purple-600 font-bold">{item.data.slice(8, 10)}</span>
+                    <span className="flex-1 min-w-0 space-y-1">
+                      <span className="block text-base font-semibold">{item.grupo || 'Grupo a definir'}</span>
+                      <span className="block text-sm text-gray-500">{dateLabel}</span>
+                      <span className={`block ${statusClass}`}>{status}</span>
+                      {item.tarefas && <span className="block text-sm text-gray-600 line-clamp-1">{item.tarefas}</span>}
+                      {item.responsaveis && <span className="block text-xs text-gray-500 line-clamp-1">Responsáveis: {item.responsaveis}</span>}
+                    </span>
+                    {!item.cancelado && <ChevronRight className="w-5 h-5 shrink-0 text-gray-400" />}
+                  </button>
+                  {deleteButton}
+                </div>
+                <Card className="md:hidden border-gray-200">
+                  <CardHeader className="p-4 pb-3 border-b border-gray-100">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <CalendarIcon className="w-4 h-4 shrink-0 text-purple-600" />
+                        {meetingDate.toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: '2-digit' })}
+                      </CardTitle>
+                      {deleteButton}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-4 space-y-3">
+                    <p className={statusClass}>{status}</p>
+                    <p className="flex items-center gap-2 text-base"><Users className="w-4 h-4 shrink-0 text-gray-400" />{item.grupo || 'Grupo a definir'}</p>
+                    {item.tarefas && <p className="text-sm text-gray-600 break-words">{item.tarefas}</p>}
+                    {item.responsaveis && <p className="text-xs text-gray-500 break-words">Responsáveis: {item.responsaveis}</p>}
+                    {!item.cancelado && <Button disabled={!canEdit} onClick={() => openEditModal(item)} variant="outline" className="h-10 w-full text-purple-700">
+                      {item.id ? 'Editar designação' : 'Designar limpeza'}
+                    </Button>}
+                  </CardContent>
+                </Card>
+              </div>;
+            })}
+          </div>
+        )}
       </div>
 
+      {pendingDelete && <ConfirmationDialog destructive title="Excluir designação de limpeza?" confirmLabel="Excluir"
+        description={`A designação do grupo ${pendingDelete.grupo || 'não definido'} em ${pendingDelete.data.slice(0, 10).split('-').reverse().join('/')} será removida. A reunião continuará no calendário para uma nova designação.`}
+        onConfirm={() => handleDelete(pendingDelete.id)} onCancel={() => setPendingDelete(null)} />}
+
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-2xl bg-white text-gray-900 font-medium">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-2xl max-h-[90dvh] overflow-y-auto bg-white text-gray-900 font-medium">
             <DialogHeader>
                 <DialogTitle>{editId ? 'Editar Designação' : 'Nova Designação de Limpeza'}</DialogTitle>
                 <DialogDescription>Preencha os dados da semana de limpeza.</DialogDescription>
@@ -302,9 +301,9 @@ export function CleaningTab() {
                     />
                 </div>
 
-                <DialogFooter>
-                    <Button type="button" variant="ghost" onClick={closeModal}>Cancelar</Button>
-                    <Button type="submit" disabled={!canEdit} className={`${editId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50`}>
+                <DialogFooter className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:space-x-0">
+                    <Button type="button" variant="outline" onClick={closeModal} className="h-10 w-full">Cancelar</Button>
+                    <Button type="submit" disabled={!canEdit} className="h-10 w-full bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50">
                         {editId ? 'Salvar Alterações' : 'Adicionar Designação'}
                     </Button>
                 </DialogFooter>

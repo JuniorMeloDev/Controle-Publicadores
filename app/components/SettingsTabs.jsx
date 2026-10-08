@@ -43,14 +43,14 @@ export function SettingsTabs({ children }) {
     }
 
     return <SettingsTabContext.Provider value={activeTab}>
-        <div className="min-w-0 space-y-5">
-            <div role="tablist" aria-label="Seções de configurações" className="grid grid-cols-2 sm:grid-cols-4 gap-1 rounded-xl bg-gray-100 p-1.5">
+        <div className="min-w-0 space-y-3">
+            <div role="tablist" aria-label="Seções de configurações" className="grid grid-cols-2 lg:grid-cols-4 gap-1 rounded-xl bg-gray-100/80 p-1">
                 {sections.map(({ value, label, shortLabel, icon: Icon }, index) => <button
                     key={value} ref={element => { buttons.current[index] = element; }} type="button"
                     role="tab" id={`settings-tab-${value}`} aria-controls={`settings-panel-${value}`}
                     aria-selected={activeTab === value} aria-label={label} tabIndex={activeTab === value ? 0 : -1}
                     onClick={() => select(value)} onKeyDown={event => navigate(event, index)}
-                    className={`flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 focus-visible:ring-offset-2 ${activeTab === value ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:bg-white/60 hover:text-gray-900'}`}
+                    className={`flex h-10 min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs sm:text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 focus-visible:ring-offset-2 ${activeTab === value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-white/60 hover:text-gray-900'}`}
                 >
                     <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                     {shortLabel ? <><span className="sm:hidden">{shortLabel}</span><span className="hidden sm:inline">{label}</span></> : <span>{label}</span>}
@@ -61,7 +61,7 @@ export function SettingsTabs({ children }) {
     </SettingsTabContext.Provider>;
 }
 
-export function SettingsPanel({ value, className = 'space-y-6', children }) {
+export function SettingsPanel({ value, className = 'space-y-4', children }) {
     const activeTab = useContext(SettingsTabContext);
     const selected = value === activeTab;
     // Keep forms mounted so changing tabs preserves unsaved input.

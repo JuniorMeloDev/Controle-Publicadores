@@ -1,10 +1,11 @@
 
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/app/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Button } from '@/app/components/ui/button';
+import { ConfirmationDialog } from '@/app/components/ui/confirmation-dialog';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
-import { Loader2, Plus, Trash2, Save, GripVertical, AlertTriangle } from 'lucide-react';
+import { Loader2, Plus, Trash2, Save, GripVertical } from 'lucide-react';
 
 export function PrivilegeTypesModal({ open, onOpenChange, onUpdate }) {
     const [types, setTypes] = useState([]);
@@ -73,12 +74,13 @@ export function PrivilegeTypesModal({ open, onOpenChange, onUpdate }) {
 
     async function confirmDelete() {
         if (!pendingDeleteId) return;
-        try {
-            await fetch(`/api/admin/privilegios/tipos?id=${pendingDeleteId}`, { method: 'DELETE' });
-            fetchTypes();
-            onUpdate();
-        } catch(e) { console.error(e); }
-        finally { setPendingDeleteId(null); }
+        const response = await fetch(`/api/admin/privilegios/tipos?id=${pendingDeleteId}`, { method: 'DELETE' });
+        if (!response.ok) {
+            const result = await response.json().catch(() => ({}));
+            throw new Error(result.error || result.message || 'Erro ao excluir o privil\u00e9gio.');
+        }
+        await fetchTypes();
+        onUpdate();
     }
 
     return (
@@ -136,7 +138,8 @@ export function PrivilegeTypesModal({ open, onOpenChange, onUpdate }) {
                                         )}
 
                                         <Button 
-                                            variant="ghost" 
+                                            variant="ghost"
+                                            aria-label={`Excluir tipo ${t.nome}`}
                                             onClick={() => handleDeleteClick(t.id)}
                                             className="text-gray-400 hover:text-red-600 h-8 w-8 p-0"
                                         >
@@ -151,31 +154,9 @@ export function PrivilegeTypesModal({ open, onOpenChange, onUpdate }) {
                 </DialogContent>
             </Dialog>
             
-            {/* DELETE CONFIRMATION DIALOG */}
-            <Dialog open={!!pendingDeleteId} onOpenChange={(val) => !val && setPendingDeleteId(null)}>
-                <DialogContent className="bg-white sm:max-w-[400px] text-gray-900">
-                    <DialogHeader className="flex flex-col items-center gap-2">
-                         <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mb-2">
-                            <AlertTriangle className="h-6 w-6 text-red-600" />
-                         </div>
-                        <DialogTitle className="text-xl text-center">Excluir Privilégio?</DialogTitle>
-                    </DialogHeader>
-                    
-                    <div className="py-2 text-center text-gray-600 text-sm">
-                        <p>Isso removerá este privilégio de todas as reuniões passadas.</p> 
-                        <p className="font-semibold text-gray-800 mt-2">Esta ação não pode ser desfeita.</p>
-                    </div>
-
-                    <DialogFooter className="flex gap-2 sm:justify-center mt-4">
-                        <Button variant="outline" onClick={() => setPendingDeleteId(null)} className="flex-1 border-gray-300 text-gray-700">
-                            Cancelar
-                        </Button>
-                        <Button onClick={confirmDelete} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
-                            Sim, Excluir
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            {pendingDeleteId && <ConfirmationDialog destructive title="Excluir tipo de privilégio?" confirmLabel="Excluir"
+                description={`O tipo ${types.find(type => type.id === pendingDeleteId)?.nome || ''} será removido junto com as designações vinculadas a ele. Esta ação não pode ser desfeita.`}
+                onConfirm={confirmDelete} onCancel={() => setPendingDeleteId(null)} />}
         </>
     );
 }

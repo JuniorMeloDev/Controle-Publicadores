@@ -6,6 +6,8 @@ import { useState, useEffect, useRef } from 'react';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
 
+const footerButtonClass = 'h-10 min-w-0 w-full px-3 rounded-md text-sm font-medium inline-flex items-center justify-center gap-2 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:shrink-0';
+
 // Internal SearchableSelect Component
 const SearchableSelect = ({ value, options, onChange, placeholder }) => {
    const [isOpen, setIsOpen] = useState(false);
@@ -347,7 +349,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
 
    return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-         <DialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] z-50 w-full max-w-md max-h-[90vh] p-0 gap-0 overflow-hidden rounded-xl bg-white flex flex-col border shadow-lg outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:rounded-xl">
+         <DialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] z-50 w-[calc(100%-2rem)] max-w-xl max-h-[90dvh] p-0 gap-0 overflow-hidden rounded-xl bg-white flex flex-col border shadow-lg outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:rounded-xl">
 
             {/* --- HISTORY MODAL (NESTED ABSOLUTE OVERLAY) --- */}
             {historyModalOpen && selectedPubHistory && (
@@ -393,7 +395,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
+            <div className="flex-1 min-h-0 p-4 overflow-y-auto">
 
                {/* SALÃO PRINCIPAL */}
                {renderSectionHeader(<Users size={16} />, "Salão Principal", "text-blue-600 border-blue-100")}
@@ -517,23 +519,23 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
 
             </div>
 
-            <div className="p-3 border-t border-gray-100 bg-gray-50 flex flex-wrap items-center justify-between gap-2">
+            <div className="p-3 sm:p-4 shrink-0 border-t border-gray-100 bg-gray-50 space-y-2">
                {/* AUTO INSERT BUTTON */}
                <button 
                   type="button" 
                   onClick={handleAutoFill} 
-                  className="px-3 py-2 bg-white border border-purple-200 text-purple-700 hover:bg-purple-50 rounded-md text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 transition-colors"
+                  className={`${footerButtonClass} bg-white border border-purple-200 text-purple-700 hover:bg-purple-50`}
                   title="Preenchimento inteligente baseado em rodízio justo e histórico"
                >
-                  <Sparkles size={16} /> Inserir Automático
+                  <Sparkles size={16} /> Inserir automático
                </button>
 
-               <div className="flex flex-wrap items-center gap-2">
+               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {onShareWhatsApp && (
                      <button
                         type="button"
                         onClick={() => onShareWhatsApp(schedule, assignments, weekDescription)}
-                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 transition-colors"
+                        className={`${footerButtonClass} bg-emerald-600 hover:bg-emerald-700 text-white`}
                         title="Enviar programação completa via WhatsApp"
                      >
                         <MessageCircle size={16} /> WhatsApp
@@ -544,7 +546,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                      <button 
                         type="button" 
                         onClick={onOpenEmail} 
-                        className="px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 transition-colors"
+                        className={`${footerButtonClass} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50`}
                      >
                         <Mail size={16} /> E-mail
                      </button>
@@ -554,7 +556,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                      type="button" 
                      onClick={onPrint} 
                      disabled={!canPdf} 
-                     className="px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                     className={`${footerButtonClass} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50`}
                   >
                      <Printer size={16} /> PDF
                   </button>
@@ -563,7 +565,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
                      type="button" 
                      onClick={async () => { if (onSave) await onSave(); onClose(); }} 
                      disabled={isSaving || !canSave} 
-                     className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                     className={`${footerButtonClass} bg-purple-600 hover:bg-purple-700 text-white`}
                   >
                      {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Salvar
                   </button>

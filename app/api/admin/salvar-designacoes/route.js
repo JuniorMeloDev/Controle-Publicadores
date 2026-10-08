@@ -4,6 +4,7 @@ import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-acces
 import { isAllowed } from '@/app/lib/access-control';
 import { registerAuditLog } from '@/app/lib/audit-log';
 import { lockAssignmentMeeting } from '@/app/lib/meeting-calendar-service';
+import { getPartTitles } from '@/app/lib/life-ministry-parts';
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
@@ -12,68 +13,6 @@ const pool = new Pool({
 function normalizeStr(str) {
   if (!str) return '';
   return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-// Extrai só o título curto da parte: "Relatório anual de serviço (15 min): Consideração"
-// Descarta o restante do texto de instrução que vem do RTF
-function truncatePartTitle(title) {
-  if (!title) return '';
-  // If it's a song/cântico, return as-is
-  if (normalizeStr(title).includes('cantico') || normalizeStr(title).startsWith('cantemos')) return title;
-
-  // Try to extract: text up to and including "(XX min)" + optional ": Consideração"
-  const match = title.match(/^(.*?\(\d+\s*min\))/i);
-  if (match) {
-    let base = match[1].trim();
-    // Check if "Consideração" immediately follows the time
-    const afterTime = title.substring(match[0].length);
-    if (afterTime.match(/^[:\s]*Considera/i)) {
-      base += ': Consideração';
-    }
-    return base;
-  }
-  // Fallback: truncate at first period or 100 chars
-  const dotIdx = title.indexOf('.');
-  if (dotIdx > 0 && dotIdx < 100) return title.substring(0, dotIdx).trim();
-  return title.substring(0, 100).trim();
-}
-
-function getPartTitles(scheduleData) {
-  const titles = {
-    'presidente': 'Presidente',
-    'ajudante': 'Ajudante',
-    'oracao_inicial': 'Oração Inicial',
-    'oracao_final': 'Oração Final',
-    'comentarios_iniciais': scheduleData.openingComments || 'Comentários Iniciais',
-    'comentarios_finais': scheduleData.finalComments || 'Comentários Finais',
-    'cantico_meio': scheduleData.middleSong || 'Cântico do Meio',
-  };
-
-  scheduleData.treasures?.forEach((part, index) => {
-    titles[`tesouro_${index}`] = truncatePartTitle(part.title);
-  });
-  
-  scheduleData.ministry?.forEach((part, index) => {
-    const isDiscurso = normalizeStr(part.title).includes('discurso');
-    if (isDiscurso) {
-      titles[`ministerio_${index}`] = truncatePartTitle(part.title);
-    } else {
-      titles[`ministerio_${index}_1`] = truncatePartTitle(part.title);
-      titles[`ministerio_${index}_2`] = truncatePartTitle(part.title);
-    }
-  });
-
-  scheduleData.living?.forEach((part, index) => {
-    const isBibleStudy = normalizeStr(part.title).includes('estudo biblico');
-    if (isBibleStudy) {
-       titles[`vida_${index}_1`] = truncatePartTitle(part.title);
-       titles[`vida_${index}_2`] = truncatePartTitle(part.title);
-    } else {
-       titles[`vida_${index}`] = truncatePartTitle(part.title);
-    }
-  });
-
-  return titles;
 }
 
 export async function POST(request) {

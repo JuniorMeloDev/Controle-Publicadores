@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
-import { loadRoute } from './helpers/load-source.mjs';
+import { loadModule, loadRoute } from './helpers/load-source.mjs';
+
+const { getPartTitles } = await loadModule('../../app/lib/life-ministry-parts.js');
 
 // Names, dates and IDs below are fictitious. These tests never connect to a database.
 const guest = 'Estudante Fictício Ômega';
@@ -23,7 +25,7 @@ function savingRoute() {
     const route = loadRoute('../../app/api/admin/salvar-designacoes/route.js', {
         Pool: class { connect() { return client; } },
         getUserIdFromRequest: () => 990001, getUserPermissions: async () => ({}),
-        isAllowed: () => true, registerAuditLog: async () => {}
+        isAllowed: () => true, registerAuditLog: async () => {}, getPartTitles
     });
     return { ...route, calls };
 }

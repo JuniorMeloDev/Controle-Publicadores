@@ -11,6 +11,7 @@ import { importMeetingProgram } from '../app/lib/jw-program-service.js';
 nextEnv.loadEnvConfig(process.cwd());
 const calendar = await loadModule('../../app/lib/meeting-calendar.js');
 const visits = await loadModule('../../app/lib/meeting-visits.js');
+const { getPartTitles } = await loadModule('../../app/lib/life-ministry-parts.js');
 // Session-local TEMP tables require a direct connection, not a transaction pooler.
 const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL?.replace('-pooler.', '.');
 const pool = new pg.Pool({ connectionString });
@@ -23,7 +24,7 @@ vm.runInContext(serviceSource + '\nglobalThis.service = { getCalendarContext, wi
 const dependencies = {
     Pool: class { connect() { return client; } }, ...calendar, ...visits, ...serviceContext.service,
     getUserIdFromRequest: () => 990001, getUserPermissions: async () => ({}), isAllowed: () => true,
-    registerAuditLog: async () => {}
+    registerAuditLog: async () => {}, getPartTitles
 };
 const route = name => loadRoute(`../../app/api/admin/${name}/route.js`, dependencies);
 const request = body => ({ json: async () => body, url: 'http://example.test/api' });

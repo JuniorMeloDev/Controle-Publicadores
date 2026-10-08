@@ -12,6 +12,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { StatusToast } from '@/app/components/ui/status-toast';
 import { useDesignationPeriod } from './DesignationPeriodContext';
 import { requestMeetingProgram } from '@/app/lib/import-programs-client';
+import { buildLifeMinistryWhatsAppMessage, lifeMinistryWhatsAppUrl } from '@/app/lib/life-ministry-whatsapp';
+import { DesignationPeriodFilters, designationToolbarClass, designationActionClass, designationListHeaderClass } from './DesignationLayout';
 
 // --- CONSTANTES ---
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -99,42 +101,8 @@ const mapSavedToAssignments = (savedRows, schedule) => {
   return newAssignments;
 };
 
-const generateWhatsAppText = (weekText, schedule, assignments) => {
-  let text = `*DESIGNAÇÕES: ${weekText}*\n_Nossa Vida e Ministério Cristão_\n\n`;
-  text += `🏛 *SALÃO PRINCIPAL*\nPresidente: *${assignments.presidente || '---'}*\nAjudante: ${assignments.ajudante || '---'}\n\n`;
-  text += `🎵 Cântico Inicial: *${schedule.initialSong}*\n🙏 Oração: *${assignments.oracao_inicial || '---'}*\n🗣 ${schedule.openingComments || 'Comentários'}: *${assignments.comentarios_iniciais || '---'}*\n\n`;
-  text += `💎 *TESOUROS DA PALAVRA DE DEUS*\n`;
-  schedule.treasures?.forEach((part, idx) => {
-    const title = part.title.replace(/\(.*\)/, '').trim();
-    text += `• ${title}: *${assignments[`tesouro_${idx}`] || '---'}*\n`;
-  });
-  text += `\n🌾 *FAÇA SEU MELHOR NO MINISTÉRIO*\n`;
-  schedule.ministry?.forEach((part, idx) => {
-    const title = part.title.replace(/\(.*\)/, '').trim();
-    const isDiscurso = part.title.toLowerCase().includes('discurso');
-    if (isDiscurso) {
-      text += `• ${title}: *${assignments[`ministerio_${idx}`] || '---'}*\n`;
-    } else {
-      const est = assignments[`ministerio_${idx}_1`] || '---';
-      const aju = assignments[`ministerio_${idx}_2`] || '---';
-      text += `• ${title}:\n   👤 *${est}* / 👥 ${aju}\n`;
-    }
-  });
-  text += `\n✝ *NOSSA VIDA CRISTÃ*\n🎵 ${schedule.middleSong}: *${assignments.cantico_meio || '---'}*\n`;
-  schedule.living?.forEach((part, idx) => {
-    const title = part.title.replace(/\(.*\)/, '').trim();
-    const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
-    if (isBibleStudy) {
-      const dirig = assignments[`vida_${idx}_1`] || '---';
-      const leitor = assignments[`vida_${idx}_2`] || '---';
-      text += `• ${title}:\n   📖 *${dirig}* / 🗣 ${leitor}\n`;
-    } else {
-      text += `• ${title}: *${assignments[`vida_${idx}`] || '---'}*\n`;
-    }
-  });
-  text += `\n🗣 ${schedule.finalComments}: *${assignments.comentarios_finais || '---'}*\n🎵 ${schedule.finalSong}\n🙏 Oração Final: *${assignments.oracao_final || '---'}*`;
-  return encodeURIComponent(text);
-};
+const generateWhatsAppText = (weekText, schedule, assignments, publishers) =>
+  encodeURIComponent(buildLifeMinistryWhatsAppMessage(weekText, schedule, assignments, publishers));
 
 function getWeekCompletionStats(schedule, assignments = {}) {
   if (!schedule) return { total: 0, filled: 0, percentage: 0 };
@@ -243,7 +211,7 @@ export function LifeMinistryTab() {
   const [isSaving, setIsSaving] = useState(false);
 
   // New Filter state for Sidebar
-  const { month, setMonth, year, setYear } = useDesignationPeriod();
+  const { month, year } = useDesignationPeriod();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobileModalOpen, setIsMobileModalOpen] = useState(false);
 
@@ -1228,8 +1196,14 @@ export function LifeMinistryTab() {
       setToastData({ message: 'Nenhuma designação disponível para compartilhar.', type: 'error' });
       return;
     }
-    const text = generateWhatsAppText(currentDescription, currentSchedule, currentAssignments);
-    window.open(`https://wa.me/?text=${text}`, '_blank');
+    const text = generateWhatsAppText(currentDescription, currentSchedule, currentAssignments, publicadores);
+    // Clipboard avoids emoji corruption by an external link/protocol handler.
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(decodeURIComponent(text)).then(() => {
+        setToastData({ message: 'Mensagem copiada. Você também pode colá-la no WhatsApp.', type: 'success' });
+      }).catch(() => {});
+    }
+    window.open(lifeMinistryWhatsAppUrl(decodeURIComponent(text)), '_blank', 'noopener,noreferrer');
   };
 
   const handlePrintAll = () => { window.print(); };
@@ -1282,7 +1256,7 @@ export function LifeMinistryTab() {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto w-full">
+    <div className="w-full min-w-0">
       <StatusToast message={toastData.message} type={toastData.type} onClose={() => setToastData({ message: '', type: '' })} />
       {error && <p role="alert" className="mb-4 bg-red-50 text-red-700 border border-red-200 rounded-lg p-3 text-sm">{error}
         {programSessionRequired && <Link href="/" prefetch={false} className="block mt-2 font-semibold underline">Entrar novamente</Link>}
@@ -1360,21 +1334,27 @@ export function LifeMinistryTab() {
         onShareWhatsApp={handleShareWhatsApp}
       />
 
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-4">
 
         {/* CABEÇALHO + IMPORTAR */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <div className={designationToolbarClass}>
+          <div className="flex-1 min-w-0 basis-64">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               <FileText className="w-5 h-5 text-purple-600" />
               Programação Vida e Ministério
             </h2>
-            <p className="text-gray-500 text-sm mt-1">As reuniões seguem o calendário. Importe arquivos RTF para preencher a programação de {year || 'um ano selecionado'}.</p>
+            <p className="text-gray-500 text-sm mt-1">Abra uma reunião para preencher as designações.</p>
           </div>
 
-          <label className={`flex items-center gap-3 py-3 px-6 rounded-lg text-white transition font-bold shadow-md hover:shadow-lg transform active:translate-y-0 ${isParsing || !canImport ? 'bg-purple-400 cursor-not-allowed opacity-70' : 'bg-purple-600 hover:bg-purple-700 hover:-translate-y-0.5 cursor-pointer'}`}>
-            {isParsing ? <Loader2 className="w-5 h-5 animate-spin" /> : <UploadCloud size={20} />}
-            {isParsing ? 'IMPORTANDO...' : 'IMPORTAR PROGRAMAÇÃO (RTF)'}
+          <label role="button" tabIndex={isParsing || !canImport ? -1 : 0} aria-disabled={isParsing || !canImport}
+            onKeyDown={event => {
+              if ((event.key === 'Enter' || event.key === ' ') && !isParsing && canImport) {
+                event.preventDefault(); event.currentTarget.querySelector('input').click();
+              }
+            }}
+            className={`${designationActionClass} text-white ${isParsing || !canImport ? 'bg-purple-400 cursor-not-allowed opacity-70' : 'bg-purple-600 hover:bg-purple-700 cursor-pointer'}`}>
+            {isParsing ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <UploadCloud size={16} className="shrink-0" />}
+            {isParsing ? 'Importando…' : 'Importar RTF'}
             <input type="file" multiple accept=".rtf, .txt" className="hidden" onChange={handleFilesParse} disabled={isParsing || !canImport} />
           </label>
         </div>
@@ -1388,41 +1368,14 @@ export function LifeMinistryTab() {
         </div>}
 
         {/* HISTÓRICO DE REUNIÕES */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden min-h-[500px]">
-          <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+          <div className={designationListHeaderClass}>
             <h2 className="font-bold text-gray-800 flex items-center gap-2">
               <History size={20} className="text-gray-500" />
               Histórico de Reuniões
             </h2>
 
-            <div className="flex items-center gap-3">
-              <select
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                className="text-sm border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-purple-500 outline-none text-gray-700"
-              >
-                <option value="">Todos os Meses</option>
-                {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((m, i) => <option key={i} value={String(i + 1).padStart(2, '0')}>{m}</option>)}
-              </select>
-
-              <select
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-                className="text-sm border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-purple-500 outline-none text-gray-700"
-              >
-                <option value="">Todos os Anos</option>
-                {/* Compute years from sidebarItems just for display options if needed, or static list */}
-                {Array.from(new Set([String(new Date().getFullYear()), ...savedMeetingsList.map(m => m.dataSQL.slice(0, 4))])).sort().reverse().map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-
-              {(month || year) && (
-                <button onClick={() => { setMonth(''); setYear(''); }} className="text-sm text-red-600 hover:text-red-700 hover:underline px-2">
-                  Limpar Filtros
-                </button>
-              )}
-            </div>
+            <DesignationPeriodFilters years={savedMeetingsList.map(m => m.dataSQL.slice(0, 4))} />
           </div>
 
           <div className="flex-1 overflow-auto">
@@ -1449,7 +1402,7 @@ export function LifeMinistryTab() {
                     <button type="button" disabled={isParsing || item.meeting.cancelado}
                       onClick={() => handleLoadSavedMeeting(item.meeting)}
                       aria-label={`Abrir / Editar ${item.label}`}
-                      className="p-4 flex-1 min-w-0 flex items-center gap-4 text-left disabled:cursor-default focus-visible:outline-purple-600">
+                      className="px-4 py-3 flex-1 min-w-0 flex items-center gap-4 text-left disabled:cursor-default focus-visible:outline-purple-600">
                       <div className="w-10 h-10 shrink-0 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-sm">
                         {item.date?.split('-')[2]}
                       </div>

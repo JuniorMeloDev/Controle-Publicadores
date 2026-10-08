@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
 import { importCreatedPrograms } from '@/app/lib/import-programs-client';
+import { ConfirmationDialog } from '@/app/components/ui/confirmation-dialog';
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card";
@@ -17,6 +18,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/app/components/ui/label";
 import { StatusToast } from "@/app/components/ui/status-toast";
 import { Trash2, Calendar, Save, Plus, Loader2, Sparkles, CheckCircle2, AlertTriangle, Edit2, Users, Eye, EyeOff, Database, DownloadCloud, ShieldCheck } from 'lucide-react';
+
+const settingsActionClass = 'h-10 w-full sm:w-auto inline-flex shrink-0 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium whitespace-nowrap disabled:opacity-50';
 
 const WEEKDAYS = [
     { value: 'Segunda-feira', label: 'Segunda-feira' },
@@ -53,6 +56,7 @@ export default function ConfiguracoesPage() {
 
     // Events State
     const [events, setEvents] = useState([]);
+    const [pendingDelete, setPendingDelete] = useState(null);
     const [newEvent, setNewEvent] = useState({ date: '', name: '', type: 'Outro' });
 
     // Groups State
@@ -261,39 +265,17 @@ export default function ConfiguracoesPage() {
     };
 
     const handleDeleteGroup = async (group) => {
-        if (!window.confirm(`Deseja realmente excluir o grupo "${group.nome_grupo}"?`)) {
-            return;
+        if (!canEditConfig) throw new Error('Você não tem permissão para editar configurações.');
+        const res = await fetch('/api/admin/grupos', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete', grupo_id: group.id })
+        });
+        if (!res.ok) {
+            const result = await res.json().catch(() => ({}));
+            throw new Error(result.message || result.error || 'Erro ao excluir grupo.');
         }
-
-        if (!canEditConfig) {
-            setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
-            return;
-        }
-
-        setGroupActionLoading(true);
-        try {
-            const res = await fetch('/api/admin/grupos', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'delete',
-                    grupo_id: group.id
-                })
-            });
-
-            if (res.ok) {
-                setGrupos(grupos.filter(g => g.id !== group.id));
-                setToast({ message: 'Grupo excluído com sucesso!', type: 'success' });
-            } else {
-                const err = await res.json();
-                setToast({ message: err.message || 'Erro ao excluir grupo.', type: 'error' });
-            }
-        } catch (error) {
-            console.error(error);
-            setToast({ message: 'Erro de conexão.', type: 'error' });
-        } finally {
-            setGroupActionLoading(false);
-        }
+        setGrupos(previous => previous.filter(g => g.id !== group.id));
+        setToast({ message: 'Grupo excluído com sucesso!', type: 'success' });
     };
 
     const handleToggleGroupStatus = async (group) => {
@@ -367,21 +349,17 @@ export default function ConfiguracoesPage() {
 
 
     const handleDeleteEvent = async (id) => {
-        if (!canEditConfig) {
-            setToast({ message: 'Você não tem permissão para editar configurações.', type: 'error' });
-            return;
+        if (!canEditConfig) throw new Error('Você não tem permissão para editar configurações.');
+        const res = await fetch('/api/admin/configuracoes', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete_event', id })
+        });
+        if (!res.ok) {
+            const result = await res.json().catch(() => ({}));
+            throw new Error(result.message || result.error || 'Erro ao excluir evento.');
         }
-        if (!confirm('Tem certeza que deseja excluir este evento?')) return;
-        try {
-            await fetch('/api/admin/configuracoes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'delete_event', id })
-            });
-            setEvents(events.filter(e => e.id !== id));
-        } catch (error) {
-            console.error(error);
-        }
+        setEvents(previous => previous.filter(event => event.id !== id));
+        setToast({ message: 'Evento excluído com sucesso!', type: 'success' });
     };
 
     // GENERATION LOGIC
@@ -536,13 +514,13 @@ export default function ConfiguracoesPage() {
     };
 
     return (
-        <DashboardLayout>
-            <div className="w-full min-w-0 p-3 sm:p-6 space-y-5 sm:space-y-6 max-w-5xl mx-auto">
+        <DashboardLayout contentClassName="[scrollbar-gutter:stable]">
+            <div className="w-full min-w-0 p-2 sm:p-3 space-y-4 [&_input:not([type=checkbox])]:h-10 [&_button[role=combobox]]:h-10 [&_button[role=combobox]]:min-w-0 [&_button[role=combobox]]:w-full">
                 {/* Page header */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-2 border-b border-gray-100">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Configurações Gerais</h1>
-                        <p className="text-sm sm:text-base text-gray-500">Organize o calendário, os grupos, os alertas e os backups da congregação.</p>
+                        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Configurações Gerais</h1>
+                        <p className="text-sm text-gray-500 mt-0.5">Organize o calendário, os grupos, os alertas e os backups da congregação.</p>
                     </div>
 
                 </div>
@@ -553,13 +531,13 @@ export default function ConfiguracoesPage() {
                     </div>
                 ) : (
                     <SettingsTabs>
-                        <SettingsPanel value="reunioes" className="grid grid-cols-1 lg:grid-cols-2 items-start gap-5 sm:gap-6">
-                            <div className="lg:col-span-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <SettingsPanel value="reunioes" className="grid grid-cols-1 gap-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                                 <p className="text-sm text-gray-600">Calendário das reuniões e datas especiais do ano selecionado.</p>
-                                <div className="flex w-full sm:w-auto items-center justify-between sm:justify-start gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-                                    <Label className="text-sm font-medium text-gray-700">Ano de Referência:</Label>
+                                <div className="flex w-full sm:w-auto items-center justify-between gap-3">
+                                    <Label htmlFor="settings-year" className="text-sm font-medium text-gray-700 whitespace-nowrap">Ano de Referência:</Label>
                                     <Select value={String(year)} onValueChange={(v) => setYear(parseInt(v))}>
-                                        <SelectTrigger className="w-24 border-none shadow-none focus:ring-0 bg-transparent h-8 p-0 px-2 font-bold text-lg text-purple-700">
+                                        <SelectTrigger id="settings-year" className="h-10 min-w-0 !w-28 shrink-0 bg-white border-gray-300 text-sm text-gray-700">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -572,8 +550,8 @@ export default function ConfiguracoesPage() {
                             </div>
                         {/* CARD 1: DIAS DE REUNIÃO */}
                         <Card className="min-w-0 border-gray-200 bg-white shadow-sm flex flex-col">
-                            <CardHeader className="bg-gray-50/50 p-4 sm:p-6 pb-4 sm:pb-4 border-b border-gray-100">
-                                <CardTitle className="flex items-center gap-2 text-gray-900">
+                            <CardHeader className="bg-gray-50/50 p-4 border-b border-gray-100">
+                                <CardTitle className="flex items-center gap-2 text-base font-bold leading-snug text-gray-900">
                                     <Calendar className="w-5 h-5 text-blue-600" />
                                     Dias de Reunião ({year})
                                 </CardTitle>
@@ -581,8 +559,8 @@ export default function ConfiguracoesPage() {
                                     Defina em quais dias da semana ocorrem as reuniões regulares.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="px-4 sm:px-6 pt-5 sm:pt-6 space-y-6 flex-1">
-                                <div className="space-y-4">
+                            <CardContent className="p-4 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label className="text-gray-700">Reunião de Meio de Semana (Vida e Ministério)</Label>
                                         <Select value={midweekDay} onValueChange={setMidweekDay}>
@@ -607,8 +585,8 @@ export default function ConfiguracoesPage() {
                                         </Select>
                                     </div>
                                 </div>
-                                <div className="space-y-3 pt-2">
-                                    <Button onClick={handleSaveWeekdays} disabled={saving || !canEditConfig} className="w-full min-h-11 bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 shadow-xs">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <Button onClick={handleSaveWeekdays} disabled={saving || !canEditConfig} className="h-10 w-full bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50">
                                         {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                                         Salvar Dias
                                     </Button>
@@ -624,11 +602,11 @@ export default function ConfiguracoesPage() {
                                         setGenOpen(open); 
                                     }}>
                                         <DialogTrigger asChild>
-                                            <Button variant="outline" disabled={!canEditConfig} className="w-full h-auto min-h-11 whitespace-normal border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50">
-                                                <Sparkles className="w-4 h-4 mr-2" /> Criar Reuniões Automaticamente
+                                            <Button variant="outline" disabled={!canEditConfig} className="h-10 w-full border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50">
+                                                <Sparkles className="w-4 h-4 mr-2" /> Gerar reuniões
                                             </Button>
                                         </DialogTrigger>
-                                        <DialogContent className="w-[calc(100%_-_2rem)] max-w-2xl rounded-xl bg-white max-h-[85dvh] overflow-hidden flex flex-col text-gray-900">
+                                        <DialogContent className="w-[calc(100%_-_2rem)] max-w-2xl rounded-xl bg-white max-h-[85dvh] overflow-hidden flex flex-col text-gray-900 [&_button[role=combobox]]:h-10 [&_input:not([type=checkbox])]:h-10">
                                             <DialogHeader>
                                                 <DialogTitle>Gerador Automático de Reuniões</DialogTitle>
                                                 <DialogDescription>
@@ -636,7 +614,7 @@ export default function ConfiguracoesPage() {
                                                 </DialogDescription>
                                             </DialogHeader>
 
-                                            <div className="flex-1 overflow-y-auto py-4 px-1">
+                                            <div className="flex-1 min-h-0 overflow-y-auto py-2 px-1">
                                                 {genStep === 1 ? (
                                                     <div className="space-y-4">
                                                         <div className="space-y-2">
@@ -733,7 +711,7 @@ export default function ConfiguracoesPage() {
                                                         {/* Table */}
                                                         <div>
                                                             <h4 className="font-semibold text-gray-900 mb-2">Reuniões a serem criadas ({previewData.meetings.filter(m => !m.exists).length})</h4>
-                                                            <div className="border border-gray-200 rounded-md overflow-hidden bg-white text-sm">
+                                                            <div className="border border-gray-200 rounded-md overflow-x-auto bg-white text-sm">
                                                                 <table className="w-full text-left">
                                                                     <thead className="bg-gray-100 border-b border-gray-200">
                                                                         <tr>
@@ -770,19 +748,19 @@ export default function ConfiguracoesPage() {
                                             </div>
 
                                             {genImportProgress && <p role="status" className="text-sm text-purple-700">{genImportProgress}</p>}
-                                            <DialogFooter className="mt-4 border-t pt-4">
+                                            <DialogFooter className="mt-0 border-t pt-4 shrink-0 [&_button]:h-10">
                                                 {genStep === 1 ? (
                                                     <Button 
                                                         onClick={genPeriod === 'avulso' ? handleCreateCustom : handlePreview} 
                                                         disabled={genLoading || (genPeriod === 'avulso' && !genCustomDate)} 
-                                                        className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white"
+                                                        className={`${settingsActionClass} bg-purple-600 hover:bg-purple-700 text-white`}
                                                     >
                                                         {genLoading ? <Loader2 className="animate-spin w-4 h-4 ml-2" /> : (genPeriod === 'avulso' ? 'Criar Reunião' : 'Gerar Prévia')}
                                                     </Button>
                                                 ) : (
                                                     <div className="flex gap-2 w-full justify-end">
                                                         <Button variant="outline" disabled={genLoading} onClick={() => setGenStep(1)}>Voltar</Button>
-                                                        <Button onClick={handleConfirmGeneration} disabled={genLoading || previewData.meetings.filter(m => !m.exists).length === 0} className="bg-green-600 hover:bg-green-700 text-white">
+                                                        <Button onClick={handleConfirmGeneration} disabled={genLoading || previewData.meetings.filter(m => !m.exists).length === 0} className="h-10 bg-purple-600 hover:bg-purple-700 text-white">
                                                             {genLoading ? <Loader2 className="animate-spin w-4 h-4" /> : 'Confirmar e Criar'}
                                                         </Button>
                                                     </div>
@@ -795,8 +773,8 @@ export default function ConfiguracoesPage() {
                         </Card>
                         {/* CARD 3: EVENTOS ESPECIAIS */}
                         <Card className="border-gray-200 bg-white shadow-sm min-w-0 h-fit">
-                            <CardHeader className="bg-gray-50/50 p-4 sm:p-6 pb-4 sm:pb-4 border-b border-gray-100">
-                                <CardTitle className="text-orange-900 flex items-center gap-2">
+                            <CardHeader className="bg-gray-50/50 p-4 border-b border-gray-100">
+                                <CardTitle className="text-gray-900 text-base font-bold leading-snug flex items-center gap-2">
                                     <Calendar className="w-5 h-5 text-orange-600" />
                                     Eventos Especiais & Datas Importantes
                                 </CardTitle>
@@ -804,11 +782,11 @@ export default function ConfiguracoesPage() {
                                     Adicione Assembleias, Congressos, Visitas e outras datas que alteram a rotina.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="px-4 sm:px-6 pt-5 sm:pt-6 space-y-6">
+                            <CardContent className="p-4 space-y-4">
 
-                                <div className="p-4 bg-orange-50 rounded-lg border border-orange-100 space-y-3">
+                                <div className="space-y-3">
                                     <Label className="font-semibold text-orange-900">Adicionar Novo Evento</Label>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 items-end">
                                         <div className="space-y-1">
                                             <span className="text-xs font-medium text-gray-700">Nome do Evento</span>
                                             <Input
@@ -829,7 +807,7 @@ export default function ConfiguracoesPage() {
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                        <div className="space-y-1 sm:col-span-2">
+                                        <div className="space-y-1 sm:col-span-2 xl:col-span-1">
                                             <span className="text-xs font-medium text-gray-700">Data</span>
                                             <div className="flex flex-col sm:flex-row gap-2">
                                                 <Input
@@ -838,7 +816,7 @@ export default function ConfiguracoesPage() {
                                                     onChange={e => setNewEvent({ ...newEvent, date: e.target.value })}
                                                     className="min-w-0 w-full bg-white text-gray-900 border-gray-300 flex-1"
                                                 />
-                                                <Button onClick={handleAddEvent} disabled={!canEditConfig} className="min-h-11 w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white shrink-0 shadow-xs">
+                                                <Button onClick={handleAddEvent} disabled={!canEditConfig} className={`${settingsActionClass} bg-purple-600 hover:bg-purple-700 text-white`}>
                                                     <Plus className="w-4 h-4" />
                                                     Adicionar
                                                 </Button>
@@ -847,29 +825,22 @@ export default function ConfiguracoesPage() {
                                     </div>
                                 </div>
 
-                                <SettingsEventsList events={events} year={year} canEdit={canEditConfig} onDelete={handleDeleteEvent} />
+                                <SettingsEventsList events={events} year={year} canEdit={canEditConfig} onDelete={id => setPendingDelete({ kind: 'event', item: events.find(event => event.id === id) })} />
                             </CardContent>
                         </Card>
                         </SettingsPanel>
                         <SettingsPanel value="grupos">
                         {/* CARD 2: GRUPOS DE SERVIÇO */}
                         <Card className="min-w-0 border-gray-200 bg-white shadow-sm flex flex-col">
-                            <CardHeader className="bg-gray-50/50 p-4 sm:p-6 pb-4 sm:pb-4 border-b border-gray-100">
-                                <CardTitle className="flex items-center gap-2 text-gray-900">
+                            <CardHeader className="bg-gray-50/50 p-4 border-b border-gray-100 flex flex-wrap flex-row items-center justify-between gap-3 space-y-0">
+                                <div className="min-w-0 flex-1 basis-64"><CardTitle className="flex items-center gap-2 text-base font-bold leading-snug text-gray-900">
                                     <Users className="w-5 h-5 text-green-600" />
                                     Grupos de Serviço de Campo
                                 </CardTitle>
                                 <CardDescription className="text-gray-600">
                                     Crie, renomeie ou exclua grupos de publicadores.
                                 </CardDescription>
-                            </CardHeader>
-                            <CardContent className="px-4 sm:px-6 pt-5 sm:pt-6 space-y-4 flex-1">
-                                {groupsLoading ? (
-                                    <div className="flex justify-center py-8">
-                                        <Loader2 className="w-6 h-6 animate-spin text-green-600" />
-                                    </div>
-                                ) : (
-                                    <>
+                             </div>
                                         <Dialog open={groupModalOpen} onOpenChange={setGroupModalOpen}>
                                             <DialogTrigger asChild>
                                                 <Button 
@@ -879,7 +850,7 @@ export default function ConfiguracoesPage() {
                                                         setSelectedGroup(null);
                                                     }}
                                                     disabled={!canEditConfig}
-                                                    className="w-full min-h-11 bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                                                    className={`${settingsActionClass} bg-purple-600 hover:bg-purple-700 text-white`}
                                                 >
                                                     <Plus className="w-4 h-4 mr-2" />
                                                     Criar Novo Grupo
@@ -890,6 +861,7 @@ export default function ConfiguracoesPage() {
                                                     <DialogTitle>
                                                         {groupModalMode === 'create' ? 'Criar Novo Grupo' : 'Renomear Grupo'}
                                                     </DialogTitle>
+                                                    <DialogDescription>Defina o nome usado para identificar este grupo.</DialogDescription>
                                                 </DialogHeader>
                                                 <div className="space-y-4">
                                                     <div>
@@ -901,7 +873,7 @@ export default function ConfiguracoesPage() {
                                                             placeholder={groupModalMode === 'create' ? 'Ex: Grupo 1' : 'Novo nome...'}
                                                             value={groupInputValue}
                                                             onChange={(e) => setGroupInputValue(e.target.value)}
-                                                            className="mt-2 bg-white text-gray-900 border-gray-300"
+                                                            className="mt-2 h-10 bg-white text-gray-900 border-gray-300"
                                                             onKeyDown={(e) => {
                                                                 if (e.key === 'Enter') {
                                                                     groupModalMode === 'create' ? handleCreateGroup() : handleRenameGroup();
@@ -910,14 +882,14 @@ export default function ConfiguracoesPage() {
                                                         />
                                                     </div>
                                                 </div>
-                                                <DialogFooter>
+                                                <DialogFooter className="grid grid-cols-2 gap-2 sm:space-x-0 [&_button]:h-10 [&_button]:w-full">
                                                     <Button variant="outline" onClick={() => setGroupModalOpen(false)}>
                                                         Cancelar
                                                     </Button>
                                                     <Button 
                                                         onClick={groupModalMode === 'create' ? handleCreateGroup : handleRenameGroup}
                                                         disabled={groupActionLoading || !groupInputValue.trim()}
-                                                        className="bg-green-600 hover:bg-green-700 text-white"
+                                                        className="h-10 bg-purple-600 hover:bg-purple-700 text-white"
                                                     >
                                                         {groupActionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                                                         {groupModalMode === 'create' ? 'Criar' : 'Renomear'}
@@ -925,15 +897,24 @@ export default function ConfiguracoesPage() {
                                                 </DialogFooter>
                                             </DialogContent>
                                         </Dialog>
+</CardHeader>
+                            <CardContent className="p-4 space-y-4 flex-1">
+                                {groupsLoading ? (
+                                    <div className="flex justify-center py-8">
+                                        <Loader2 className="w-6 h-6 animate-spin text-green-600" />
+                                    </div>
+                                ) : (
+                                    <>
 
-                                        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+
+                                        <div className="space-y-2 md:space-y-0 md:divide-y md:divide-gray-100">
                                             {grupos.length === 0 ? (
                                                 <p className="text-sm text-gray-400 italic text-center py-8">Nenhum grupo cadastrado.</p>
                                             ) : (
                                                 grupos.map((grupo) => (
                                                     <div
                                                         key={grupo.id}
-                                                        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-white border border-gray-100 rounded-lg hover:shadow-sm transition-shadow group ${!grupo.ativo ? 'opacity-60' : ''}`}
+                                                        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-white border border-gray-100 rounded-lg md:border-0 md:rounded-none hover:bg-gray-50 transition-colors group ${!grupo.ativo ? 'opacity-60' : ''}`}
                                                     >
                                                         <div className="flex min-w-0 items-center gap-3 flex-1">
                                                             <Users className={`w-4 h-4 shrink-0 ${grupo.ativo ? 'text-green-600' : 'text-gray-400'}`} />
@@ -946,7 +927,7 @@ export default function ConfiguracoesPage() {
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className={`h-11 w-11 sm:h-9 sm:w-9 ${grupo.ativo ? 'text-gray-400 hover:text-yellow-600' : 'text-gray-400 hover:text-green-600'}`}
+                                                                className={`h-10 w-10 ${grupo.ativo ? 'text-gray-400 hover:text-yellow-600' : 'text-gray-400 hover:text-green-600'}`}
                                                                 onClick={() => handleToggleGroupStatus(grupo)}
                                                                 disabled={!canEditConfig || groupActionLoading}
                                                                 title={grupo.ativo ? 'Desativar grupo' : 'Ativar grupo'}
@@ -956,7 +937,7 @@ export default function ConfiguracoesPage() {
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className="h-11 w-11 sm:h-9 sm:w-9 text-gray-500 hover:text-blue-600"
+                                                                className="h-10 w-10 text-gray-500 hover:text-blue-600"
                                                                 aria-label={`Renomear ${grupo.nome_grupo}`}
                                                                 onClick={() => {
                                                                     setGroupModalMode('rename');
@@ -971,8 +952,9 @@ export default function ConfiguracoesPage() {
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className="h-8 w-8 text-gray-400 hover:text-red-500"
-                                                                onClick={() => handleDeleteGroup(grupo)}
+                                                                className="h-10 w-10 text-gray-400 hover:text-red-500"
+                                                                aria-label={`Excluir grupo ${grupo.nome_grupo}`}
+                                                                onClick={() => setPendingDelete({ kind: 'group', item: grupo })}
                                                                 disabled={!canEditConfig || groupActionLoading}
                                                             >
                                                                 <Trash2 className="w-4 h-4" />
@@ -993,10 +975,10 @@ export default function ConfiguracoesPage() {
                         </SettingsPanel>
                         <SettingsPanel value="backup">
                         {/* CARD 4: BACKUP COMPLETO DO BANCO DE DADOS */}
-                        <Card className="border-purple-200 bg-gradient-to-br from-white to-purple-50/40 shadow-sm min-w-0">
-                            <CardHeader className="bg-purple-50/60 p-4 sm:p-6 pb-4 sm:pb-4 border-b border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <Card className="border-gray-200 bg-white shadow-sm min-w-0">
+                            <CardHeader className="bg-gray-50/50 p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div>
-                                    <CardTitle className="text-purple-950 flex items-center gap-2">
+                                    <CardTitle className="text-gray-900 text-base font-bold leading-snug flex items-center gap-2">
                                         <Database className="w-5 h-5 text-purple-600" />
                                         Backup Completo em 1 Clique
                                     </CardTitle>
@@ -1009,7 +991,7 @@ export default function ConfiguracoesPage() {
                                     Snapshot Seguro
                                 </div>
                             </CardHeader>
-                            <CardContent className="px-4 sm:px-6 pt-5 sm:pt-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                            <CardContent className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                 <div className="space-y-2 max-w-2xl text-sm text-gray-600">
                                     <p>
                                         O arquivo gerado reúne todas as tabelas: <strong>publicadores</strong>, <strong>grupos</strong>, <strong>assistência presencial e Zoom</strong>, <strong>discursos públicos</strong>, <strong>designações de Vida e Ministério</strong>, <strong>relatórios mensais</strong> e <strong>configurações</strong>.
@@ -1023,7 +1005,7 @@ export default function ConfiguracoesPage() {
                                     <Button
                                         onClick={handleExportBackup}
                                         disabled={isExportingBackup || !canEditConfig}
-                                        className="w-full lg:w-auto bg-purple-600 hover:bg-purple-700 text-white h-auto min-h-11 whitespace-normal text-center font-semibold py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                                        className={`${settingsActionClass} bg-purple-600 hover:bg-purple-700 text-white`}
                                     >
                                         {isExportingBackup ? (
                                             <>
@@ -1033,7 +1015,7 @@ export default function ConfiguracoesPage() {
                                         ) : (
                                             <>
                                                 <DownloadCloud className="w-5 h-5" />
-                                                <span>Exportar Backup Completo (.JSON)</span>
+                                                <span>Exportar backup (.JSON)</span>
                                             </>
                                         )}
                                     </Button>
@@ -1043,6 +1025,13 @@ export default function ConfiguracoesPage() {
                         </SettingsPanel>
                     </SettingsTabs>
                 )}
+                {pendingDelete && <ConfirmationDialog destructive confirmLabel="Excluir"
+                    title={pendingDelete.kind === 'group' ? 'Excluir grupo?' : 'Excluir evento?'}
+                    description={pendingDelete.kind === 'group'
+                        ? `O grupo ${pendingDelete.item.nome_grupo} será excluído. Só é possível excluir grupos sem publicadores associados. Esta ação não pode ser desfeita.`
+                        : `O evento ${pendingDelete.item.nome} será removido do calendário de ${year}. Esta ação não pode ser desfeita.`}
+                    onConfirm={() => pendingDelete.kind === 'group' ? handleDeleteGroup(pendingDelete.item) : handleDeleteEvent(pendingDelete.item.id)}
+                    onCancel={() => setPendingDelete(null)} />}
                 <StatusToast
                     message={toast.message}
                     type={toast.type}
@@ -1065,7 +1054,7 @@ export default function ConfiguracoesPage() {
                                 {resultData.details.map((d, i) => <li key={i}>{d}</li>)}
                             </ul>
                         </div>
-                        <DialogFooter>
+                        <DialogFooter className="grid grid-cols-2 gap-2 sm:space-x-0 [&_button]:h-10 [&_button]:w-full">
                             <Button onClick={() => setResultOpen(false)}>Fechar</Button>
                         </DialogFooter>
                     </DialogContent>

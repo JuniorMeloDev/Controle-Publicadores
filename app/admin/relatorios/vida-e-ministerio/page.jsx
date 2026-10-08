@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import { generateLifeMinistryPDF } from '@/app/utils/generateLifeMinistryPDF';
 import { generateS140TPDF } from '@/app/utils/generateS140TPDF';
+import { canExportMeeting, meetingExportKey, fetchLifeMinistryExportDetails } from '@/app/lib/life-ministry-export';
 
 export default function LifeMinistryExportPage() {
     const router = useRouter();
@@ -17,10 +18,11 @@ export default function LifeMinistryExportPage() {
     const [selectedIds, setSelectedIds] = useState(new Set());
 
     // Filters
-    const [month, setMonth] = useState('');
-    const [year, setYear] = useState('');
+    const [month, setMonth] = useState(() => String(new Date().getMonth() + 1).padStart(2, '0'));
+    const [year, setYear] = useState(() => String(new Date().getFullYear()));
 
     const [isPreparingExport, setIsPreparingExport] = useState(false);
+    const [exportError, setExportError] = useState('');
 
     useEffect(() => {
         fetchMeetings();
@@ -62,35 +64,23 @@ export default function LifeMinistryExportPage() {
     };
 
     const toggleAll = () => {
-        if (selectedIds.size === filteredMeetings.length) {
-            setSelectedIds(new Set());
-        } else {
-            setSelectedIds(new Set(filteredMeetings.map(m => m.id || m.dataSQL)));
-        }
+        const available = filteredMeetings.filter(canExportMeeting);
+        const allSelected = available.length > 0 && available.every(m => selectedIds.has(meetingExportKey(m)));
+        setSelectedIds(previous => {
+            const next = new Set(previous);
+            available.forEach(m => allSelected ? next.delete(meetingExportKey(m)) : next.add(meetingExportKey(m)));
+            return next;
+        });
     };
 
     const fetchSelectedDetails = async () => {
-        const results = [];
-        const selectedMeetings = meetings
-            .filter(m => selectedIds.has(m.id || m.dataSQL))
-            .sort((a, b) => a.dataSQL.localeCompare(b.dataSQL));
-
-        for (const m of selectedMeetings) {
-            try {
-                const res = await fetch(`/api/admin/get-meeting-details?date=${m.dataSQL}`);
-                if (!res.ok) throw new Error(`Erro ${m.label}`);
-                const data = await res.json();
-                results.push(data);
-            } catch (e) {
-                console.error(e);
-            }
-        }
-        return results;
+        return fetchLifeMinistryExportDetails(meetings, selectedIds);
     };
 
     const handleExportPDF = async () => {
         if (selectedIds.size === 0) return;
         setIsPreparingExport(true);
+        setExportError('');
         try {
             const detailsList = await fetchSelectedDetails();
             if (detailsList.length === 0) return;
@@ -104,7 +94,7 @@ export default function LifeMinistryExportPage() {
                 doc.save(`Designacoes_Vida_Ministerio_Lote.pdf`);
             }
         } catch (error) {
-            console.error("Erro exportar PDF", error);
+            setExportError(error.message || 'Erro ao exportar PDF.');
         } finally {
             setIsPreparingExport(false);
         }
@@ -113,6 +103,7 @@ export default function LifeMinistryExportPage() {
     const handleExportExcel = async () => {
         if (selectedIds.size === 0) return;
         setIsPreparingExport(true);
+        setExportError('');
         try {
             const detailsList = await fetchSelectedDetails();
             if (detailsList.length === 0) return;
@@ -182,7 +173,7 @@ export default function LifeMinistryExportPage() {
 
             XLSX.writeFile(wb, "Designacoes_Vida_Ministerio.xlsx");
         } catch (error) {
-            console.error("Erro exportar Excel", error);
+            setExportError(error.message || 'Erro ao exportar Excel.');
         } finally {
             setIsPreparingExport(false);
         }
@@ -191,12 +182,13 @@ export default function LifeMinistryExportPage() {
     const handleExportS140T = async () => {
         if (selectedIds.size === 0) return;
         setIsPreparingExport(true);
+        setExportError('');
         try {
             const detailsList = await fetchSelectedDetails();
             if (detailsList.length === 0) return;
             generateS140TPDF(detailsList);
         } catch (error) {
-            console.error("Erro exportar S-140-T", error);
+            setExportError(error.message || 'Erro ao exportar S-140-T.');
         } finally {
             setIsPreparingExport(false);
         }
@@ -221,13 +213,15 @@ export default function LifeMinistryExportPage() {
                     </div>
                 </div>
 
+                {exportError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{exportError}</p>}
+
                 {/* Filters & Actions */}
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row gap-4 items-center justify-between">
                     <div className="flex items-center gap-3 w-full md:w-auto text-gray-500">
                         <Filter className="text-gray-400 w-5 h-5" />
                         <select value={year} onChange={e => setYear(e.target.value)} className="border rounded-md px-3 py-2 text-sm">
                             <option value="">Todos os Anos</option>
-                            {[2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                            {[...new Set([String(new Date().getFullYear()), ...meetings.map(m => m.dataSQL.slice(0, 4))])].sort().reverse().map(y => <option key={y} value={y}>{y}</option>)}
                         </select>
                         <select value={month} onChange={e => setMonth(e.target.value)} className="border rounded-md px-3 py-2 text-sm">
                             <option value="">Todos os Meses</option>
@@ -274,8 +268,8 @@ export default function LifeMinistryExportPage() {
                 {/* List */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center gap-4">
-                        <button onClick={toggleAll} className="text-gray-500 hover:text-indigo-600">
-                            {selectedIds.size > 0 && selectedIds.size === filteredMeetings.length ? <CheckSquare /> : <Square />}
+                        <button onClick={toggleAll} aria-label="Selecionar todas as reuniões com programação" disabled={!filteredMeetings.some(canExportMeeting) || isPreparingExport} className="text-gray-500 hover:text-indigo-600">
+                            {filteredMeetings.some(canExportMeeting) && filteredMeetings.filter(canExportMeeting).every(m => selectedIds.has(meetingExportKey(m))) ? <CheckSquare /> : <Square />}
                         </button>
                         <span className="text-sm font-semibold text-gray-700">
                             {selectedIds.size} selecionados
@@ -289,7 +283,7 @@ export default function LifeMinistryExportPage() {
                     ) : (
                         <div className="divide-y divide-gray-100">
                             {filteredMeetings.map(m => (
-                                <div key={m.dataSQL || m.id} onClick={() => toggleSelection(m.id || m.dataSQL)} className={`p-4 flex items-center gap-4 cursor-pointer hover:bg-indigo-50 transition-colors ${selectedIds.has(m.id || m.dataSQL) ? 'bg-indigo-50/50' : ''}`}>
+                                <div key={m.dataSQL || m.id} onClick={() => { if (canExportMeeting(m) && !isPreparingExport) toggleSelection(meetingExportKey(m)); }} className={`p-4 flex items-center gap-4 transition-colors ${canExportMeeting(m) ? 'cursor-pointer hover:bg-indigo-50' : 'opacity-60 cursor-default'} ${selectedIds.has(m.id || m.dataSQL) ? 'bg-indigo-50/50' : ''}`}>
                                     <div className={selectedIds.has(m.id || m.dataSQL) ? 'text-indigo-600' : 'text-gray-300'}>
                                         {selectedIds.has(m.id || m.dataSQL) ? <CheckSquare /> : <Square />}
                                     </div>
@@ -298,6 +292,7 @@ export default function LifeMinistryExportPage() {
                                         <p className="text-sm text-gray-500 capitalize">
                                             {m.dataSQL ? new Date(m.dataSQL + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : m.dataSQL}
                                         </p>
+                                        {!canExportMeeting(m) && <p className="text-xs text-gray-500 mt-1">{m.cancelado ? 'Reunião cancelada' : 'Programação pendente: importe-a em Designações antes de exportar.'}</p>}
                                     </div>
                                 </div>
                             ))}

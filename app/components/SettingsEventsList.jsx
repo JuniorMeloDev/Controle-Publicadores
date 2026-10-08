@@ -36,15 +36,15 @@ export function SettingsEventsList({ events, year, canEdit, onDelete }) {
             <p className="text-sm font-medium text-gray-700">Nenhum evento neste ano</p>
             <p className="text-xs text-gray-500">Use o formulário acima para adicionar uma data ao calendário.</p>
         </div> : <div role="region" aria-label={`Lista de eventos de ${year}`} tabIndex={0}
-            className="space-y-5 p-3 sm:p-4 lg:max-h-[480px] lg:overflow-y-auto lg:overscroll-contain [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500">
+            className="space-y-4 p-3 sm:p-4 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500">
             {[...months].map(([key, month]) => <div key={key}>
                 <div className="mb-2.5 flex items-center gap-2">
                     <h5 className="text-xs font-semibold capitalize text-gray-600">{month.label}</h5>
                     <span className="h-px flex-1 bg-gray-100" aria-hidden="true" />
                     <span className="text-[11px] text-gray-400">{month.events.length}</span>
                 </div>
-                <ul className="space-y-2">
-                    {month.events.map(event => <li key={event.id} className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-start gap-2 rounded-lg border border-gray-100 bg-white p-2.5 transition-colors hover:border-gray-200 hover:bg-gray-50/60 sm:gap-3 sm:p-3">
+                <ul className="space-y-2 md:space-y-0 md:divide-y md:divide-gray-100">
+                    {month.events.map(event => <li key={event.id} className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-start gap-2 rounded-lg border border-gray-100 md:border-0 md:rounded-none bg-white p-2.5 transition-colors hover:border-gray-200 hover:bg-gray-50/60 sm:gap-3 sm:p-3">
                         <time dateTime={event.date.toISOString().slice(0, 10)} title={event.date.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
                             className="flex min-h-14 flex-col items-center justify-center rounded-lg border border-orange-100 bg-orange-50/70 text-orange-900">
                             <span className="text-xl font-bold leading-none">{event.date.getUTCDate()}</span>
@@ -55,7 +55,7 @@ export function SettingsEventsList({ events, year, canEdit, onDelete }) {
                             <span className={`mt-2 inline-block max-w-full rounded-md border px-2 py-0.5 text-[11px] font-medium leading-4 ${typeStyles[event.tipo] || 'border-gray-200 bg-gray-50 text-gray-600'}`}>{event.tipo}</span>
                         </div>
                         <Button type="button" variant="ghost" size="icon" disabled={!canEdit}
-                            className="h-11 w-11 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 focus-visible:ring-red-500"
+                            className="h-10 w-10 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 focus-visible:ring-red-500"
                             aria-label={`Excluir evento: ${event.nome}`} title="Excluir evento" onClick={() => onDelete(event.id)}>
                             <Trash2 className="h-4 w-4" />
                         </Button>

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/app/components/ui/card';
 import { FileText, BarChart, Calendar, ArrowRight, Lock, Users, LayoutList, Brush, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 
@@ -103,61 +102,37 @@ export default function RelatoriosHubPage() {
   ];
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Central de Relatórios</h1>
-          <p className="text-gray-500">Selecione o tipo de relatório que deseja visualizar ou imprimir.</p>
+    <DashboardLayout contentClassName="[scrollbar-gutter:stable]">
+      <div className="w-full min-w-0 p-2 sm:p-3 space-y-4">
+        <div className="pb-2 border-b border-gray-100">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Central de Relatórios</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Selecione o tipo de relatório que deseja visualizar ou imprimir.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {reports.map((report, idx) => {
-            const isLocked = !isLoadingUser && report.needsElder && !isAnciao;
-            const isActive = report.active && !isLocked;
-
-            return (
-              <Link
-                key={idx}
-                href={isActive ? report.href : '#'}
-                className={`block group h-full ${!isActive ? 'cursor-not-allowed' : ''}`}
-                onClick={(e) => !isActive && e.preventDefault()}
-              >
-                <Card className={`h-full border-gray-200 bg-white transition-all 
-                      ${isActive
-                    ? `cursor-pointer hover:border-${report.color.split('-')[1]}-300 hover:shadow-md group-hover:ring-2 ${report.hoverRing}`
-                    : 'opacity-75 grayscale-[0.5]'}
-                  `}>
-                  <CardHeader>
-                    <div className={`mb-2 w-10 h-10 rounded-full flex items-center justify-center transition-colors
-                          ${isLocked ? 'bg-gray-100' : report.bgColor}
-                      `}>
-                      {isLocked ? <Lock className="w-5 h-5 text-gray-500" /> : <report.icon className={`w-5 h-5 ${report.color}`} />}
-                    </div>
-                    <CardTitle className={`text-gray-900 ${isActive ? 'group-hover:text-primary transition-colors' : ''}`}>
-                      {report.title}
-                    </CardTitle>
-                    <CardDescription className="text-gray-600">
-                      {report.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className={`flex items-center text-sm font-medium mt-2 
-                          ${isActive ? 'text-gray-900 font-semibold' : 'text-gray-400'}
-                      `}>
-                      {isLocked ? (
-                        <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Apenas Anciãos</span>
-                      ) : (
-                        isActive ? (
-                          <>Acessar <ArrowRight className="text-gray-900 w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" /></>
-                        ) : 'Em breve'
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
+        <section aria-label="Relatórios disponíveis" className="md:bg-white md:rounded-xl md:border md:border-gray-200 md:shadow-sm md:overflow-hidden">
+          <div className="space-y-3 md:space-y-0 md:divide-y md:divide-gray-100">
+            {reports.map(report => {
+              const pending = isLoadingUser && report.needsElder;
+              const isLocked = !isLoadingUser && report.needsElder && !isAnciao;
+              const isActive = report.active && !isLocked && !pending;
+              const Icon = isLocked ? Lock : report.icon;
+              return <Link key={report.href} href={isActive ? report.href : '#'} aria-disabled={!isActive}
+                onClick={event => { if (!isActive) event.preventDefault(); }}
+                className={`group flex flex-col md:flex-row md:items-center gap-3 md:gap-4 p-4 min-w-0 rounded-xl border border-gray-200 bg-white shadow-sm md:rounded-none md:border-0 md:shadow-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500 ${isActive ? 'hover:bg-purple-50/40' : 'cursor-not-allowed opacity-75'}`}>
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${isLocked ? 'bg-gray-100' : report.bgColor}`}>
+                  <Icon className={`w-5 h-5 ${isLocked ? 'text-gray-500' : report.color}`} aria-hidden="true" />
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-base font-semibold text-gray-900">{report.title}</span>
+                  <span className="block text-sm text-gray-500 mt-1">{report.description}</span>
+                </span>
+                <span className={`flex h-10 w-full md:w-32 shrink-0 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium ${isActive ? 'border border-purple-200 text-purple-700 group-hover:bg-purple-50' : 'text-gray-500'}`}>
+                  {pending ? 'Carregando…' : isLocked ? 'Apenas anciãos' : isActive ? <>Acessar <ArrowRight className="w-4 h-4" aria-hidden="true" /></> : 'Em breve'}
+                </span>
+              </Link>;
+            })}
+          </div>
+        </section>
       </div>
     </DashboardLayout>
   );

@@ -14,6 +14,8 @@ export const generateLifeMinistryPDF = (schedule, assignments, weekText, existin
     const pageWidth = 210;
     const contentWidth = pageWidth - (margin * 2);
     let currentY = margin;
+    let bodyFontSize = 10;
+    let bodyLineHeight = 6;
 
     // Cores
     const colors = {
@@ -120,7 +122,7 @@ export const generateLifeMinistryPDF = (schedule, assignments, weekText, existin
     };
 
     const measureAndRender = (richParts, x, y, maxWidth, lineHeight = 5, dryRun = false) => {
-      doc.setFontSize(10); 
+      doc.setFontSize(bodyFontSize);
       let cursorX = 0;
       let cursorY = 0; 
       let maxLineWidth = 0;
@@ -230,24 +232,13 @@ export const generateLifeMinistryPDF = (schedule, assignments, weekText, existin
     const colTimeW = 16;
     const colPartW = contentWidth - colTimeW - colNameW;
 
-    // Contagem de linhas para cálculo dinâmico de altura (preencher toda a folha A4)
-    let totalRowsCount = 2; // Cântico inicial + Comentários iniciais
-    totalRowsCount += (schedule.treasures?.length || 0);
-    if (assignments.leitura_biblia && !schedule.treasures?.some(t => t.title?.toLowerCase().includes('leitura'))) {
-      totalRowsCount += 1;
-    }
-    totalRowsCount += (schedule.ministry?.length || 0);
-    totalRowsCount += 1; // Cântico do meio
-    totalRowsCount += (schedule.living?.length || 0);
-    totalRowsCount += 2; // Comentários finais + Cântico final
-
     const pageHeight = 297;
-    const topMargin = 6;
-    const bottomMargin = 6;
-    const usableHeight = pageHeight - topMargin - bottomMargin; // 285mm
+    const bottomMargin = 10;
     const sectionHeadersTotalH = 3 * 9; // 3 seções * 9mm = 27mm
-    const availableForRows = usableHeight - headerH - sectionHeadersTotalH; // ~218mm
-    const dynamicMinH = Math.max(12, Math.min(18.5, Math.floor((availableForRows / Math.max(1, totalRowsCount)) * 10) / 10));
+    const availableForRows = pageHeight - bottomMargin - currentY - sectionHeadersTotalH;
+    let dynamicMinH = 12;
+    let measuring = true;
+    const measuredHeights = [];
 
     const drawRow = (timeStr, richParts, nameVal, type = 'normal', secondaryLabel = null) => {
       // Handle "Oração --->" special alignment
@@ -272,9 +263,19 @@ export const generateLifeMinistryPDF = (schedule, assignments, weekText, existin
       if (type !== 'header') {
         const dummyParts = Array.isArray(finalRichParts) ? finalRichParts : [finalRichParts];
          // Using measureAndRender helper which should remain compatible
-        textH = measureAndRender(dummyParts, 0, 0, colPartW - 4, 6, true); 
+        textH = measureAndRender(dummyParts, 0, 0, colPartW - 4, bodyLineHeight, true);
       }
       let h = Math.max(dynamicMinH, textH + 6);
+      if (measuring) {
+        if (type !== 'header') measuredHeights.push(textH + 6);
+        return;
+      }
+      // Unusually long programmes continue on another page rather than being clipped.
+      const requiredHeight = type === 'header' ? 9 + dynamicMinH : h;
+      if (currentY + requiredHeight > pageHeight - bottomMargin) {
+        doc.addPage();
+        currentY = margin;
+      }
 
       if (type === 'header') {
         // Section Header
@@ -296,7 +297,7 @@ export const generateLifeMinistryPDF = (schedule, assignments, weekText, existin
       drawRect(margin + colTimeW, currentY, colPartW, h);
       const textYStart = currentY + (h - textH) / 2 - 2; 
       const partsArr = Array.isArray(finalRichParts) ? finalRichParts : [finalRichParts];
-      measureAndRender(partsArr, margin + colTimeW + 2, textYStart, colPartW - 4, 6, false);
+      measureAndRender(partsArr, margin + colTimeW + 2, textYStart, colPartW - 4, bodyLineHeight, false);
 
       if (oracaoLabel) {
         doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(...colors.black);
@@ -371,78 +372,100 @@ export const generateLifeMinistryPDF = (schedule, assignments, weekText, existin
         return `${h}:${m.toString().padStart(2, '0')}`;
     };
 
-    let startMin = 19 * 60 + 30; // 19:30
-    let currentMinutes = startMin;
+    const buildRows = () => {
+      let startMin = 19 * 60 + 30; // 19:30
+      let currentMinutes = startMin;
 
-    // 1. Initial
-    const initParts = parseRichText(`${schedule.initialSong || schedule.openingSong || "Cântico"}    Oração --->`, 'normal');
-    if (initParts[0]) initParts[0] = { ...initParts[0], color: colors.blue, font: "bold" };
-    drawRow(formatTime(currentMinutes), initParts, assignments.oracao_inicial);
-    currentMinutes += 5;
+      // 1. Initial
+      const initParts = parseRichText(`${schedule.initialSong || schedule.openingSong || "Cântico"}    Oração --->`, 'normal');
+      if (initParts[0]) initParts[0] = { ...initParts[0], color: colors.blue, font: "bold" };
+      drawRow(formatTime(currentMinutes), initParts, assignments.oracao_inicial);
+      currentMinutes += 5;
 
-    // Comentários Iniciais
-    const commentsText = schedule.openingComments || 'Comentários Iniciais (1 min)';
-    const commentsDuration = getDuration(commentsText) || 1;
-    drawRow(formatTime(currentMinutes), parseRichText(commentsText, 'normal'), assignments.comentarios_iniciais);
-    currentMinutes += commentsDuration;
+      // Comentários Iniciais
+      const commentsText = schedule.openingComments || 'Comentários Iniciais (1 min)';
+      const commentsDuration = getDuration(commentsText) || 1;
+      drawRow(formatTime(currentMinutes), parseRichText(commentsText, 'normal'), assignments.comentarios_iniciais);
+      currentMinutes += commentsDuration;
 
-    // 2. Treasures
-    drawRow('', { text: 'TESOUROS DA PALAVRA DE DEUS', color: colors.blue }, '', 'header'); // BLUE header
+      // 2. Treasures
+      drawRow('', { text: 'TESOUROS DA PALAVRA DE DEUS', color: colors.blue }, '', 'header'); // BLUE header
     
-    schedule.treasures?.forEach((part, idx) => {
-        const parts = parseRichText(part.title, 'treasures');
-        drawRow(formatTime(currentMinutes), parts, assignments[`tesouro_${idx}`]);
-        currentMinutes += getDuration(part.title) + 1; 
-    });
+      schedule.treasures?.forEach((part, idx) => {
+          const parts = parseRichText(part.title, 'treasures');
+          drawRow(formatTime(currentMinutes), parts, assignments[`tesouro_${idx}`]);
+          currentMinutes += getDuration(part.title) + 1; 
+      });
 
-    // 3. Ministry
-    drawRow('', { text: 'FAÇA SEU MELHOR NO MINISTÉRIO', color: colors.orange }, '', 'header');
+      // 3. Ministry
+      drawRow('', { text: 'FAÇA SEU MELHOR NO MINISTÉRIO', color: colors.orange }, '', 'header');
     
-    schedule.ministry?.forEach((part, idx) => {
-        const parts = parseRichText(part.title, 'ministry'); 
-        const isDiscurso = part.title.toLowerCase().includes('discurso');
-        let assignVal;
-        let label = null;
-        if (isDiscurso) {
-          assignVal = assignments[`ministerio_${idx}`] || assignments[`ministerio_${idx}_1`];
-        } else {
-          assignVal = [assignments[`ministerio_${idx}_1`] || assignments[`ministerio_${idx}`], assignments[`ministerio_${idx}_2`]];
-          label = "Ajudante";
-        }
-        drawRow(formatTime(currentMinutes), parts, assignVal, isDiscurso ? 'normal' : 'split', label);
-        currentMinutes += getDuration(part.title) + 1; 
-    });
+      schedule.ministry?.forEach((part, idx) => {
+          const parts = parseRichText(part.title, 'ministry'); 
+          const isDiscurso = part.title.toLowerCase().includes('discurso');
+          let assignVal;
+          let label = null;
+          if (isDiscurso) {
+            assignVal = assignments[`ministerio_${idx}`] || assignments[`ministerio_${idx}_1`];
+          } else {
+            assignVal = [assignments[`ministerio_${idx}_1`] || assignments[`ministerio_${idx}`], assignments[`ministerio_${idx}_2`]];
+            label = "Ajudante";
+          }
+          drawRow(formatTime(currentMinutes), parts, assignVal, isDiscurso ? 'normal' : 'split', label);
+          currentMinutes += getDuration(part.title) + 1; 
+      });
 
-    // 4. Living
-    drawRow('', { text: 'NOSSA VIDA CRISTÃ', color: colors.red }, '', 'header');
+      // 4. Living
+      drawRow('', { text: 'NOSSA VIDA CRISTÃ', color: colors.red }, '', 'header');
     
-    drawRow(formatTime(currentMinutes), parseRichText(schedule.middleSong || "Cântico do Meio", 'living'), assignments.cantico_meio);
-    currentMinutes += 3;
+      drawRow(formatTime(currentMinutes), parseRichText(schedule.middleSong || "Cântico do Meio", 'living'), assignments.cantico_meio);
+      currentMinutes += 3;
 
-    schedule.living?.forEach((part, idx) => {
-        const parts = parseRichText(part.title, 'living');
-        const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
-        let assignVal;
-        let label = null;
-        if (isBibleStudy) {
-          assignVal = [assignments[`vida_${idx}_1`] || assignments[`vida_${idx}`], assignments[`vida_${idx}_2`]];
-          label = "Leitor";
-        } else {
-          assignVal = assignments[`vida_${idx}`] || assignments[`vida_${idx}_1`]; // needs name
-        }
-        drawRow(formatTime(currentMinutes), parts, assignVal, isBibleStudy ? 'split' : 'normal', label);
-        currentMinutes += getDuration(part.title);
-    });
+      schedule.living?.forEach((part, idx) => {
+          const parts = parseRichText(part.title, 'living');
+          const isBibleStudy = part.title.toLowerCase().includes('estudo bíblico');
+          let assignVal;
+          let label = null;
+          if (isBibleStudy) {
+            assignVal = [assignments[`vida_${idx}_1`] || assignments[`vida_${idx}`], assignments[`vida_${idx}_2`]];
+            label = "Leitor";
+          } else {
+            assignVal = assignments[`vida_${idx}`] || assignments[`vida_${idx}_1`]; // needs name
+          }
+          drawRow(formatTime(currentMinutes), parts, assignVal, isBibleStudy ? 'split' : 'normal', label);
+          currentMinutes += getDuration(part.title);
+      });
 
-    // Finish
-    const finalCommentsText = schedule.finalComments || 'Comentários Finais (3 min)';
-    const finalCommentsDuration = getDuration(finalCommentsText) || 3;
-    drawRow(formatTime(currentMinutes), parseRichText(finalCommentsText, 'normal'), assignments.comentarios_finais);
-    currentMinutes += finalCommentsDuration;
+      // Finish
+      const finalCommentsText = schedule.finalComments || 'Comentários Finais (3 min)';
+      const finalCommentsDuration = getDuration(finalCommentsText) || 3;
+      drawRow(formatTime(currentMinutes), parseRichText(finalCommentsText, 'normal'), assignments.comentarios_finais);
+      currentMinutes += finalCommentsDuration;
 
-    const finalParts = parseRichText(`${schedule.finalSong}    Oração --->`, 'normal');
-    if (finalParts[0]) finalParts[0] = { ...finalParts[0], color: colors.blue, font: "bold" };
-    drawRow(formatTime(currentMinutes), finalParts, assignments.oracao_final);
+      const finalParts = parseRichText(`${schedule.finalSong}    Oração --->`, 'normal');
+      if (finalParts[0]) finalParts[0] = { ...finalParts[0], color: colors.blue, font: "bold" };
+      drawRow(formatTime(currentMinutes), finalParts, assignments.oracao_final);
+    };
+
+    // Measure the same rows that will be drawn, including all wrapped ministry instructions.
+    buildRows();
+    if (measuredHeights.reduce((sum, height) => sum + Math.max(12, height), 0) > availableForRows) {
+      bodyFontSize = 9;
+      bodyLineHeight = 5;
+      measuredHeights.length = 0;
+      buildRows();
+    }
+    let low = 12;
+    let high = 18.5;
+    for (let i = 0; i < 20; i++) {
+      const candidate = (low + high) / 2;
+      const height = measuredHeights.reduce((sum, rowHeight) => sum + Math.max(candidate, rowHeight), 0);
+      if (height <= availableForRows) low = candidate;
+      else high = candidate;
+    }
+    dynamicMinH = Math.floor(low * 10) / 10;
+    measuring = false;
+    buildRows();
 
     if (saveInfo) {
        doc.save(`Designacoes_${weekText.replace(/[^a-z0-9]/gi, '_')}.pdf`);
