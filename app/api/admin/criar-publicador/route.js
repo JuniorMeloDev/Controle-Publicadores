@@ -1,3 +1,5 @@
+import { normalizeEmergencyContacts } from '@/app/lib/emergency-contacts';
+import { ensureEmergencyContactsColumn } from '@/app/lib/emergency-contacts-server';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
@@ -37,6 +39,10 @@ export async function POST(req) {
     return NextResponse.json({ message: 'Nome, Data de Nascimento, Sexo e Grupo são obrigatórios.' }, { status: 400 });
   }
 
+  let contatos;
+  try { contatos = normalizeEmergencyContacts(body.contatos_emergencia); }
+  catch (error) { return NextResponse.json({ message: error.message }, { status: 400 }); }
+
   const client = await pool.connect();
 
   try {
@@ -45,6 +51,8 @@ export async function POST(req) {
     if (!isAllowed(perms, 'publicadores_editar', 'actions')) {
       return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
     }
+    await ensureEmergencyContactsColumn(client);
+    await client.query('BEGIN');
     let hashSenha = null;
     if (senha && senha.trim() !== '') {
       const salt = await bcrypt.genSalt(10);
@@ -58,6 +66,7 @@ export async function POST(req) {
     const grupo = grupoRes.rows[0];
 
     if (!grupo) {
+      await client.query('ROLLBACK');
       return NextResponse.json({ message: 'Grupo de Campo não encontrado.' }, { status: 404 });
     }
 
@@ -66,14 +75,14 @@ export async function POST(req) {
       `INSERT INTO publicadores (
          nome_completo, data_nascimento, data_batismo, grupo_id, senha, privilegios, designacoes,
          telefone, email, cep, logradouro, numero, complemento, bairro, cidade, estado,
-         sexo, esperanca -- <-- ADICIONADO
+         sexo, esperanca, contatos_emergencia -- <-- ADICIONADO
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`, // <-- ATUALIZADO PARA $18
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19::jsonb)`, // <-- ATUALIZADO PARA $18
       [
         nome_completo, data_nascimento, data_batismo || null, grupo.id, hashSenha, finalPrivilegios, finalDesignacoes,
         telefone || null, email || null, cep || null, logradouro || null, numero || null, 
         complemento || null, bairro || null, cidade || null, estado || null,
-        sexo, esperanca || null // <-- ADICIONADO
+        sexo, esperanca || null, JSON.stringify(contatos) // <-- ADICIONADO
       ]
     );
     await registerAuditLog(client, {
@@ -83,9 +92,11 @@ export async function POST(req) {
       details: { nome_completo, email }
     });
 
+    await client.query('COMMIT');
     return NextResponse.json({ message: 'Publicador cadastrado com sucesso!' }, { status: 201 });
 
   } catch (err) {
+    await client.query('ROLLBACK');
     if (err.code === '23505') {
       return NextResponse.json({ message: 'Um publicador com este Nome Completo já existe.' }, { status: 409 });
     }

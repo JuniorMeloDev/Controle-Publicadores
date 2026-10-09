@@ -1,3 +1,5 @@
+import { normalizeEmergencyContacts } from '@/app/lib/emergency-contacts';
+import { ensureEmergencyContactsColumn, saveEmergencyContacts } from '@/app/lib/emergency-contacts-server';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
@@ -84,6 +86,10 @@ export async function PUT(request, context) {
      return NextResponse.json({ message: 'Data de Batismo está em formato inválido. Use dd/mm/aaaa.' }, { status: 400 });
   }
 
+  let contatos;
+  try { if (body.contatos_emergencia !== undefined) contatos = normalizeEmergencyContacts(body.contatos_emergencia); }
+  catch (error) { return NextResponse.json({ message: error.message }, { status: 400 }); }
+
   const client = await pool.connect();
 
   try {
@@ -92,6 +98,7 @@ export async function PUT(request, context) {
     if (!isAllowed(perms, 'publicadores_editar', 'actions')) {
       return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
     }
+    await ensureEmergencyContactsColumn(client);
     await client.query('BEGIN');
 
     const grupoRes = await client.query('SELECT id FROM grupos WHERE nome_grupo = $1', [nome_grupo]);
@@ -190,6 +197,7 @@ export async function PUT(request, context) {
       ]
     );
     
+    if (contatos !== undefined) await saveEmergencyContacts(client, id, dadosAntigos.contatos_emergencia, contatos);
     await client.query('COMMIT');
     await registerAuditLog(client, {
       userId,

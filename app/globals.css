@@ -1,5 +1,39 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Keep existing screens and portal dialogs in the selected theme. */
+@media screen {
+  .dark body { background: #09090b; color: #f4f4f5; }
+  .dark :is(.bg-white, .bg-neutral-50, [class~="bg-white/95"], [class~="bg-white/90"]) { background-color: #18181b; }
+  .dark :is(.bg-gray-50, [class~="bg-gray-50/30"], [class~="bg-gray-50/50"], [class~="md:bg-gray-50/50"]) { background-color: #111114; }
+  .dark :is(.bg-gray-100, .bg-gray-200, .bg-neutral-100, .bg-neutral-200, [class~="bg-gray-100/50"]) { background-color: #27272a; }
+  .dark .bg-gray-300 { background-color: #3f3f46; }
+  .dark :is(.text-gray-900, .text-gray-800, .text-gray-700, .text-neutral-950, .text-neutral-900, .text-neutral-800, .text-neutral-700, .text-black) { color: #f4f4f5; }
+  .dark :is(.text-gray-600, .text-gray-500, .text-gray-400, .text-neutral-600, .text-neutral-500) { color: #a1a1aa; }
+  .dark :is(.border-gray-100, .border-gray-200, .border-gray-300, .border-neutral-200, .border-neutral-300) { border-color: #3f3f46; }
+  .dark :is(.bg-purple-50, .bg-purple-100) { background-color: #302043; }
+  .dark :is(.text-purple-900, .text-purple-800, .text-purple-700, .text-purple-600) { color: #d8b4fe; }
+  .dark :is(.border-purple-100, .border-purple-200) { border-color: #6b418c; }
+  .dark :is(.bg-blue-50, .bg-blue-100) { background-color: #172b46; }
+  .dark :is(.text-blue-700, .text-blue-800) { color: #93c5fd; }
+  .dark :is(.bg-red-50, .bg-red-100) { background-color: #3c1d24; }
+  .dark :is(.text-red-600, .text-red-700, .text-red-800) { color: #fda4af; }
+  .dark :is(.bg-green-50, .bg-green-100) { background-color: #15392c; }
+  .dark :is(.text-green-700, .text-green-800) { color: #86efac; }
+  .dark :is(.bg-amber-50, .bg-yellow-50) { background-color: #3b2d15; }
+  .dark :is(.text-amber-700, .text-amber-800) { color: #fcd34d; }
+  .dark .ring-white { --tw-ring-color: #18181b; }
+  .dark :is([class~="hover:bg-white"], [class~="hover:bg-gray-50"], [class~="hover:bg-gray-100"], [class~="hover:bg-neutral-50"], [class~="hover:bg-neutral-100"]):hover { background-color: #27272a; }
+  .dark [class~="hover:bg-gray-200"]:hover { background-color: #3f3f46; }
+  .dark [class~="hover:bg-purple-50"]:hover { background-color: #302043; }
+  .dark [class~="hover:bg-red-50"]:hover { background-color: #3c1d24; }
+  .dark [class~="hover:text-gray-900"]:hover { color: #f4f4f5; }
+  .dark [class~="focus:bg-white"]:focus { background-color: #18181b; }
+  .dark .placeholder-gray-400::placeholder { color: #71717a; }
+  .dark [class~="group-hover:bg-gray-300"] { background-color: #27272a; }
+}
+
 :root {
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;

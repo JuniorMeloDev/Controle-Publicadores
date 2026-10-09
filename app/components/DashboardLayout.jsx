@@ -12,6 +12,7 @@ import {
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { GlobalSearch } from '@/app/components/GlobalSearch';
+import ThemeToggle from '@/app/components/ThemeToggle';
 import { NotificationBell } from '@/app/components/NotificationBell';
 import { PermissionsProvider } from '@/app/components/PermissionsContext';
 import { getPageKeyForPath, isAllowed } from '@/app/lib/access-control';
@@ -324,7 +325,7 @@ export function DashboardLayout({ children, contentClassName = '' }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden print:h-auto print:overflow-visible">
-        <header className="h-16 border-b border-gray-200 bg-white px-6 flex items-center justify-between shrink-0 print:hidden">
+        <header className="h-16 border-b border-gray-200 bg-white px-3 sm:px-6 flex items-center justify-between shrink-0 print:hidden">
           <div className="flex items-center gap-4">
             <button 
                 className="md:hidden p-2 -ml-2 text-gray-500"
@@ -332,24 +333,25 @@ export function DashboardLayout({ children, contentClassName = '' }) {
             >
                 <Menu className="w-5 h-5" />
             </button>
-            <div className="flex text-sm text-gray-500 items-center">
-              <span className="font-medium text-gray-900 hidden sm:inline">Painel</span> 
-              <ChevronRight className="w-4 h-4 mx-1 hidden sm:inline" />
-              <span className="font-semibold text-gray-800 text-base md:text-sm md:font-normal md:text-gray-500 truncate max-w-[160px] sm:max-w-none">{getPageBreadcrumbTitle(pathname)}</span>
+            <div className="hidden sm:flex text-sm text-gray-500 items-center min-w-0">
+              <span className="font-medium text-gray-900 hidden lg:inline">Painel</span>
+              <ChevronRight className="w-4 h-4 mx-1 hidden lg:inline" />
+              <span className="font-semibold text-gray-800 text-base md:text-sm md:font-normal md:text-gray-500 truncate max-w-[100px] lg:max-w-none">{getPageBreadcrumbTitle(pathname)}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <GlobalSearch />
             
             <NotificationBell userId={usuario.id} permissions={permissions} />
+            <ThemeToggle />
 
-            <div className="relative pl-4 border-l border-gray-100" ref={userMenuRef}>
+            <div className="relative pl-2 sm:pl-4 border-l border-gray-100" ref={userMenuRef}>
                 <button 
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center gap-4 hover:bg-gray-50 py-1.5 px-3 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-purple-100"
+                  className="flex items-center gap-4 hover:bg-gray-50 py-1.5 px-1 sm:px-3 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-purple-100"
                 >
-                    <div className="text-right hidden md:block">
+                    <div className="text-right hidden lg:block">
                         <p className="text-sm font-medium text-gray-900 whitespace-nowrap">
                             {nomeExibicao}
                         </p>
@@ -368,7 +370,7 @@ export function DashboardLayout({ children, contentClassName = '' }) {
                 {isUserMenuOpen && (
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
                     
-                    <div className="px-4 py-3 border-b border-gray-100 md:hidden">
+                    <div className="px-4 py-3 border-b border-gray-100 lg:hidden">
                       <p className="text-sm font-medium text-gray-900 truncate">{nomeExibicao}</p>
                       <p className="text-xs text-gray-500 truncate">{getCargoExibicao()}</p>
                     </div>

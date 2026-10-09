@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, X, Eye, EyeOff } from 'lucide-react';
 import { IMaskInput } from 'react-imask';
+import EmergencyContactsFields from '@/app/components/EmergencyContactsFields';
 
 const LISTA_PRIVILEGIOS = [
   { id: 'anciao', label: 'Ancião' },
@@ -19,7 +20,7 @@ const LISTA_DESIGNACOES = [
 export default function FormularioCadastro({ onSaveSuccess, onClose }) {
   const [gruposList, setGruposList] = useState([]);
   const [formData, setFormData] = useState({
-    nome_completo: '', data_nascimento: '', data_batismo: '', nome_grupo: '',
+    contatos_emergencia: [], nome_completo: '', data_nascimento: '', data_batismo: '', nome_grupo: '',
     sexo: '', esperanca: '',
     senha: '', privilegios: [], designacoes: [],
     telefone: '', email: '', cep: '', logradouro: '',
@@ -147,30 +148,30 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
     }
   };
 
-  const labelClass = "block text-xs font-semibold text-neutral-300 mb-1";
-  const baseInputClass = "w-full rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-sm text-neutral-100 placeholder-neutral-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50";
-  const checkboxClass = "h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-blue-600 cursor-pointer";
-  const checkboxLabelClass = "ml-2 text-xs text-neutral-100 select-none cursor-pointer";
+  const labelClass = "block text-sm font-medium text-gray-700 mb-1.5";
+  const baseInputClass = "h-11 w-full min-w-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-50";
+  const checkboxClass = "h-4 w-4 rounded border-gray-300 bg-white text-purple-600 cursor-pointer";
+  const checkboxLabelClass = "ml-2 text-xs text-gray-900 select-none cursor-pointer";
 
   if (isPageLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="size-8 animate-spin text-neutral-400" />
+        <Loader2 className="size-8 animate-spin text-gray-500" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-neutral-900 overflow-hidden">
+    <div className="flex flex-col h-full bg-white overflow-hidden">
       {/* HEADER */}
-      <div className="shrink-0 border-b border-neutral-800 bg-neutral-800/50">
+      <div className="shrink-0 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center justify-between px-4 py-3">
           
           {/* --- Botão Voltar (Mobile) --- */}
           {onClose && (
             <button
               onClick={onClose}
-              className="mr-3 text-neutral-400 hover:text-neutral-100 transition md:hidden"
+              className="mr-3 text-gray-500 hover:text-gray-900 transition md:hidden"
               aria-label="Voltar para a lista"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
@@ -179,15 +180,15 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
 
           {/* Título */}
           <div className="flex-1">
-            <h2 className="text-base font-bold text-white">Novo Publicador</h2>
-            <p className="text-xs text-neutral-400">Preencha os dados abaixo</p>
+            <h2 className="text-base font-bold text-gray-900">Novo Publicador</h2>
+            <p className="text-xs text-gray-500">Preencha os dados abaixo</p>
           </div>
 
           {/* --- Botão Fechar (Desktop) --- */}
           {onClose && (
             <button
               onClick={onClose}
-              className="ml-2 p-1 text-neutral-400 hover:text-neutral-100 transition hidden md:block"
+              className="ml-2 p-1 text-gray-500 hover:text-gray-900 transition hidden md:block"
               aria-label="Fechar"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -197,8 +198,8 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
 
         {message && (
           <div className={`px-4 py-2 text-xs ${isError 
-            ? 'bg-red-900/30 text-red-300 border-t border-red-800' 
-            : 'bg-green-900/30 text-green-300 border-t border-green-800'}`
+            ? 'bg-red-50 text-red-700 border-t border-red-200'
+            : 'bg-green-50 text-green-700 border-t border-green-200'}`
           }>
             {message}
           </div>
@@ -208,16 +209,11 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
       {/* CONTEÚDO COM SCROLL */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-4">
-          <form onSubmit={handleSubmit} className="space-y-4 pb-4">
-            {/* === LINHA 1: PESSOAIS === */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* COLUNA 1 */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-bold text-white border-b border-neutral-700 pb-1.5">
-                  Pessoais
-                </h3>
-                
-                <div>
+          <form onSubmit={handleSubmit} className="space-y-8 pb-4">
+      <section className="space-y-4">
+<h3 className="border-b border-gray-200 pb-2 text-sm font-bold text-gray-900">Dados pessoais</h3>
+<div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
+<div className="min-w-0 sm:col-span-12">
                   <label htmlFor="nome_completo" className={labelClass}>Nome Completo</label>
                   <input 
                     type="text" 
@@ -229,8 +225,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                     required 
                   />
                 </div>
-
-                <div>
+<div className="min-w-0 sm:col-span-4">
                   <label htmlFor="sexo" className={labelClass}>Sexo</label>
                   <select 
                     id="sexo" 
@@ -245,8 +240,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                     <option value="Feminino">Feminino</option>
                   </select>
                 </div>
-
-                <div>
+<div className="min-w-0 sm:col-span-4">
                   <label htmlFor="data_nascimento" className={labelClass}>Nascimento</label>
                   <IMaskInput
                     mask="00/00/0000" 
@@ -259,8 +253,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                     required
                   />
                 </div>
-
-                <div>
+<div className="min-w-0 sm:col-span-4">
                   <label htmlFor="data_batismo" className={labelClass}>Batismo</label>
                   <IMaskInput
                     mask="00/00/0000" 
@@ -272,8 +265,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                     placeholder="dd/mm/aaaa"
                   />
                 </div>
-
-                <div>
+<div className="min-w-0 sm:col-span-6">
                   <label htmlFor="esperanca" className={labelClass}>Esperança</label>
                   <select 
                     id="esperanca" 
@@ -287,8 +279,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                     <option value="Ungido">Ungido</option>
                   </select>
                 </div>
-
-                <div>
+<div className="min-w-0 sm:col-span-6">
                   <label htmlFor="nome_grupo" className={labelClass}>Grupo de Campo</label>
                   <select 
                     id="nome_grupo" 
@@ -304,15 +295,12 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                     ))}
                   </select>
                 </div>
-              </div>
-
-              {/* COLUNA 2: CONTATO */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-bold text-white border-b border-neutral-700 pb-1.5">
-                  Contato
-                </h3>
-
-                <div>
+</div>
+</section>
+<section className="space-y-4">
+<h3 className="border-b border-gray-200 pb-2 text-sm font-bold text-gray-900">Contato</h3>
+<div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
+<div className="min-w-0 sm:col-span-4">
                   <label htmlFor="telefone" className={labelClass}>Telefone</label>
                   <IMaskInput
                     mask="(00) 00000-0000" 
@@ -324,8 +312,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                     placeholder="(99) 99999-9999"
                   />
                 </div>
-
-                <div>
+<div className="min-w-0 sm:col-span-8">
                   <label htmlFor="email" className={labelClass}>Email</label>
                   <input 
                     type="email" 
@@ -337,8 +324,12 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                     placeholder="email@ex.com" 
                   />
                 </div>
-
-                <div>
+</div>
+</section>
+<section className="space-y-4">
+<h3 className="border-b border-gray-200 pb-2 text-sm font-bold text-gray-900">Endereço</h3>
+<div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
+<div className="min-w-0 sm:col-span-4">
                   <label htmlFor="cep" className={labelClass}>CEP</label>
                   <div className="relative">
                     <IMaskInput
@@ -353,20 +344,12 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                       disabled={isCepLoading}
                     />
                     {isCepLoading && (
-                      <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-neutral-400" />
+                      <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-gray-500" />
                     )}
                   </div>
                   {cepError && <p className="text-xs text-red-400 mt-1">{cepError}</p>}
                 </div>
-              </div>
-
-              {/* COLUNA 3: ENDEREÇO */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-bold text-white border-b border-neutral-700 pb-1.5">
-                  Endereço
-                </h3>
-
-                <div>
+<div className="min-w-0 sm:col-span-8">
                   <label htmlFor="logradouro" className={labelClass}>Rua/Avenida</label>
                   <input 
                     type="text" 
@@ -378,10 +361,8 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                     disabled={isCepLoading} 
                   />
                 </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label htmlFor="numero" className={labelClass}>Nº</label>
+<div className="min-w-0 sm:col-span-2">
+                    <label htmlFor="numero" className={labelClass}>Número</label>
                     <input 
                       type="text" 
                       id="numero" 
@@ -393,8 +374,8 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                       ref={numeroInputRef} 
                     />
                   </div>
-                  <div>
-                    <label htmlFor="complemento" className={labelClass}>Compl</label>
+<div className="min-w-0 sm:col-span-4">
+                    <label htmlFor="complemento" className={labelClass}>Complemento</label>
                     <input 
                       type="text" 
                       id="complemento" 
@@ -405,9 +386,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                       disabled={isCepLoading} 
                     />
                   </div>
-                </div>
-
-                <div>
+<div className="min-w-0 sm:col-span-6">
                   <label htmlFor="bairro" className={labelClass}>Bairro</label>
                   <input 
                     type="text" 
@@ -419,9 +398,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                     disabled={isCepLoading} 
                   />
                 </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
+<div className="min-w-0 sm:col-span-10">
                     <label htmlFor="cidade" className={labelClass}>Cidade</label>
                     <input 
                       type="text" 
@@ -433,7 +410,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                       disabled={isCepLoading} 
                     />
                   </div>
-                  <div>
+<div className="min-w-0 sm:col-span-2">
                     <label htmlFor="estado" className={labelClass}>UF</label>
                     <input 
                       type="text" 
@@ -445,15 +422,15 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                       disabled={isCepLoading} 
                     />
                   </div>
-                </div>
-              </div>
-            </div>
+</div>
+</section>
+<EmergencyContactsFields value={formData.contatos_emergencia || []} onChange={contatos => setFormData(prev => ({ ...prev, contatos_emergencia: contatos }))} disabled={isLoading} />
 
             {/* === LINHA 2: ACESSO E DESIGNAÇÕES === */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* COLUNA 1: ACESSO */}
               <div className="space-y-3">
-                <h3 className="text-sm font-bold text-white border-b border-neutral-700 pb-1.5">
+                <h3 className="text-sm font-bold text-gray-900 border-b border-gray-300 pb-1.5">
                   Acesso
                 </h3>
 
@@ -472,7 +449,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                     />
                     <button
                       type="button"
-                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-neutral-400 hover:text-neutral-100"
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-900"
                       onClick={() => setShowPassword(!showPassword)}
                     >
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -503,7 +480,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
 
               {/* COLUNA 2: DESIGNAÇÕES */}
               <div className="space-y-3">
-                <h3 className="text-sm font-bold text-white border-b border-neutral-700 pb-1.5">
+                <h3 className="text-sm font-bold text-gray-900 border-b border-gray-300 pb-1.5">
                   Designações
                 </h3>
 
@@ -527,7 +504,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                 <button 
                   type="submit" 
                   disabled={isLoading || isCepLoading}
-                  className="w-full mt-6 py-2 px-4 rounded-md text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="w-full mt-6 py-2 px-4 rounded-md text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isLoading ? (
                     <div className="flex items-center justify-center gap-2">
@@ -543,4 +520,4 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
       </div>
     </div>
   );
-} 
+}

@@ -2,8 +2,9 @@
 
 'use client';
 
+import Link from 'next/link';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, ShieldCheck, Star, X, Plus, ChevronDown, ChevronUp, Shuffle } from 'lucide-react'; 
+import { Search, ShieldCheck, Star, X, Plus, ChevronDown, ChevronUp, Shuffle, ClipboardCheck } from 'lucide-react';
 import { normalizeString } from '@/lib/utils'; 
 
 export default function FiltroELista({ 
@@ -88,6 +89,9 @@ export default function FiltroELista({
           {/* GRUPO DE BOTÕES DE AÇÃO: shrink-0 garante que eles não sejam espremidos */}
           <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
             
+            <Link href="/admin/gerenciar/atualizacoes" title="Atualizações cadastrais" aria-label="Atualizações cadastrais" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 shadow-xs transition-colors">
+              <ClipboardCheck size={14} className="text-gray-500" /><span className="hidden sm:inline">Atualizações cadastrais</span>
+            </Link>
             {/* BOTÃO DE TRANSFERÊNCIA */}
             <button 
                 onClick={onStartTransfer} 

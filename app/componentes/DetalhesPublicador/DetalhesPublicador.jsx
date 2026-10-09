@@ -36,7 +36,7 @@ export default function DetalhesPublicador({
   const [activeTab, setActiveTab] = useState(initialTab);
   const [gruposList, setGruposList] = useState([]);
   const [formData, setFormData] = useState({
-    nome_completo: '', nome_chamado: '',
+    nome_completo: '', nome_chamado: '', contatos_emergencia: [],
     data_nascimento: '', data_batismo: '', nome_grupo: '',
     sexo: '', esperanca: '',
     senha: '', privilegios: [], designacoes: [],
@@ -121,6 +121,7 @@ export default function DetalhesPublicador({
 
       setFormData({
         ...pubData,
+        contatos_emergencia: pubData.contatos_emergencia || [],
         data_nascimento: formatDateForForm(pubData.data_nascimento) || '',
         data_batismo: formatDateForForm(pubData.data_batismo) || '',
         nome_chamado: pubData.nome_chamado || '',

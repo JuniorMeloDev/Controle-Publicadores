@@ -1,6 +1,7 @@
 'use client';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { IMaskInput } from 'react-imask';
+import EmergencyContactsFields from '@/app/components/EmergencyContactsFields';
 
 // Listas estáticas
 const LISTA_PRIVILEGIOS = [
@@ -24,7 +25,7 @@ export default function FormularioInformacoes({
   const labelClass = "block text-sm font-medium text-gray-700 mb-1.5"; // Removido 'uppercase'
   
   const baseInputClass = `
-    w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 
+    h-11 w-full min-w-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900
     placeholder-gray-400 shadow-sm transition-all
     focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 
     disabled:opacity-50 disabled:bg-gray-100
@@ -37,15 +38,10 @@ export default function FormularioInformacoes({
   return (
     <form onSubmit={handleSubmit} className="space-y-8 mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* === LINHA 1: PESSOAIS === */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* COLUNA 1 */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-bold text-gray-900 border-b border-gray-200 pb-2">
-            Pessoais
-          </h3>
-          
-          <div>
+<section className="space-y-4">
+<h3 className="border-b border-gray-200 pb-2 text-sm font-bold text-gray-900">Dados pessoais</h3>
+<div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
+<div className="min-w-0 sm:col-span-12">
             <label htmlFor="nome_completo" className={labelClass}>Nome Completo</label>
             <input 
               type="text" id="nome_completo" name="nome_completo" 
@@ -53,8 +49,7 @@ export default function FormularioInformacoes({
               className={baseInputClass} required 
             />
           </div>
-
-          <div>
+<div className="min-w-0 sm:col-span-8">
             <label htmlFor="nome_chamado" className={labelClass}>Nome Chamado (Apelido)</label>
             <input 
               type="text" id="nome_chamado" name="nome_chamado" 
@@ -62,8 +57,7 @@ export default function FormularioInformacoes({
               className={baseInputClass} placeholder="Ex: João Júnior"
             />
           </div>
-
-          <div>
+<div className="min-w-0 sm:col-span-4">
             <label htmlFor="sexo" className={labelClass}>Sexo</label>
             <select 
               id="sexo" name="sexo" value={formData.sexo || ''} onChange={handleChange} 
@@ -74,8 +68,7 @@ export default function FormularioInformacoes({
               <option value="Feminino">Feminino</option>
             </select>
           </div>
-
-          <div>
+<div className="min-w-0 sm:col-span-4">
             <label htmlFor="data_nascimento" className={labelClass}>Nascimento</label>
             <IMaskInput
               mask="00/00/0000" id="data_nascimento" name="data_nascimento"
@@ -83,8 +76,7 @@ export default function FormularioInformacoes({
               className={baseInputClass} placeholder="dd/mm/aaaa" required
             />
           </div>
-
-          <div>
+<div className="min-w-0 sm:col-span-4">
             <label htmlFor="data_batismo" className={labelClass}>Batismo</label>
             <IMaskInput
               mask="00/00/0000" id="data_batismo" name="data_batismo"
@@ -92,8 +84,7 @@ export default function FormularioInformacoes({
               className={baseInputClass} placeholder="dd/mm/aaaa"
             />
           </div>
-
-          <div>
+<div className="min-w-0 sm:col-span-4">
             <label htmlFor="esperanca" className={labelClass}>Esperança</label>
             <select 
               id="esperanca" name="esperanca" value={formData.esperanca || ''} onChange={handleChange} 
@@ -104,8 +95,7 @@ export default function FormularioInformacoes({
               <option value="Ungido">Ungido</option>
             </select>
           </div>
-
-          <div>
+<div className="min-w-0 sm:col-span-12">
             <label htmlFor="nome_grupo" className={labelClass}>Grupo de Campo</label>
             <select 
               id="nome_grupo" name="nome_grupo" value={formData.nome_grupo} onChange={handleChange} 
@@ -117,15 +107,12 @@ export default function FormularioInformacoes({
               ))}
             </select>
           </div>
-        </div>
-
-        {/* COLUNA 2: CONTATO */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-bold text-gray-900 border-b border-gray-200 pb-2">
-            Contato
-          </h3>
-
-          <div>
+</div>
+</section>
+<section className="space-y-4">
+<h3 className="border-b border-gray-200 pb-2 text-sm font-bold text-gray-900">Contato</h3>
+<div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
+<div className="min-w-0 sm:col-span-4">
             <label htmlFor="telefone" className={labelClass}>Telefone</label>
             <IMaskInput
               mask="(00) 00000-0000" id="telefone" name="telefone"
@@ -133,8 +120,7 @@ export default function FormularioInformacoes({
               className={baseInputClass} placeholder="(99) 99999-9999"
             />
           </div>
-
-          <div>
+<div className="min-w-0 sm:col-span-8">
             <label htmlFor="email" className={labelClass}>Email</label>
             <input 
               type="email" id="email" name="email" 
@@ -142,8 +128,12 @@ export default function FormularioInformacoes({
               className={baseInputClass} placeholder="email@exemplo.com" 
             />
           </div>
-
-          <div>
+</div>
+</section>
+<section className="space-y-4">
+<h3 className="border-b border-gray-200 pb-2 text-sm font-bold text-gray-900">Endereço</h3>
+<div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
+<div className="min-w-0 sm:col-span-4">
             <label htmlFor="cep" className={labelClass}>CEP</label>
             <div className="relative">
               <IMaskInput
@@ -158,15 +148,7 @@ export default function FormularioInformacoes({
             </div>
             {cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}
           </div>
-        </div>
-
-        {/* COLUNA 3: ENDEREÇO */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-bold text-gray-900 border-b border-gray-200 pb-2">
-            Endereço
-          </h3>
-
-          <div>
+<div className="min-w-0 sm:col-span-8">
             <label htmlFor="logradouro" className={labelClass}>Rua/Avenida</label>
             <input 
               type="text" id="logradouro" name="logradouro" 
@@ -174,27 +156,23 @@ export default function FormularioInformacoes({
               className={baseInputClass} disabled={isCepLoading} 
             />
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="numero" className={labelClass}>Nº</label>
+<div className="min-w-0 sm:col-span-2">
+              <label htmlFor="numero" className={labelClass}>Número</label>
               <input 
                 type="text" id="numero" name="numero" 
                 value={formData.numero} onChange={handleChange} 
                 className={baseInputClass} disabled={isCepLoading} ref={numeroInputRef} 
               />
             </div>
-            <div>
-              <label htmlFor="complemento" className={labelClass}>Compl</label>
+<div className="min-w-0 sm:col-span-4">
+              <label htmlFor="complemento" className={labelClass}>Complemento</label>
               <input 
                 type="text" id="complemento" name="complemento" 
                 value={formData.complemento} onChange={handleChange} 
                 className={baseInputClass} disabled={isCepLoading} 
               />
             </div>
-          </div>
-
-          <div>
+<div className="min-w-0 sm:col-span-6">
             <label htmlFor="bairro" className={labelClass}>Bairro</label>
             <input 
               type="text" id="bairro" name="bairro" 
@@ -202,9 +180,7 @@ export default function FormularioInformacoes({
               className={baseInputClass} disabled={isCepLoading} 
             />
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+<div className="min-w-0 sm:col-span-10">
               <label htmlFor="cidade" className={labelClass}>Cidade</label>
               <input 
                 type="text" id="cidade" name="cidade" 
@@ -212,7 +188,7 @@ export default function FormularioInformacoes({
                 className={baseInputClass} disabled={isCepLoading} 
               />
             </div>
-            <div>
+<div className="min-w-0 sm:col-span-2">
               <label htmlFor="estado" className={labelClass}>UF</label>
               <input 
                 type="text" id="estado" name="estado" 
@@ -220,9 +196,9 @@ export default function FormularioInformacoes({
                 className={baseInputClass} disabled={isCepLoading} 
               />
             </div>
-          </div>
-        </div>
-      </div>
+</div>
+</section>
+<EmergencyContactsFields value={formData.contatos_emergencia || []} onChange={contatos => setFormData(prev => ({ ...prev, contatos_emergencia: contatos }))} disabled={isLoading} />
 
       {/* === LINHA 2: ACESSO E DESIGNAÇÕES === */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4 border-t border-gray-100">

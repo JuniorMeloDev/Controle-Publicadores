@@ -24,6 +24,22 @@ export function GlobalSearch() {
   }, []);
 
   useEffect(() => {
+    const fetchResults = async () => {
+      setLoading(true);
+      try {
+          const res = await fetch(`/api/admin/global-search?q=${encodeURIComponent(query)}`);
+          if (res.ok) {
+              const data = await res.json();
+              setResults(data);
+              setIsOpen(true);
+          }
+      } catch (error) {
+          console.error("Search failed", error);
+      } finally {
+          setLoading(false);
+      }
+    };
+
     const timer = setTimeout(() => {
         if (query.length >= 2) {
             fetchResults();
@@ -35,21 +51,6 @@ export function GlobalSearch() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const fetchResults = async () => {
-    setLoading(true);
-    try {
-        const res = await fetch(`/api/admin/global-search?q=${encodeURIComponent(query)}`);
-        if (res.ok) {
-            const data = await res.json();
-            setResults(data);
-            setIsOpen(true);
-        }
-    } catch (error) {
-        console.error("Search failed", error);
-    } finally {
-        setLoading(false);
-    }
-  };
 
   const clearAndClose = () => {
       setIsOpen(false);
@@ -69,7 +70,7 @@ export function GlobalSearch() {
           }}
           onFocus={() => { if(query.length >= 2) setIsOpen(true); }}
           placeholder="Pesquisar..."
-          className="pl-10 pr-4 py-2 w-32 sm:w-64 focus:w-48 sm:focus:w-80 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-purple-100 focus:border-purple-300 transition-all text-sm text-gray-700 outline-none placeholder:text-gray-400"
+          className="pl-10 pr-4 py-2 w-28 sm:w-40 lg:w-64 focus:w-28 sm:focus:w-40 lg:focus:w-80 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-purple-100 focus:border-purple-300 transition-all text-sm text-gray-700 outline-none placeholder:text-gray-400"
         />
         {loading && (
             <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -155,7 +156,7 @@ export function GlobalSearch() {
       {/* No Results */}
       {isOpen && query.length >= 2 && !loading && results.pages.length === 0 && results.publishers.length === 0 && (
           <div className="absolute top-full left-1/2 -translate-x-1/2 text-left mt-2 w-[80vw] sm:w-80 bg-white rounded-xl shadow-xl border border-gray-100 p-4 z-50 text-center">
-              <p className="text-sm text-gray-500">Nenhum resultado encontrado para "{query}".</p>
+              <p className="text-sm text-gray-500">Nenhum resultado encontrado para &quot;{query}&quot;.</p>
           </div>
       )}
     </div>

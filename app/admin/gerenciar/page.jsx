@@ -164,6 +164,7 @@ function GerenciarContent() {
         {(!isTransferSheetOpen && isSheetOpen) && (
             <SheetContent 
                 side="right" 
+                showCloseButton={false}
                 className="w-full sm:max-w-lg md:max-w-xl lg:max-w-3xl p-0 border-l border-gray-200 bg-white focus:outline-none"
             >
                 {/* CORREÇÃO DO ERRO DE ACESSIBILIDADE RADIX UI */}
@@ -177,14 +178,14 @@ function GerenciarContent() {
                 </SheetHeader>
                 
                 {/* BOTÃO DE FECHAR VISÍVEL PARA USER EXPERIENCE E ACESSIBILIDADE */}
-                <SheetClose 
+                {!modoNovo && <SheetClose
                     className="absolute right-4 top-4 rounded-sm opacity-100 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-neutral-950 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary" 
                     asChild
                 >
                     <button onClick={handleCloseDrawer} aria-label="Fechar">
                          <X className="h-6 w-6 text-black" />
                     </button>
-                </SheetClose>
+                </SheetClose>}
                 {/* FIM DA CORREÇÃO */}
 
                 <div className="h-full w-full bg-white flex flex-col">

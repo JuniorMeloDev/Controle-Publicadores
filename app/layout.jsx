@@ -37,9 +37,9 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    // Adicionamos a classe 'dark' ao HTML
-    <html lang="pt-BR" className="dark">
+    <html lang="pt-BR" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: "try{const dark=localStorage.getItem('congregacao-theme')==='dark';document.documentElement.classList.toggle('dark',dark);document.documentElement.style.colorScheme=dark?'dark':'light';}catch{}" }} />
         <link rel="manifest" href="/manifest.json" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -48,7 +48,7 @@ export default function RootLayout({ children }) {
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased 
-        bg-neutral-950 text-neutral-100`} // Fundo escuro e texto claro
+        bg-gray-50 text-gray-900`}
       >
         <ServiceWorkerRegister />
         {children}

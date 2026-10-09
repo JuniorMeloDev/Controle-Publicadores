@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatEmergencyContacts } from '@/app/lib/emergency-contacts';
 import { Loader2, Edit2, Calendar, User, ArrowRight, Shield, Star } from 'lucide-react';
 
 /**
@@ -26,6 +27,7 @@ function formatarData(dataString) {
 // --- 1. NOVO DICIONÁRIO DE TRADUÇÃO ---
 const NOME_CAMPOS = {
   'nome_completo': 'Nome Completo',
+  'contatos_emergencia': 'Contatos de emergência',
   'data_nascimento': 'Nascimento',
   'data_batismo': 'Batismo',
   'sexo': 'Sexo',
@@ -84,6 +86,11 @@ function EventoPessoal({ evento }) {
   // Pega os valores brutos
   let valorAntigo = evento.valor_antigo || 'vazio';
   let valorNovo = evento.valor_novo || 'vazio';
+
+  if (evento.campo_alterado === 'contatos_emergencia') {
+    valorAntigo = formatEmergencyContacts(evento.valor_antigo);
+    valorNovo = formatEmergencyContacts(evento.valor_novo);
+  }
 
   // Formata datas
   if (evento.campo_alterado === 'data_nascimento' || evento.campo_alterado === 'data_batismo') {

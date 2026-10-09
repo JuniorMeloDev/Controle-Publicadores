@@ -1,3 +1,4 @@
+import { ensureEmergencyContactsColumn } from '@/app/lib/emergency-contacts-server';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 
@@ -17,12 +18,13 @@ export async function GET(request, context) {
 
   const client = await pool.connect();
   try {
+    await ensureEmergencyContactsColumn(client);
     // Este SQL busca todos os campos do publicador e junta com
     // a tabela 'grupos' para pegar o 'nome_grupo'
     const res = await client.query(
       `SELECT 
          p.id, p.nome_completo, p.data_nascimento, p.data_batismo,
-         p.nome_chamado,
+         p.nome_chamado, p.contatos_emergencia,
          g.nome_grupo, p.privilegios, p.designacoes,
          p.sexo, p.esperanca,
          p.telefone, p.email, p.cep, p.logradouro, 
