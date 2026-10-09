@@ -3,6 +3,24 @@ import assert from 'node:assert/strict';
 import { loadModule, loadRoute } from './helpers/load-source.mjs';
 
 const reset = await loadModule('../../app/lib/password-reset.js');
+test('logged-in password change updates the authenticated publisher and releases connection', async () => {
+  let params;
+  let released = false;
+  const { POST } = loadRoute('../../app/api/alterar-senha/route.js', {
+    Pool: class { async connect() { return {
+      query: async (sql, values) => { assert.match(sql, /UPDATE publicadores SET senha/); params = values; return { rows: [{ id: 7 }] }; },
+      release() { released = true; },
+    }; } },
+    cookies: async () => ({ get: () => ({ value: 'session' }) }),
+    verify: () => ({ userId: 7 }), bcrypt: { hash: async () => 'new-hash' },
+    isValidPassword: reset.isValidPassword,
+  });
+  assert.equal((await POST({ json: async () => ({ novaSenha: 'weak' }) })).status, 400);
+  assert.equal((await POST({ json: async () => ({ novaSenha: 'NovaSenha1!' }) })).status, 200);
+  assert.equal(params[0], 'new-hash');
+  assert.equal(params[1], 7);
+  assert.equal(released, true);
+});
 const { buildPasswordResetEmail } = await loadModule('../../app/lib/password-reset-email.js');
 
 test('personalized email escapes names and links and includes HTML and plain text', () => {
@@ -17,6 +35,7 @@ test('personalized email escapes names and links and includes HTML and plain tex
   assert.match(message.html, /Redefinir minha senha/);
   assert.match(message.html, /Não solicitou esta alteração/);
   assert.match(message.html, /Mensagem automática/);
+  assert.match(message.html, /src="cid:congregacao-logo"/);
   assert.match(buildPasswordResetEmail({ name: null, link }).text, /Olá, publicador!/);
   assert.throws(() => buildPasswordResetEmail({ name: 'João', link: 'javascript:alert(1)' }));
 });

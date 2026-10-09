@@ -52,7 +52,6 @@ export default function DetalhesPublicador({
   // Inicializa com null para diferenciar "não carregado" de "sem permissão"
   const [currentUser, setCurrentUser] = useState(null);
 
-  const [showPassword, setShowPassword] = useState(false);
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [cepError, setCepError] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -919,8 +918,6 @@ export default function DetalhesPublicador({
               isCepLoading={isCepLoading}
               cepError={cepError}
               numeroInputRef={numeroInputRef}
-              showPassword={showPassword}
-              setShowPassword={setShowPassword}
             />
           )}
 

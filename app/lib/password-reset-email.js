@@ -19,6 +19,7 @@ export function buildPasswordResetEmail({ name, link }) {
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f4f3f8;"><tr><td align="center" style="padding:32px 16px;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #e4e4e7;border-radius:16px;overflow:hidden;">
       <tr><td style="padding:28px 32px;background-color:#302043;border-radius:16px 16px 0 0;">
+        <img src="cid:congregacao-logo" alt="Congregação Praia dos Corais" width="88" height="88" style="display:block;width:88px;height:88px;margin:0 0 18px;border:0;" />
         <p style="margin:0 0 8px;font-size:12px;font-weight:bold;letter-spacing:2px;color:#d8b4fe;">PRAIA DOS CORAIS</p>
         <p style="margin:0;font-size:20px;font-weight:bold;color:#ffffff;">Controle de Publicadores</p>
       </td></tr>

@@ -1,5 +1,5 @@
 'use client';
-import { Loader2, Eye, EyeOff } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { IMaskInput } from 'react-imask';
 import EmergencyContactsFields from '@/app/components/EmergencyContactsFields';
 
@@ -17,8 +17,7 @@ const LISTA_DESIGNACOES = [
 export default function FormularioInformacoes({ 
   formData, setFormData, handleSubmit, handleChange, handleMaskChange, 
   handlePrivilegioChange, handleDesignacaoChange, handleCepBlur, 
-  gruposList, isLoading, isCepLoading, cepError, numeroInputRef, 
-  showPassword, setShowPassword 
+  gruposList, isLoading, isCepLoading, cepError, numeroInputRef
 }) {
   
   // --- ESTILOS CORRIGIDOS (Sem Uppercase) ---
@@ -207,26 +206,6 @@ export default function FormularioInformacoes({
           <h3 className="text-sm font-bold text-gray-900 border-b border-gray-200 pb-2">
             Acesso e Privilégios
           </h3>
-
-          <div>
-            <label htmlFor="senha" className={labelClass}>Redefinir Senha</label>
-            <div className="relative">
-              <input 
-                type={showPassword ? 'text' : 'password'}
-                id="senha" name="senha" 
-                value={formData.senha} onChange={handleChange} 
-                className={`${baseInputClass} pr-10`}
-                placeholder="••••••••" 
-              />
-              <button
-                type="button"
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
 
           <div className="pt-2">
             <label className={labelClass}>Privilégios</label>

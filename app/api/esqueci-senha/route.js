@@ -1,6 +1,7 @@
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
+import { getEmailLogoAttachment } from '@/app/lib/email-brand';
 import { buildPasswordResetEmail } from '@/app/lib/password-reset-email';
 import { RESET_MESSAGE, ensurePasswordResetTable, issuePasswordReset, hashResetToken } from '@/app/lib/password-reset';
 
@@ -35,6 +36,7 @@ export async function POST(request) {
       await transporter.sendMail({
         from: { name: 'Praia dos Corais | Controle de Publicadores', address: process.env.EMAIL_USER }, to: email,
         ...message,
+        attachments: [await getEmailLogoAttachment()],
       });
     }
     return NextResponse.json({ message: RESET_MESSAGE });

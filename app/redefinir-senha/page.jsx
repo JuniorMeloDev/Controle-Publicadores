@@ -8,6 +8,7 @@ export default function ResetPasswordPage() {
   const [senha, setSenha] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [visible, setVisible] = useState(false);
+  const [confirmationVisible, setConfirmationVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -37,6 +38,8 @@ export default function ResetPasswordPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md rounded-xl border border-neutral-800 bg-neutral-900 p-8 shadow-2xl">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.png" alt="Congregação Praia dos Corais" width={96} height={96} className="mx-auto mb-5 object-contain" />
         <h1 className="mb-6 text-center text-3xl font-bold text-white">Redefinir senha</h1>
         {error && <p role="alert" className="mb-4 rounded-md border border-red-800 bg-red-950 p-3 text-sm text-red-300">{error}</p>}
         {success ? <p role="status" className="text-sm text-green-300">{success}</p> : (
@@ -51,7 +54,10 @@ export default function ResetPasswordPage() {
             </div>
             <div>
               <label htmlFor="confirm-password" className="text-sm text-neutral-300">Confirmar nova senha</label>
-              <input id="confirm-password" autoComplete="new-password" type={visible ? 'text' : 'password'} required minLength={8} value={confirmation} onChange={e => setConfirmation(e.target.value)} className={inputClass} />
+              <div className="relative">
+                <input id="confirm-password" autoComplete="new-password" type={confirmationVisible ? 'text' : 'password'} required minLength={8} value={confirmation} onChange={e => setConfirmation(e.target.value)} className={`${inputClass} pr-10`} />
+                <button type="button" aria-label={confirmationVisible ? 'Ocultar confirmação da senha' : 'Mostrar confirmação da senha'} aria-controls="confirm-password" aria-pressed={confirmationVisible} onClick={() => setConfirmationVisible(!confirmationVisible)} className="absolute inset-y-0 right-3 text-neutral-400">{confirmationVisible ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+              </div>
             </div>
             <button disabled={loading} className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50">{loading ? 'Salvando...' : 'Salvar nova senha'}</button>
           </form>

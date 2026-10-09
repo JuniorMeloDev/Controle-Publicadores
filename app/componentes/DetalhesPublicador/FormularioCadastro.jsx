@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, X, Eye, EyeOff } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { IMaskInput } from 'react-imask';
 import EmergencyContactsFields from '@/app/components/EmergencyContactsFields';
 
@@ -22,7 +22,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
   const [formData, setFormData] = useState({
     contatos_emergencia: [], nome_completo: '', data_nascimento: '', data_batismo: '', nome_grupo: '',
     sexo: '', esperanca: '',
-    senha: '', privilegios: [], designacoes: [],
+    privilegios: [], designacoes: [],
     telefone: '', email: '', cep: '', logradouro: '',
     numero: '', complemento: '', bairro: '', cidade: '', estado: ''
   });
@@ -31,7 +31,6 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [cepError, setCepError] = useState('');
 
@@ -109,19 +108,6 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
     setIsLoading(true);
     setMessage('');
     setIsError(false);
-
-    // --- NOVA LÓGICA DE VALIDAÇÃO DE SENHA ---
-    const temPrivilegio = formData.privilegios.includes('anciao') || formData.privilegios.includes('servo_ministerial');
-    
-    if (temPrivilegio && formData.senha.trim() === '') {
-      setMessage('É obrigatório definir uma senha para usuários com privilégios (Ancião ou Servo Ministerial).');
-      setIsError(true);
-      setIsLoading(false);
-      return;
-    }
-    // Se a senha for opcional (sem privilégios), o campo 'senha' pode ser vazio,
-    // e o backend (criar-publicador/route.js) o tratará como NULL.
-    // --- FIM DA NOVA LÓGICA ---
 
     try {
       const response = await fetch('/api/admin/criar-publicador', {
@@ -433,29 +419,6 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
                 <h3 className="text-sm font-bold text-gray-900 border-b border-gray-300 pb-1.5">
                   Acesso
                 </h3>
-
-                <div>
-                  <label htmlFor="senha" className={labelClass}>Senha (Opcional, exceto para privilégios)</label>
-                  <div className="relative">
-                    <input 
-                      type={showPassword ? 'text' : 'password'}
-                      id="senha" 
-                      name="senha" 
-                      value={formData.senha} 
-                      onChange={handleChange} 
-                      className={`${baseInputClass} pr-10`}
-                      placeholder="Digite uma senha" 
-                      // Removido 'required' do JSX
-                    />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-900"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </div>
 
                 <div>
                   <label className={labelClass}>Privilégios</label>

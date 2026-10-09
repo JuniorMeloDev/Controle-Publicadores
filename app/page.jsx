@@ -61,6 +61,8 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen w-full flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-neutral-900 p-8 rounded-xl shadow-2xl border border-neutral-800">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.png" alt="Congregação Praia dos Corais" width={96} height={96} className="mx-auto mb-5 object-contain" />
         <h2 className="text-3xl font-bold text-center mb-6 text-white">
           {recovering ? 'Recuperar senha' : 'Acesso Restrito'}
         </h2>
