@@ -11,6 +11,8 @@ export default function LoginPage() {
   const [senha, setSenha] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [recovering, setRecovering] = useState(false);
+  const [message, setMessage] = useState('');
   
   // --- MUDANÇA 2: Adiciona o state para o "olho" ---
   const [showPassword, setShowPassword] = useState(false);
@@ -21,9 +23,10 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setMessage('');
 
     try {
-      const response = await fetch('/api/login', {
+      const response = await fetch(recovering ? '/api/esqueci-senha' : '/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -33,6 +36,11 @@ export default function LoginPage() {
       });
 
       if (response.ok) {
+        if (recovering) {
+          const data = await response.json();
+          setMessage(data.message);
+          return;
+        }
         // Redireciona para o dashboard após login (o middleware vai pegar)
         router.push('/admin/dashboard'); 
       } else {
@@ -54,7 +62,7 @@ export default function LoginPage() {
     <main className="min-h-screen w-full flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-neutral-900 p-8 rounded-xl shadow-2xl border border-neutral-800">
         <h2 className="text-3xl font-bold text-center mb-6 text-white">
-          Acesso Restrito
+          {recovering ? 'Recuperar senha' : 'Acesso Restrito'}
         </h2>
         
         {error && (
@@ -63,6 +71,8 @@ export default function LoginPage() {
           </div>
         )}
 
+        {recovering && <p className="mb-6 text-sm text-neutral-300">Informe seu e-mail para receber um link e definir uma nova senha.</p>}
+        {message && <p role="status" className="mb-4 rounded-md border border-green-800 bg-green-950 p-3 text-sm text-green-300">{message}</p>}
         <form onSubmit={handleSubmit} className="space-y-6">
           
           <div>
@@ -80,7 +90,7 @@ export default function LoginPage() {
           </div>
 
           {/* --- MUDANÇA 3: Bloco de senha ATUALIZADO --- */}
-          <div>
+          {!recovering && <div>
             <label htmlFor="senha" className={labelClass}>
               Senha
             </label>
@@ -104,7 +114,7 @@ export default function LoginPage() {
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-          </div>
+          </div>}
           {/* --- FIM DA MUDANÇA --- */}
 
           <button 
@@ -112,9 +122,12 @@ export default function LoginPage() {
             disabled={isLoading} 
             className="w-full flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-neutral-900 disabled:opacity-50 transition-colors"
           >
-            {isLoading ? 'Verificando...' : 'Entrar'}
+            {isLoading ? (recovering ? 'Enviando...' : 'Verificando...') : (recovering ? 'Enviar link por e-mail' : 'Entrar')}
           </button>
         </form>
+        <button type="button" disabled={isLoading} onClick={() => { setRecovering(!recovering); setError(''); setMessage(''); setSenha(''); }} className="mt-5 w-full text-sm text-blue-400 hover:text-blue-300 disabled:opacity-50">
+          {recovering ? 'Voltar para o login' : 'Esqueci minha senha'}
+        </button>
       </div>
     </main>
   );
