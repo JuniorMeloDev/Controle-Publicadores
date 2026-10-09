@@ -3,6 +3,23 @@ import assert from 'node:assert/strict';
 import { loadModule, loadRoute } from './helpers/load-source.mjs';
 
 const reset = await loadModule('../../app/lib/password-reset.js');
+const { buildPasswordResetEmail } = await loadModule('../../app/lib/password-reset-email.js');
+
+test('personalized email escapes names and links and includes HTML and plain text', () => {
+  const link = 'https://example.com/redefinir-senha?token=abc&source=email';
+  const message = buildPasswordResetEmail({ name: 'João <script>alert(1)</script>', link });
+  assert.match(message.text, /Olá, João/);
+  assert.match(message.text, /30 minutos/);
+  assert.ok(message.text.includes(link));
+  assert.match(message.html, /João &lt;script&gt;/);
+  assert.ok(!message.html.includes('<script>'));
+  assert.ok(message.html.includes('token=abc&amp;source=email'));
+  assert.match(message.html, /Redefinir minha senha/);
+  assert.match(message.html, /Não solicitou esta alteração/);
+  assert.match(message.html, /Mensagem automática/);
+  assert.match(buildPasswordResetEmail({ name: null, link }).text, /Olá, publicador!/);
+  assert.throws(() => buildPasswordResetEmail({ name: 'João', link: 'javascript:alert(1)' }));
+});
 
 test('reset validates tokens and passwords, including bcrypt byte limit', () => {
   assert.equal(reset.isValidResetToken('a'.repeat(64)), true);

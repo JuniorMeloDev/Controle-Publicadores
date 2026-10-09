@@ -1,6 +1,7 @@
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
+import { buildPasswordResetEmail } from '@/app/lib/password-reset-email';
 import { RESET_MESSAGE, ensurePasswordResetTable, issuePasswordReset, hashResetToken } from '@/app/lib/password-reset';
 
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
@@ -25,13 +26,15 @@ export async function POST(request) {
     token = await issuePasswordReset(client, email);
     if (token) {
       link.searchParams.set('token', token);
+      const userResult = await client.query(`SELECT p.nome_completo FROM publicadores p
+        JOIN password_resets r ON r.publicador_id = p.id WHERE r.token_hash = $1`, [hashResetToken(token)]);
+      const message = buildPasswordResetEmail({ name: userResult.rows[0]?.nome_completo, link: link.href });
       const transporter = nodemailer.createTransport({ service: 'gmail', auth: {
         user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS,
       } });
       await transporter.sendMail({
-        from: process.env.EMAIL_USER, to: email,
-        subject: 'Redefinição de senha — Controle de Publicadores',
-        text: `Para definir uma nova senha, acesse:\n${link.href}\n\nEste link expira em 30 minutos e só pode ser usado uma vez. Se você não solicitou esta alteração, ignore este e-mail.`,
+        from: { name: 'Praia dos Corais | Controle de Publicadores', address: process.env.EMAIL_USER }, to: email,
+        ...message,
       });
     }
     return NextResponse.json({ message: RESET_MESSAGE });
