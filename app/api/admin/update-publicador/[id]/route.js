@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { normalizeEmergencyContacts } from '@/app/lib/emergency-contacts';
 import { ensureEmergencyContactsColumn, saveEmergencyContacts } from '@/app/lib/emergency-contacts-server';
 import { Pool } from '@neondatabase/serverless';
@@ -57,6 +58,8 @@ async function registrarHistorico(client, publicadorId, campo, valorAntigo, valo
 
 // Rota: PUT /api/admin/update-publicador/123
 export async function PUT(request, context) {
+  const denied = await authorizeRequest(request, 'PUT');
+  if (denied) return denied;
   const { id } = await context.params; 
   const body = await request.json();   
 

@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getPublisherAssignments } from '@/app/lib/publisher-assignments';
@@ -8,7 +9,9 @@ const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 });
 
-export async function GET() {
+export async function GET(request) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const since = new Date();

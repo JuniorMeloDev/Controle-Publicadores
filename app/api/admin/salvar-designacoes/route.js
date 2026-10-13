@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
@@ -16,6 +17,8 @@ function normalizeStr(str) {
 }
 
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
   const body = await request.json();
   const { scheduleData, assignments, reuniao_id } = body;
   let { meetingDate } = body;

@@ -4,7 +4,14 @@ import { createHash } from 'node:crypto';
 import { CADASTRO_FIELDS } from './cadastro-update';
 export const cadastroPool = new Pool({ connectionString: process.env.POSTGRES_URL });
 export const tokenHash = value => createHash('sha256').update(value).digest('hex');
+let cadastroSchemaReady;
 export async function ensureCadastroTables(client) {
+  if (!cadastroSchemaReady) {
+    cadastroSchemaReady = createCadastroTables(client).catch(error => { cadastroSchemaReady = undefined; throw error; });
+  }
+  await cadastroSchemaReady;
+}
+async function createCadastroTables(client) {
   await ensureEmergencyContactsColumn(client);
   await client.query(`CREATE TABLE IF NOT EXISTS cadastro_sessoes (
     token_hash TEXT PRIMARY KEY, publicador_id INTEGER NOT NULL REFERENCES publicadores(id) ON DELETE CASCADE,

@@ -81,7 +81,7 @@ export default function AnaliseCampoPage() {
         fetch('/api/usuario-atual')
             .then(res => res.json())
             .then(user => {
-                if (!user.isAnciao) {
+                if (!user.permissions?.pages?.relatorios) {
                     setToast({ show: true, message: 'Acesso negado. Apenas anciãos.', type: 'error' });
                     setTimeout(() => router.push('/admin/relatorios'), 1500);
                 }

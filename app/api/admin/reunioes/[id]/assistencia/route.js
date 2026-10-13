@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
@@ -10,6 +11,8 @@ const pool = new Pool({
 
 // GET: Get attendance detail for a meeting
 export async function GET(request, { params }) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
   const { id } = await params;
   
   if (!id) return NextResponse.json({ message: 'ID da reunião obrigatório' }, { status: 400 });
@@ -75,6 +78,8 @@ export async function GET(request, { params }) {
 
 // POST: Batch update attendance
 export async function POST(request, { params }) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
   const { id } = await params;
   const { assistanceData } = await request.json(); // Array of { publicador_id, modalidade }
   

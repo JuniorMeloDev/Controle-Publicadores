@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 
@@ -9,6 +10,8 @@ const pool = new Pool({
 
 // GET: Get meeting details with assignments
 export async function GET(request, { params }) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
     const { id } = await params;
     const client = await pool.connect();
     try {
@@ -103,6 +106,8 @@ export async function GET(request, { params }) {
 
 // PUT: Update meeting details (e.g., visitors)
 export async function PUT(request, { params }) {
+  const denied = await authorizeRequest(request, 'PUT');
+  if (denied) return denied;
     const { id } = await params;
     const { visitantes } = await request.json();
     const client = await pool.connect();

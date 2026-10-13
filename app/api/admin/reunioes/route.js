@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
@@ -55,6 +56,8 @@ async function ensureColumns(client) {
 
 // GET: List recent meetings with summary
 export async function GET(request) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     // 1. Ensure Table and Columns
@@ -361,6 +364,8 @@ export async function GET(request) {
 
 // POST: Create new meeting
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const permissions = await getUserPermissions(client, getUserIdFromRequest(request));

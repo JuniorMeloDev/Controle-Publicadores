@@ -7,6 +7,7 @@ import Link from 'next/link';
 
 export default function RelatoriosHubPage() {
   const [isAnciao, setIsAnciao] = useState(false);
+  const [s21Permissions, setS21Permissions] = useState({});
   const [isLoadingUser, setIsLoadingUser] = useState(true);
 
   useEffect(() => {
@@ -15,7 +16,8 @@ export default function RelatoriosHubPage() {
         const res = await fetch('/api/usuario-atual');
         if (res.ok) {
           const data = await res.json();
-          setIsAnciao(data.isAnciao);
+          setIsAnciao(data.permissions?.pages?.relatorios === true);
+          setS21Permissions(data.permissions?.actions || {});
         }
       } catch (err) {
         console.error(err);
@@ -113,7 +115,9 @@ export default function RelatoriosHubPage() {
           <div className="space-y-3 md:space-y-0 md:divide-y md:divide-gray-100">
             {reports.map(report => {
               const pending = isLoadingUser && report.needsElder;
-              const isLocked = !isLoadingUser && report.needsElder && !isAnciao;
+              const s21Locked = report.href.endsWith('/registro-publicador') ? !s21Permissions.s21_visualizar || !s21Permissions.s21_exportar
+                : report.href.endsWith('/analise-campo') ? !s21Permissions.s21_visualizar : false;
+              const isLocked = !isLoadingUser && ((report.needsElder && !isAnciao) || s21Locked);
               const isActive = report.active && !isLocked && !pending;
               const Icon = isLocked ? Lock : report.icon;
               return <Link key={report.href} href={isActive ? report.href : '#'} aria-disabled={!isActive}
@@ -127,7 +131,7 @@ export default function RelatoriosHubPage() {
                   <span className="block text-sm text-gray-500 mt-1">{report.description}</span>
                 </span>
                 <span className={`flex h-10 w-full md:w-32 shrink-0 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium ${isActive ? 'border border-purple-200 text-purple-700 group-hover:bg-purple-50' : 'text-gray-500'}`}>
-                  {pending ? 'Carregando…' : isLocked ? 'Apenas anciãos' : isActive ? <>Acessar <ArrowRight className="w-4 h-4" aria-hidden="true" /></> : 'Em breve'}
+                  {pending ? 'Carregando…' : isLocked ? 'Sem permissão' : isActive ? <>Acessar <ArrowRight className="w-4 h-4" aria-hidden="true" /></> : 'Em breve'}
                 </span>
               </Link>;
             })}

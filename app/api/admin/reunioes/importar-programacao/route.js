@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { NextResponse } from 'next/server';
 import { Pool } from '@neondatabase/serverless';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
@@ -11,6 +12,8 @@ export const maxDuration = 60;
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
     const userId = getUserIdFromRequest(request);
     if (!userId) return NextResponse.json({ message: 'Sua sessão expirou ou não está válida. Entre novamente.' }, { status: 401 });
     const client = await pool.connect();

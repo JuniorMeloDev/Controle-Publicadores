@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { ensureEmergencyContactsColumn } from '@/app/lib/emergency-contacts-server';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
@@ -10,6 +11,8 @@ const pool = new Pool({
 
 // Rota: GET /api/admin/get-publicador/123
 export async function GET(request, context) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
   const { id } = await context.params; // Pega o ID da URL
 
   if (!id) {

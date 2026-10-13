@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
@@ -19,6 +20,8 @@ async function ensureTable(client) {
 }
 
 export async function GET(request) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     await ensureTable(client);

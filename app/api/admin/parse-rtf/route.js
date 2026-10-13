@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { NextResponse } from 'next/server';
 import { Pool } from '@neondatabase/serverless';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
@@ -144,6 +145,8 @@ function parseRTFMeeting(rtf) {
 
 // Rota POST
 export async function POST(req) {
+  const denied = await authorizeRequest(req, 'POST');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const userId = getUserIdFromRequest(req);

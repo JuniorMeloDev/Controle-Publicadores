@@ -29,7 +29,7 @@ function RelatoriosContent() {
             const res = await fetch('/api/usuario-atual');
             if (res.ok) {
                const user = await res.json();
-               if (!user.isAnciao) {
+               if (!user.permissions?.pages?.relatorios || !user.permissions?.actions?.s21_visualizar || !user.permissions?.actions?.s21_exportar) {
                   // Se não for ancião, redireciona
                   router.push('/admin/relatorios');
                   return;

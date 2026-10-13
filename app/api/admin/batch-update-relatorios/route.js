@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 
@@ -9,6 +10,8 @@ const pool = new Pool({
 
 // Rota: POST /api/admin/batch-update-relatorios
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
   const body = await request.json();
   const { publicadorId, relatorios } = body; // Recebe o ID e a lista de relatórios
 

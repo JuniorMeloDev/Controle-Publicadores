@@ -2,25 +2,15 @@
 import { cookies } from 'next/headers';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
-import { buildAllPermissions, normalizePermissions } from '@/app/lib/access-control';
+import { getUserAccess } from '@/app/lib/server-access';
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'chave-secreta-de-teste-mude-depois';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export const dynamic = 'force-dynamic';
-
-async function ensureAccessTable(client) {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS acessos_app (
-      publicador_id INTEGER PRIMARY KEY REFERENCES publicadores(id) ON DELETE CASCADE,
-      permissoes JSONB NOT NULL,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-}
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -36,32 +26,20 @@ export async function GET() {
     
     const client = await pool.connect();
     try {
-      const res = await client.query(
-        'SELECT nome_completo, nome_chamado, privilegios FROM publicadores WHERE id = $1', 
-        [decoded.userId]
-      );
+      const access = await getUserAccess(client, decoded.userId);
       
-      if (res.rows.length === 0) {
+      if (!access) {
         return NextResponse.json({ message: 'UsuÃ¡rio nÃ£o encontrado' }, { status: 404 });
       }
 
-      const user = res.rows[0];
+      const user = access.user;
       const privilegios = Array.isArray(user.privilegios) ? user.privilegios : [];
       
       // Verifica privilÃ©gios
       const isAnciao = privilegios.includes('anciao');
       const isServo = privilegios.includes('servo_ministerial');
 
-      await ensureAccessTable(client);
-      const accessRes = await client.query(
-        'SELECT permissoes FROM acessos_app WHERE publicador_id = $1',
-        [decoded.userId]
-      );
-
-      const storedPerms = accessRes.rows[0]?.permissoes ?? null;
-      // Se for ancião/servo OU se não tiver nenhuma entrada configurada na tabela (null = sem restrições), garante acesso total.
-      // Só aplica permissões restritas quando há um registro explícito em acessos_app.
-      const permissions = (isAnciao || isServo || storedPerms === null) ? buildAllPermissions() : normalizePermissions(storedPerms);
+      const permissions = access?.permissions;
 
       return NextResponse.json({ 
         id: String(decoded.userId), // <--- FORÇA O ID COMO STRING
@@ -69,6 +47,7 @@ export async function GET() {
         nome_chamado: user.nome_chamado,
         isAnciao: isAnciao,
         isServo: isServo,
+        isSuperAdmin: access?.isSuperAdmin === true,
         permissions
       }, { status: 200 });
 

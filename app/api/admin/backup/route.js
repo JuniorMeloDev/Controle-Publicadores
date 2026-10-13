@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
@@ -10,12 +11,14 @@ const pool = new Pool({
 });
 
 export async function GET(request) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const userId = getUserIdFromRequest(request);
     if (userId) {
       const perms = await getUserPermissions(client, userId);
-      if (perms && !isAllowed(perms, 'configuracoes_editar', 'actions')) {
+      if (!isAllowed(perms, 'backup_exportar', 'actions')) {
         return NextResponse.json({ message: 'Acesso negado para gerar backup.' }, { status: 403 });
       }
     }

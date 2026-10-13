@@ -58,6 +58,8 @@ test('issuance stores a hash and enforces expiration and cooldown', async () => 
   assert.equal(params[1], reset.hashResetToken(token));
   assert.match(query, /INTERVAL '30 minutes'/);
   assert.match(query, /INTERVAL '2 minutes'/);
+  assert.ok(!query.includes('senha IS NOT NULL'), 'First access must work without an existing password');
+  assert.match(query, /SELECT COUNT\(\*\) FROM publicadores/);
   assert.equal(await reset.issuePasswordReset({ query: async () => ({ rows: [] }) }, 'unknown@example.com'), null);
 });
 
@@ -67,7 +69,7 @@ test('consumption deletes token atomically and rejects expired, used or changed-
   assert.equal(await reset.consumePasswordReset(client, 'a'.repeat(64), 'hash'), true);
   assert.match(sql, /DELETE FROM password_resets/);
   assert.match(sql, /expires_at > NOW\(\)/);
-  assert.match(sql, /p.senha = c.password_hash/);
+  assert.match(sql, /p.senha IS NOT DISTINCT FROM c.password_hash/);
   assert.equal(await reset.consumePasswordReset({ query: async () => ({ rows: [] }) }, 'a'.repeat(64), 'hash'), false);
 });
 

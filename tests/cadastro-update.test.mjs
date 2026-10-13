@@ -47,7 +47,7 @@ test('lookup accepts partial names with accents, returns only personal data and 
   let candidates = [{ id: 99, nome_completo: 'Jos\u00e9 da Silva', data_nascimento: '2000-01-01', senha: 'secret' }];
   const client = fixtureClient(async sql => ({ rows: sql.startsWith('SELECT p.id') ? candidates : [] }));
   const route = loadRoute('../../app/api/atualizacao-cadastral/buscar/route.js', {
-    ...helpers, cadastroPool: { connect: async () => client }, ensureCadastroTables: noop,
+    ...helpers, getUserIdFromRequest: () => 99, cadastroPool: { connect: async () => client }, ensureCadastroTables: noop,
     limitCadastroAttempts: async () => true, tokenHash: value => value, randomBytes: () => ({ toString: () => 'a'.repeat(64) }),
   });
   const response = await route.POST(request({ nome: 'Jose Silva', nascimento: '01/01/2000' }));
@@ -69,7 +69,7 @@ test('submission binds to stored session, applies missing data, queues correctio
     return { rows: [] };
   });
   const route = loadRoute('../../app/api/atualizacao-cadastral/enviar/route.js', {
-    ...helpers, cadastroPool: { connect: async () => client }, ensureCadastroTables: noop,
+    ...helpers, getUserIdFromRequest: () => 99, cadastroPool: { connect: async () => client }, ensureCadastroTables: noop,
     limitCadastroAttempts: async () => true, tokenHash: value => value, randomUUID: () => 'submission',
     applyCadastroField: async (...args) => applied.push(args.slice(1)),
   });

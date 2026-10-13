@@ -90,14 +90,8 @@ export default function DetalhesPublicador({
   let canEditActivities = false;
 
   if (currentUser) {
-    const currentUserIdStr = String(currentUser.id || '').trim();
-    const publicadorIdStr = String(publicadorId || '').trim();
-
-    canViewActivities =
-      currentUser.isAnciao || // Ancião vê tudo
-      (currentUser.isServo && currentUserIdStr === publicadorIdStr); // Servo vê apenas a sua
-
-    canEditActivities = currentUser.isAnciao; // Apenas Ancião edita
+    canViewActivities = currentUser.permissions?.actions?.s21_visualizar === true;
+    canEditActivities = currentUser.permissions?.actions?.relatorios_editar === true; // Apenas Ancião edita
   }
   // --------------------------------------
 
@@ -140,7 +134,8 @@ export default function DetalhesPublicador({
         designacoes: pubData.designacoes || [],
       });
 
-      const relRes = await fetch(`/api/admin/get-relatorios/${publicadorId}`);
+      if (!canViewActivities) { setRelatorios([]); return; }
+      const relRes = await fetch(`/api/admin/get-relatorios/${publicadorId}`, { cache: 'no-store' });
       if (!relRes.ok) throw new Error('Falha ao buscar relatórios');
       const relData = await relRes.json();
       setRelatorios(relData);
@@ -151,7 +146,7 @@ export default function DetalhesPublicador({
       setIsPageLoading(false);
       setIsLoading(false);
     }
-  }, [publicadorId]);
+  }, [publicadorId, canViewActivities]);
 
   useEffect(() => {
     if (publicadorId) fetchTudo(false);
@@ -245,7 +240,7 @@ export default function DetalhesPublicador({
 
 
   // --- GERADOR PDF S-21 ---
-  const generateS21PDF = () => {
+  const generateS21PDF = (relatorios) => {
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -636,9 +631,16 @@ export default function DetalhesPublicador({
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (activeTab === 'atividades') {
-      generateS21PDF();
+      if (!canViewActivities || currentUser?.permissions?.actions?.s21_exportar !== true) return;
+      const response = await fetch(`/api/admin/get-relatorios/${publicadorId}?export=1`, { cache: 'no-store' });
+      if (!response.ok) {
+        setRelatorios([]);
+        onSaveSuccess({ message: 'Sem permissão para exportar o S-21. Atualize a página para conferir seus acessos.', isError: true, keepOpen: true });
+        return;
+      }
+      generateS21PDF(await response.json());
       return;
     }
 
@@ -808,20 +810,21 @@ export default function DetalhesPublicador({
         <div className="flex items-center gap-2">
           <button
             onClick={handlePrint}
+            disabled={activeTab === 'atividades' && (!canViewActivities || currentUser?.permissions?.actions?.s21_exportar !== true)}
             className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
             title="Imprimir Ficha"
           >
             <Printer size={18} />
             <span className="hidden sm:inline">Imprimir</span>
           </button>
-          <button
+          {currentUser?.permissions?.actions?.publicadores_excluir && <button
             onClick={handleDeletePublicador}
             className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:text-white hover:bg-red-600 transition-colors"
             title="Excluir Publicador"
           >
             <Trash2 size={18} />
             <span className="hidden sm:inline">Excluir</span>
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -904,7 +907,7 @@ export default function DetalhesPublicador({
         {/* PAINÉIS DAS ABAS */}
         <div className="pb-10">
           {activeTab === 'informacoes' && (
-            <FormularioInformacoes
+            <fieldset disabled={!currentUser?.permissions?.actions?.publicadores_editar}><FormularioInformacoes
               formData={formData}
               setFormData={setFormData}
               handleSubmit={handleSubmit}
@@ -918,7 +921,7 @@ export default function DetalhesPublicador({
               isCepLoading={isCepLoading}
               cepError={cepError}
               numeroInputRef={numeroInputRef}
-            />
+            /></fieldset>
           )}
 
           {activeTab === 'atividades' && canViewActivities && (

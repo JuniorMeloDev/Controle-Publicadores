@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
+import { usePermissions } from '@/app/components/PermissionsContext';
+import PersonalPortal from '@/app/components/PersonalPortal';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
 import { Users, Calendar, ArrowRight, TrendingUp, FileText, CheckCircle, Clock, Loader2, X, Printer, Search, MessageCircle } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from '@/app/components/ui/sheet';
@@ -83,7 +85,7 @@ async function fetchMeetingStats() {
 }
 
 
-export default function Dashboard() {
+function CongregationDashboard() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [errorStatus, setErrorStatus] = useState(null);
@@ -269,15 +271,15 @@ export default function Dashboard() {
   ];
 
   if (isPageLoading) return (
-    <DashboardLayout>
+    <>
       <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
         <Loader2 className="animate-spin text-purple-600 w-8 h-8" />
       </div>
-    </DashboardLayout>
+    </>
   );
 
   return (
-    <DashboardLayout>
+    <>
       <div className="space-y-8">
         {/* Cabeçalho da Página */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-gray-100">
@@ -620,6 +622,15 @@ export default function Dashboard() {
         />
       </div>
 
-    </DashboardLayout>
+    </>
   );
+}
+function DashboardContent() {
+  const { permissions, isLoading } = usePermissions();
+  if (isLoading) return null;
+  return permissions?.pages?.dashboard ? <CongregationDashboard /> : <PersonalPortal />;
+}
+
+export default function Dashboard() {
+  return <DashboardLayout><DashboardContent /></DashboardLayout>;
 }

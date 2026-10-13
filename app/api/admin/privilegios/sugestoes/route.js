@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
@@ -10,6 +11,8 @@ import { dateOnly, meetingCancellation } from '@/app/lib/meeting-calendar';
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
     const { semana, reuniao_ids, assignments = [] } = await request.json();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(semana || '') || Number.isNaN(new Date(semana).getTime()) ||
         !Array.isArray(reuniao_ids) || !reuniao_ids.length || !reuniao_ids.every(Number.isInteger) ||

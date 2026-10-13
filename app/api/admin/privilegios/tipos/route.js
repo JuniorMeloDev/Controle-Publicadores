@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 ﻿
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
@@ -12,7 +13,9 @@ const pool = new Pool({
 });
 
 // GET: List all privilege types (ordered)
-export async function GET() {
+export async function GET(request) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const res = await client.query('SELECT * FROM privilegios_tipos ORDER BY ordem ASC, nome ASC');
@@ -27,6 +30,8 @@ export async function GET() {
 
 // POST: Create or Update Privilege Type
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const userId = getUserIdFromRequest(request);
@@ -80,6 +85,8 @@ export async function POST(request) {
 
 // DELETE: Remove a type
 export async function DELETE(request) {
+  const denied = await authorizeRequest(request, 'DELETE');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const userId = getUserIdFromRequest(request);

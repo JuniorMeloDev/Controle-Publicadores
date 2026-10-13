@@ -58,10 +58,14 @@ test('mark all read persists across reloads and cannot mark another user notific
 
 test('middleware authorizes notification and programme POSTs and rejects expired sessions', async () => {
     const secret = 'fictional-notification-test-secret';
+    let accessReads = 0;
     const source = readFileSync(new URL('../middleware.js', import.meta.url), 'utf8')
         .replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
     const context = vm.createContext({ process: { env: { JWT_SECRET: secret } }, verify: jwt.verify,
-        NextResponse: { next: () => ({ status: 200 }), json: (body, options) => ({ body, ...options }) } });
+        Pool: class { async connect() { return { release() {} }; } },
+        getUserAccess: async () => { accessReads++; return { isSuperAdmin: true, permissions: {} }; },
+        canAccessRoute: () => true,
+        NextResponse: { next: () => ({ status: 200, headers: { set() {} } }), json: (body, options) => ({ body, ...options }) } });
     vm.runInContext(source + '\nglobalThis.handler = middleware;', context);
     const request = (token, pathname) => ({ method: 'POST', nextUrl: { pathname },
         cookies: { get: () => token ? { value: token } : undefined } });
@@ -72,4 +76,10 @@ test('middleware authorizes notification and programme POSTs and rejects expired
         assert.equal((await context.handler(request(expired, pathname))).status, 401);
         assert.equal((await context.handler(request(null, pathname))).status, 401);
     }
+    for (const pathname of ['/admin/dashboard', '/admin/meus-dados', '/admin/minhas-designacoes', '/admin/meu-s21']) {
+        assert.equal((await context.handler(request(valid, pathname))).status, 200);
+    }
+    assert.equal(accessReads, 0, 'APIs authorize in their handlers; personal page navigation needs no duplicate database check');
+    assert.equal((await context.handler(request(valid, '/admin/gerenciar'))).status, 200);
+    assert.equal(accessReads, 1, 'Administrative pages still check current database permissions');
 });

@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 // app/api/admin/batch-update-grupos/route.js
 
 import { Pool } from '@neondatabase/serverless';
@@ -10,6 +11,8 @@ const pool = new Pool({
 });
 
 export async function PUT(request) {
+  const denied = await authorizeRequest(request, 'PUT');
+  if (denied) return denied;
   const body = await request.json();
   const { publicadorIds, nome_grupo } = body;
 

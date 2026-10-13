@@ -1,7 +1,7 @@
 import { verify } from 'jsonwebtoken';
 import { buildAllPermissions, normalizePermissions } from '@/app/lib/access-control';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'chave-secreta-de-teste-mude-depois';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export const ensureAccessTable = async (client) => {
   await client.query(`
@@ -11,6 +11,7 @@ export const ensureAccessTable = async (client) => {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  await client.query('ALTER TABLE acessos_app ADD COLUMN IF NOT EXISTS super_admin BOOLEAN NOT NULL DEFAULT FALSE');
 };
 
 export const getUserIdFromRequest = (req) => {
@@ -18,7 +19,7 @@ export const getUserIdFromRequest = (req) => {
   if (!token) return null;
   try {
     const decoded = verify(token.value, JWT_SECRET);
-    return decoded.userId;
+    return Number.isSafeInteger(decoded.userId) && decoded.userId > 0 ? decoded.userId : null;
   } catch {
     return null;
   }
@@ -27,19 +28,18 @@ export const getUserIdFromRequest = (req) => {
 export const getUserPermissions = async (client, userId) => {
   if (!userId) return null;
 
-  const userRes = await client.query(
-    'SELECT privilegios FROM publicadores WHERE id = $1',
-    [userId]
-  );
-  const privilegios = Array.isArray(userRes.rows[0]?.privilegios) ? userRes.rows[0].privilegios : [];
-  const isAdmin = privilegios.includes('anciao') || privilegios.includes('servo_ministerial');
-  if (isAdmin) return buildAllPermissions();
-
-  await ensureAccessTable(client);
-  const accessRes = await client.query(
-    'SELECT permissoes FROM acessos_app WHERE publicador_id = $1',
-    [userId]
-  );
-  const storedPerms = accessRes.rows[0]?.permissoes || null;
-  return normalizePermissions(storedPerms);
+  const access = await getUserAccess(client, userId);
+  return access?.permissions || null;
 };
+
+export async function getUserAccess(client, userId) {
+  if (!Number.isInteger(userId) || userId <= 0) return null;
+  // Schema changes belong to setup/management, not permission reads on every request.
+  const result = await client.query(`SELECT a.permissoes, a.super_admin, p.id, p.nome_completo, p.nome_chamado, p.privilegios
+    FROM publicadores p LEFT JOIN acessos_app a ON a.publicador_id = p.id WHERE p.id = $1`, [userId]);
+  const row = result.rows[0];
+  if (!row) return null;
+  const isSuperAdmin = row.super_admin === true;
+  return { isSuperAdmin, permissions: isSuperAdmin ? buildAllPermissions() : normalizePermissions(row.permissoes),
+    user: { id: userId, nome_completo: row.nome_completo, nome_chamado: row.nome_chamado, privilegios: row.privilegios } };
+}

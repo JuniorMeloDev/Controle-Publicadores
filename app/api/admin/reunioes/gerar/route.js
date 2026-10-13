@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { findVisitInWeek, getVisitTuesday } from '@/app/lib/meeting-visits';
@@ -19,6 +20,8 @@ function getWeekdayName(date) {
 }
 
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
     const client = await pool.connect();
     try {
         const body = await request.json();

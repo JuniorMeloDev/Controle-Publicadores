@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
@@ -9,6 +10,8 @@ const pool = new Pool({
 });
 
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const body = await request.json();

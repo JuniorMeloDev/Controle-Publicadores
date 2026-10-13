@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { normalizeEmergencyContacts } from '@/app/lib/emergency-contacts';
 import { ensureEmergencyContactsColumn } from '@/app/lib/emergency-contacts-server';
 import { Pool } from '@neondatabase/serverless';
@@ -12,6 +13,8 @@ const pool = new Pool({
 });
 
 export async function POST(req) {
+  const denied = await authorizeRequest(req, 'POST');
+  if (denied) return denied;
   const body = await req.json();
   const { 
     nome_completo, 

@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 // app/api/admin/get-status-relatorios/route.js
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
@@ -16,6 +17,8 @@ const MES_ORDEM = {
 };
 
 export async function GET(req) {
+  const denied = await authorizeRequest(req, 'GET');
+  if (denied) return denied;
   const { searchParams } = new URL(req.url);
   const mes = searchParams.get('mes');
   const ano_servico = searchParams.get('ano');

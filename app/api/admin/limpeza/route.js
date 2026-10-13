@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
 import { isAllowed } from '@/app/lib/access-control';
@@ -10,6 +11,8 @@ const pool = new Pool({
 });
 
 export async function GET(request) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
   const { searchParams } = new URL(request.url);
   const start = searchParams.get('start');
   const end = searchParams.get('end');
@@ -57,6 +60,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const userId = getUserIdFromRequest(request);
@@ -106,6 +111,8 @@ export async function POST(request) {
 }
 
 export async function PUT(request) {
+  const denied = await authorizeRequest(request, 'PUT');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const userId = getUserIdFromRequest(request);
@@ -150,6 +157,8 @@ export async function PUT(request) {
 }
 
 export async function DELETE(request) {
+  const denied = await authorizeRequest(request, 'DELETE');
+  if (denied) return denied;
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
 

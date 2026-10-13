@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
@@ -10,11 +11,13 @@ const pool = new Pool({
 });
 
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const userId = getUserIdFromRequest(request);
     const perms = await getUserPermissions(client, userId);
-    if (!isAllowed(perms, 'relatorios_gerar', 'actions')) {
+    if (!isAllowed(perms, 's21_visualizar', 'actions') || !isAllowed(perms, 's21_exportar', 'actions')) {
       return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
     }
     const { publisherIds } = await request.json();

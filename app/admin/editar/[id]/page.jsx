@@ -345,7 +345,7 @@ export default function EditarPublicadorPage() {
             const res = await fetch('/api/usuario-atual'); // <-- Rota atualizada aqui
             if (res.ok) {
                 const data = await res.json();
-                setIsAnciao(data.isAnciao);
+                setIsAnciao(data.permissions?.actions?.publicadores_editar === true);
             }
         } catch (error) {
             console.error("Erro ao verificar permissões", error);

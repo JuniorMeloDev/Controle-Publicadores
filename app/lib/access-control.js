@@ -8,6 +8,8 @@ export const PAGE_PERMISSIONS = [
 ];
 
 export const ACTION_PERMISSIONS = [
+  { key: 's21_visualizar', label: 'Visualizar S-21 de outros publicadores' },
+  { key: 's21_exportar', label: 'Exportar PDF / imprimir S-21 de outros publicadores' },
   { key: 'designacoes_importar', label: 'Importar RTF (Designações)' },
   { key: 'designacoes_salvar', label: 'Salvar Designações' },
   { key: 'designacoes_pdf', label: 'Gerar PDF (Designações)' },
@@ -17,6 +19,10 @@ export const ACTION_PERMISSIONS = [
   { key: 'limpeza_semanal_editar', label: 'Editar Limpeza Semanal' },
   { key: 'logs_visualizar', label: 'Visualizar Logs do Sistema' },
   { key: 'publicadores_editar', label: 'Criar/Editar Publicadores' },
+  { key: 'publicadores_excluir', label: 'Excluir Publicadores' },
+  { key: 'relatorios_editar', label: 'Editar Relatórios' },
+  { key: 'reunioes_editar', label: 'Editar Reuniões e Assistência' },
+  { key: 'backup_exportar', label: 'Exportar Backup Completo' },
   { key: 'configuracoes_editar', label: 'Editar Configurações' },
   { key: 'relatorios_gerar', label: 'Gerar Relatórios' },
 ];
@@ -35,14 +41,13 @@ export const normalizePermissions = (input) => {
 
   PAGE_PERMISSIONS.forEach(({ key }) => {
     // Pages: ausente = false (acesso a páginas deve ser explicitamente concedido)
-    pages[key] = Boolean(input.pages?.[key]);
+    pages[key] = input.pages?.[key] === true;
   });
   ACTION_PERMISSIONS.forEach(({ key }) => {
     // Actions: se a chave NÃO existe no registro salvo, assume true.
     // Isso garante compatibilidade retroativa: novas actions adicionadas ao sistema
     // não bloqueiam usuários com registros antigos que não tinham essa chave.
-    const storedValue = input.actions?.[key];
-    actions[key] = storedValue === undefined ? true : Boolean(storedValue);
+    actions[key] = input.actions?.[key] === true;
   });
 
   return { pages, actions };
@@ -50,6 +55,7 @@ export const normalizePermissions = (input) => {
 
 export const getPageKeyForPath = (pathname) => {
   if (!pathname) return null;
+  if (pathname.startsWith('/admin/editar/')) return 'publicadores';
   const match = PAGE_PERMISSIONS.find(p => pathname === p.path || pathname.startsWith(`${p.path}/`));
   return match ? match.key : null;
 };

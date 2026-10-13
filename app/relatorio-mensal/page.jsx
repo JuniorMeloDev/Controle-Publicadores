@@ -114,6 +114,16 @@ function RelatorioForm() {
   // Efeito para carregar dados do publicador (Modo Manual)
   useEffect(() => {
 
+    if (!publicadorId) {
+      fetch('/api/minha-conta', { cache: 'no-store' }).then(async response => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message);
+        const info = result.info;
+        setFormData(prev => ({ ...prev, nome_completo: info.nome_completo,
+          data_nascimento: info.data_nascimento ? new Date(info.data_nascimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '',
+          pioneiro_regular_local: info.designacoes?.includes('pioneiro_regular') || false }));
+      }).catch(error => { setToastMessage(error.message); setToastType('error'); setShowToast(true); });
+    }
     if (publicadorId) {
       setIsLoading(true);
       // Exibe mensagem de loading como toast
@@ -236,8 +246,8 @@ function RelatorioForm() {
         // Limpar o formulário
         setFormData(prev => ({
           ...prev,
-          nome_completo: isManualEntry ? prev.nome_completo : '',
-          data_nascimento: isManualEntry ? prev.data_nascimento : '',
+          nome_completo: prev.nome_completo,
+          data_nascimento: prev.data_nascimento,
           participou_ministerio: null,
           pioneiro_auxiliar: false,
           pioneiro_regular_local: prev.pioneiro_regular_local,

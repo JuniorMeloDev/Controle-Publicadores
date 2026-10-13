@@ -7,8 +7,8 @@ const PermissionsContext = createContext({
   isLoading: true,
 });
 
-export const PermissionsProvider = ({ permissions, isLoading, children }) => (
-  <PermissionsContext.Provider value={{ permissions, isLoading }}>
+export const PermissionsProvider = ({ permissions, isLoading, user, children }) => (
+  <PermissionsContext.Provider value={{ permissions, isLoading, user }}>
     {children}
   </PermissionsContext.Provider>
 );

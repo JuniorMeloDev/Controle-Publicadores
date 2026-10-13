@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 // app/api/enviar-relatorio-mensal/manual/route.js
 
 import { Pool } from '@neondatabase/serverless'; 
@@ -10,6 +11,8 @@ const pool = new Pool({
 export const dynamic = 'force-dynamic';
 
 export async function GET(req) {
+  const denied = await authorizeRequest(req, 'GET');
+  if (denied) return denied;
   const { searchParams } = new URL(req.url);
   const publicadorId = searchParams.get('publicadorId');
 
@@ -60,6 +63,8 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
+  const denied = await authorizeRequest(req, 'POST');
+  if (denied) return denied;
   const body = await req.json();
   
   const {

@@ -11,7 +11,7 @@ const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'chave-secreta-de-teste-mude-depois';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Função auxiliar de validação (Regex)
 export async function POST(req) {

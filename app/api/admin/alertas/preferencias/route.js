@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest } from '@/app/lib/server-access';
@@ -35,5 +36,9 @@ async function handle(request, save) {
     } finally { client.release(); }
 }
 
-export async function GET(request) { return handle(request, false); }
-export async function POST(request) { return handle(request, true); }
+export async function GET(request) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied; return handle(request, false); }
+export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied; return handle(request, true); }

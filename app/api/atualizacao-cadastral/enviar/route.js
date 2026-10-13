@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
+import { getUserIdFromRequest } from '@/app/lib/server-access';
 import { personalData, validatePersonalData, planChanges } from '@/app/lib/cadastro-update';
 import { cadastroPool, ensureCadastroTables, limitCadastroAttempts, tokenHash, applyCadastroField } from '@/app/lib/cadastro-update-server';
 export const dynamic = 'force-dynamic';
 export async function POST(request) {
+  const userId = getUserIdFromRequest(request);
+  if (!userId) return NextResponse.json({ message: 'Faça login para atualizar seu cadastro.' }, { status: 401 });
   let body, incoming;
   try {
     body = await request.json();
@@ -15,7 +18,7 @@ export async function POST(request) {
     await ensureCadastroTables(client);
     if (!await limitCadastroAttempts(client, request, 'enviar')) return NextResponse.json({ message: 'Muitas tentativas. Aguarde 15 minutos.' }, { status: 429 });
     await client.query('BEGIN');
-    const session = await client.query(`SELECT * FROM cadastro_sessoes WHERE token_hash = $1 AND expires_at > NOW() AND used_at IS NULL FOR UPDATE`, [tokenHash(body.token)]);
+    const session = await client.query(`SELECT * FROM cadastro_sessoes WHERE token_hash = $1 AND publicador_id = $2 AND expires_at > NOW() AND used_at IS NULL FOR UPDATE`, [tokenHash(body.token), userId]);
     if (!session.rows.length) {
       await client.query('ROLLBACK');
       return NextResponse.json({ message: 'Sua sessão expirou ou já foi enviada. Busque o cadastro novamente.' }, { status: 401 });

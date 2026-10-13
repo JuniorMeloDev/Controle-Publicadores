@@ -20,10 +20,11 @@ export async function ensurePasswordResetTable(client) {
   await client.query(`CREATE TABLE IF NOT EXISTS password_resets (
     publicador_id INTEGER PRIMARY KEY REFERENCES publicadores(id) ON DELETE CASCADE,
     token_hash TEXT NOT NULL,
-    password_hash TEXT NOT NULL,
+    password_hash TEXT,
     expires_at TIMESTAMPTZ NOT NULL,
     requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
+  await client.query('ALTER TABLE password_resets ALTER COLUMN password_hash DROP NOT NULL');
 }
 
 export async function issuePasswordReset(client, email) {
@@ -31,7 +32,8 @@ export async function issuePasswordReset(client, email) {
   const result = await client.query(`
     INSERT INTO password_resets (publicador_id, token_hash, password_hash, expires_at)
     SELECT id, $2, senha, NOW() + INTERVAL '30 minutes'
-    FROM publicadores WHERE LOWER(TRIM(email)) = $1 AND senha IS NOT NULL AND senha <> ''
+    FROM publicadores WHERE LOWER(TRIM(email)) = $1
+      AND (SELECT COUNT(*) FROM publicadores WHERE LOWER(TRIM(email)) = $1) = 1
     ON CONFLICT (publicador_id) DO UPDATE SET
       token_hash = EXCLUDED.token_hash, password_hash = EXCLUDED.password_hash,
       expires_at = EXCLUDED.expires_at, requested_at = NOW()
@@ -48,7 +50,7 @@ export async function consumePasswordReset(client, token, passwordHash) {
       RETURNING publicador_id, password_hash
     )
     UPDATE publicadores p SET senha = $2 FROM consumed c
-    WHERE p.id = c.publicador_id AND p.senha = c.password_hash
+    WHERE p.id = c.publicador_id AND p.senha IS NOT DISTINCT FROM c.password_hash
     RETURNING p.id`, [hashResetToken(token), passwordHash]);
   return result.rows.length === 1;
 }

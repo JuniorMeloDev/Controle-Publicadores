@@ -11,7 +11,7 @@ const contacts = [{ nome: 'Maria', telefone: '11999991234' }, { nome: 'Joao', te
 const body = { nome_completo: 'Fulano', data_nascimento: '01/01/2000', nome_grupo: 'Grupo Exemplo', sexo: 'Masculino', privilegios: [], designacoes: [], contatos_emergencia: contacts };
 const request = value => ({ json: async () => value });
 function dependencies(client) {
-  return { ...helpers, saveEmergencyContacts, ensureEmergencyContactsColumn: async () => {},
+  return { authorizeRequest: async () => null, ...helpers, saveEmergencyContacts, ensureEmergencyContactsColumn: async () => {},
     Pool: class { connect() { return client; } }, getUserIdFromRequest: () => 7,
     getUserPermissions: async () => ({}), isAllowed: () => true, registerAuditLog: async () => {},
   };

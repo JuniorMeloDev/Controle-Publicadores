@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getPublisherAssignments } from '@/app/lib/publisher-assignments';
@@ -10,6 +11,8 @@ const pool = new Pool({
 
 // Rota: GET /api/admin/get-historico/123
 export async function GET(request, context) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
   const { id } = await context.params; // Pega o ID do publicador
 
   if (!id) {

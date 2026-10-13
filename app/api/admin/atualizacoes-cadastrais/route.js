@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { emergencyContactsValue } from '@/app/lib/emergency-contacts';
 import { NextResponse } from 'next/server';
 import { cadastroPool, ensureCadastroTables, applyCadastroField } from '@/app/lib/cadastro-update-server';
@@ -12,6 +13,8 @@ async function access(client, request) {
   return userId && isAllowed(permissions, 'publicadores') && isAllowed(permissions, 'publicadores_editar', 'actions') ? userId : null;
 }
 export async function GET(request) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
   const client = await cadastroPool.connect();
   try {
     if (!await access(client, request)) return NextResponse.json({ message: 'Acesso negado.' }, { status: 403 });
@@ -25,6 +28,8 @@ export async function GET(request) {
   finally { client.release(); }
 }
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
   let body;
   try {
     body = await request.json();

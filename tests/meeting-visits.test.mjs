@@ -26,7 +26,7 @@ function loadRoute(file, { events = [visit], weekdays = config, meetings = [] } 
     const source = readFileSync(new URL(file, import.meta.url), 'utf8')
         .replace(/^import .*;\r?\n/gm, '')
         .replace(/export /g, '');
-    const context = vm.createContext({
+    const context = vm.createContext({ authorizeRequest: async () => null,
         Pool: class { connect() { return client; } },
         NextResponse: { json: data => data },
         URL, Intl, console, process: { env: {} },

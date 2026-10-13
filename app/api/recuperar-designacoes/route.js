@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 
@@ -9,6 +10,8 @@ const pool = new Pool({
 });
 
 export async function GET(req) {
+  const denied = await authorizeRequest(req, 'GET');
+  if (denied) return denied;
   const { searchParams } = new URL(req.url);
   const date = searchParams.get('date');
 

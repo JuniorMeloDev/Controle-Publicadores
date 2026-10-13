@@ -8,10 +8,12 @@ export async function loadModule(path) {
 
 export function loadRoute(path, dependencies) {
     const source = readFileSync(new URL(path, import.meta.url), 'utf8')
-        .replace(/^\uFEFF/, '').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
+        .replace(/^\uFEFF/, '').replace(/^import .*;[ \t]*\r?\n/gm, '').replace(/export /g, '');
     const context = vm.createContext({
         URL, console: { error() {} }, process: { env: {} },
         NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200 }) },
+        // Feature unit tests run with an authorized boundary; access-control tests supply the real guard.
+        authorizeRequest: async () => null,
         ...dependencies
     });
     vm.runInContext(source + '\nglobalThis.handlers = { ' +

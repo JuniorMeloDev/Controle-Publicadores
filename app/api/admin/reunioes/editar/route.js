@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { isCalendarDate, dateOnly } from '@/app/lib/meeting-calendar';
@@ -11,6 +12,8 @@ const pool = new Pool({
 });
 
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
   const body = await request.json();
   const { id, nova_data } = body;
 

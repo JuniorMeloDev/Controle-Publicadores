@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
@@ -11,6 +12,8 @@ const pool = new Pool({
 });
 
 export async function DELETE(request, context) {
+  const denied = await authorizeRequest(request, 'DELETE');
+  if (denied) return denied;
   const { id } = context.params || {};
   const idFromUrl = new URL(request.url).pathname.split('/').filter(Boolean).pop();
   const publicadorId = Number(String(id || idFromUrl || '').trim());
@@ -24,11 +27,16 @@ export async function DELETE(request, context) {
   try {
     const userId = getUserIdFromRequest(request);
     const perms = await getUserPermissions(client, userId);
-    if (!isAllowed(perms, 'publicadores_editar', 'actions')) {
+    if (!isAllowed(perms, 'publicadores_excluir', 'actions')) {
       return NextResponse.json({ message: 'Acesso negado.' }, { status: 403 });
     }
 
+    const protectedAccount = await client.query('SELECT super_admin FROM acessos_app WHERE publicador_id = $1', [publicadorId]);
+    if (protectedAccount.rows[0]?.super_admin) return NextResponse.json({ message: 'Remova o papel de super admin antes de excluir esta conta.' }, { status: 409 });
     await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(72904123)');
+    const lockedRole = await client.query('SELECT super_admin FROM acessos_app WHERE publicador_id = $1', [publicadorId]);
+    if (lockedRole.rows[0]?.super_admin) { await client.query('ROLLBACK'); return NextResponse.json({ message: 'Conta protegida.' }, { status: 409 }); }
     const publicadorRes = await client.query('SELECT nome_completo FROM publicadores WHERE id = $1 FOR UPDATE', [publicadorId]);
     if (publicadorRes.rows.length === 0) {
       await client.query('ROLLBACK');

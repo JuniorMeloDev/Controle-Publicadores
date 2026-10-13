@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PAGE_PERMISSIONS, ACTION_PERMISSIONS, buildAllPermissions, normalizePermissions } from '@/app/lib/access-control';
 import { Button } from '@/app/components/ui/button';
 import { Loader2, ShieldCheck, Save } from 'lucide-react';
@@ -17,8 +17,12 @@ function GestaoAcessosContent() {
   const [acessosMap, setAcessosMap] = useState({});
   const [selectedIds, setSelectedIds] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [privilegeFilter, setPrivilegeFilter] = useState('');
+  const [assignmentFilter, setAssignmentFilter] = useState('');
+  const [mode, setMode] = useState('add');
   const [formPerms, setFormPerms] = useState(normalizePermissions(null));
+  const [superAdmins, setSuperAdmins] = useState({});
+  const [superAdmin, setSuperAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -79,6 +83,7 @@ function GestaoAcessosContent() {
         const map = {};
         (data.acessos || []).forEach(a => { map[a.publicador_id] = a.permissoes; });
         setAcessosMap(map);
+        setSuperAdmins(Object.fromEntries((data.acessos || []).map(access => [String(access.publicador_id), access.super_admin === true])));
       } catch (err) {
         setError(err.message || 'Erro ao carregar dados.');
       } finally {
@@ -93,14 +98,23 @@ function GestaoAcessosContent() {
     [publicadores, selectedIds]
   );
 
+  const privilegeOptions = [
+    { key: 'anciao', label: 'Ancião' },
+    { key: 'servo_ministerial', label: 'Servo ministerial' },
+  ];
+  const assignmentOptions = [
+    { key: 'pioneiro_regular', label: 'Pioneiro regular' },
+    { key: 'pioneiro_especial', label: 'Pioneiro especial' },
+    { key: 'missionario', label: 'Missionário em campo' },
+  ];
   const filteredPublicadores = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return publicadores;
-    return publicadores.filter(p => {
-      const nome = (p.nome_chamado || p.nome_completo || '').toLowerCase();
-      return nome.includes(term);
-    });
-  }, [publicadores, searchTerm]);
+    const term = searchTerm.trim().toLocaleLowerCase('pt-BR');
+    return publicadores.filter(p =>
+      `${p.nome_completo || ''} ${p.nome_chamado || ''}`.toLocaleLowerCase('pt-BR').includes(term)
+      && (!privilegeFilter || (privilegeFilter === 'none' ? !p.privilegios?.length : p.privilegios?.includes(privilegeFilter)))
+      && (!assignmentFilter || p.designacoes?.includes(assignmentFilter))
+    );
+  }, [publicadores, searchTerm, privilegeFilter, assignmentFilter]);
 
   const accessCount = useMemo(() => {
     const pages = Object.values(formPerms.pages || {}).filter(Boolean).length;
@@ -108,11 +122,7 @@ function GestaoAcessosContent() {
     return { pages, actions };
   }, [formPerms]);
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [searchTerm, filteredPublicadores.length]);
-
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     if (permsLoading || !canViewLogs) return;
     setLogsLoading(true);
     try {
@@ -133,47 +143,30 @@ function GestaoAcessosContent() {
     } finally {
       setLogsLoading(false);
     }
-  };
+  }, [permsLoading, canViewLogs, logAction, logEntity, logUser, logFrom, logTo]);
 
   useEffect(() => {
     if (activeTab === 'logs') {
       fetchLogs();
     }
-  }, [activeTab]);
+  }, [activeTab, fetchLogs]);
 
-  const handleSelectUser = (id) => {
-    const strId = String(id);
-    setSelectedIds(prev => {
-      if (prev.includes(strId)) return prev;
-      return [...prev, strId];
-    });
-    if (selectedIds.length === 0) {
-      const stored = acessosMap[strId] || null;
-      setFormPerms(normalizePermissions(stored));
-    }
-    setSearchTerm('');
+  const changeSelection = (ids) => {
+    setSelectedIds(ids);
+    setSuccess(''); setError('');
+    setSuperAdmin(ids.length === 1 && superAdmins[ids[0]] === true);
+    if (!ids.length) setFormPerms(normalizePermissions(null));
+    else if (mode === 'replace' && ids.length === 1 && selectedIds.length <= 1) setFormPerms(normalizePermissions(acessosMap[ids[0]]));
   };
-
-  const handleClearSelection = () => {
-    setSelectedIds([]);
-    setFormPerms(normalizePermissions(null));
+  const handleSelectUser = id => {
+    const key = String(id);
+    changeSelection(selectedIds.includes(key) ? selectedIds.filter(value => value !== key) : [...selectedIds, key]);
   };
-
-  const handleKeyDown = (e) => {
-    if (filteredPublicadores.length === 0) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setActiveIndex(prev => Math.min(prev + 1, filteredPublicadores.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setActiveIndex(prev => Math.max(prev - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      const target = filteredPublicadores[activeIndex];
-      if (target) handleSelectUser(target.id);
-    } else if (e.key === 'Escape') {
-      setSearchTerm('');
-    }
+  const handleClearSelection = () => changeSelection([]);
+  const selectFiltered = () => changeSelection([...new Set([...selectedIds, ...filteredPublicadores.map(p => String(p.id))])]);
+  const changeMode = next => {
+    setMode(next);
+    setFormPerms(next === 'replace' && selectedIds.length === 1 ? normalizePermissions(acessosMap[selectedIds[0]]) : normalizePermissions(null));
   };
 
   const handleToggle = (group, key) => {
@@ -197,22 +190,26 @@ function GestaoAcessosContent() {
     setError('');
     setSuccess('');
     try {
-      const results = await Promise.all(selectedIds.map(async (id) => {
-        const res = await fetch('/api/admin/gestao-acessos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ publicadorId: id, permissoes: formPerms })
-        });
-        if (!res.ok) throw new Error('Erro ao salvar permissões.');
-        return id;
-      }));
-
-      setAcessosMap(prev => {
-        const next = { ...prev };
-        results.forEach(id => { next[id] = formPerms; });
-        return next;
-      });
-      setSuccess(`Permissões salvas para ${results.length} publicador(es)!`);
+      const completed = [], failed = [];
+      for (const id of selectedIds) {
+        try {
+          const res = await fetch('/api/admin/gestao-acessos', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ publicadorId: id, permissoes: formPerms, mode, ...(selectedIds.length === 1 ? { superAdmin } : {}) })
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.message || 'Erro ao salvar.');
+          completed.push(id);
+          setAcessosMap(prev => ({ ...prev, [id]: result.permissions }));
+          if (selectedIds.length === 1) setSuperAdmins(prev => ({ ...prev, [id]: superAdmin }));
+        } catch (err) {
+          const person = publicadores.find(p => String(p.id) === id);
+          failed.push(`${person?.nome_completo || id}: ${err.message}`);
+        }
+      }
+      if (completed.length) setSuccess(`Acessos atualizados para ${completed.length} publicador(es).`);
+      if (failed.length) setError(`Não foi possível atualizar: ${failed.join('; ')}`);
+      window.dispatchEvent(new Event('session:changed'));
     } catch (err) {
       setError(err.message || 'Erro ao salvar.');
     } finally {
@@ -238,7 +235,7 @@ function GestaoAcessosContent() {
   }
 
   return (
-      <div className="p-6 max-w-5xl mx-auto w-full">
+      <div className="w-full min-w-0 p-4 sm:p-6">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-9 h-9 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
@@ -252,158 +249,57 @@ function GestaoAcessosContent() {
 
         {(error || success) && (
           <div className={`mb-4 p-3 rounded-md text-sm ${error ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
-            {error || success}
+            {error}{error && success && <br />}{success}
           </div>
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <p className="mb-5 text-sm text-gray-600">Todos têm acesso aos próprios dados, designações e S-21. Privilégios congregacionais não liberam funções administrativas automaticamente.</p>
           <TabsList className="grid w-full grid-cols-2 max-w-md mb-6">
             <TabsTrigger value="acessos">Gestão de Acessos</TabsTrigger>
             <TabsTrigger value="logs">Logs</TabsTrigger>
           </TabsList>
 
           <TabsContent value="acessos">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Selecionar publicador</label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none bg-white text-gray-700"
-              placeholder="Digite o nome..."
-            />
-            <div className="flex items-center gap-2 mt-2">
-              <button
-                type="button"
-                onClick={() => setSearchTerm('')}
-                className="text-xs text-gray-500 hover:underline"
-              >
-                Limpar busca
-              </button>
-              <span className="text-gray-300">|</span>
-              <button
-                type="button"
-                onClick={handleClearSelection}
-                className="text-xs text-gray-500 hover:underline"
-              >
-                Limpar seleção
-              </button>
-            </div>
-            {searchTerm.trim().length > 0 && (
-              <div className="mt-2 max-h-64 overflow-auto rounded-md border border-gray-200 bg-white">
-                {filteredPublicadores.length === 0 && (
-                  <div className="px-3 py-2 text-xs text-gray-400">Nenhum publicador encontrado.</div>
-                )}
-                {filteredPublicadores.map((p, idx) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => handleSelectUser(p.id)}
-                    className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                      selectedIds.includes(String(p.id))
-                        ? 'bg-purple-50 text-purple-700 font-medium'
-                        : (idx === activeIndex ? 'bg-gray-50 text-gray-900' : 'hover:bg-gray-50 text-gray-700')
-                    }`}
-                  >
-                    {p.nome_chamado ? p.nome_chamado : p.nome_completo}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="md:col-span-2">
-            {selectedUsers.length > 0 ? (
-              <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <p className="text-sm text-gray-700">
-                    Configurando acesso para: <span className="font-semibold">{selectedUsers.length} publicador(es)</span>
-                  </p>
-                  <div className="text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-1 rounded-full">
-                    {accessCount.pages} telas · {accessCount.actions} funções
+            <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
+              <section className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <h2 className="mb-3 font-semibold text-gray-900">1. Selecione os publicadores</h2>
+                <fieldset disabled={isSaving} className="space-y-3">
+                  <label className="block text-sm text-gray-700">Buscar por nome<input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Digite o nome..." className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-2 text-gray-900" /></label>
+                  <label className="block text-sm text-gray-700">Privilégio<select value={privilegeFilter} onChange={e => setPrivilegeFilter(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-2 text-gray-900"><option value="">Todos os privilégios</option><option value="none">Sem privilégios</option>{privilegeOptions.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
+                  <label className="block text-sm text-gray-700">Designação especial<select value={assignmentFilter} onChange={e => setAssignmentFilter(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-2 text-gray-900"><option value="">Todas as designações</option>{assignmentOptions.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
+                  <p className="text-xs text-gray-500">Os filtros combinados mostram quem atende aos dois critérios.</p>
+                  <div className="flex flex-wrap gap-3 text-xs"><button type="button" onClick={selectFiltered} disabled={!filteredPublicadores.length} className="text-purple-700 hover:underline">Selecionar resultados ({filteredPublicadores.length})</button><button type="button" onClick={handleClearSelection} className="text-gray-600 hover:underline">Limpar seleção</button><button type="button" onClick={() => { setSearchTerm(''); setPrivilegeFilter(''); setAssignmentFilter(''); }} className="text-gray-600 hover:underline">Limpar filtros</button></div>
+                  <div className="max-h-[55vh] overflow-y-auto rounded-lg border border-gray-200 bg-white">
+                    {!filteredPublicadores.length && <p className="p-4 text-sm text-gray-500">Nenhum publicador encontrado.</p>}
+                    {filteredPublicadores.map(p => <label key={p.id} className={`flex cursor-pointer items-start gap-3 border-b border-gray-100 p-3 last:border-0 ${selectedIds.includes(String(p.id)) ? 'bg-purple-50' : 'hover:bg-gray-50'}`}>
+                      <input type="checkbox" checked={selectedIds.includes(String(p.id))} onChange={() => handleSelectUser(p.id)} className="mt-1 accent-purple-600" />
+                      <span className="min-w-0 text-sm text-gray-900"><span className="block break-words font-medium">{p.nome_completo || p.nome_chamado}</span><span className="block text-xs text-gray-500">{[...privilegeOptions.filter(item => p.privilegios?.includes(item.key)), ...assignmentOptions.filter(item => p.designacoes?.includes(item.key))].map(item => item.label).join(' · ') || 'Publicador'}{superAdmins[String(p.id)] ? ' · Super admin' : ''}</span></span>
+                    </label>)}
                   </div>
+                </fieldset>
+              </section>
+              <section className="min-w-0 space-y-4">
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold text-gray-900">2. Defina os acessos · {selectedIds.length} selecionado(s)</h2><span className="text-xs text-purple-700">{accessCount.pages} telas · {accessCount.actions} funções</span></div>
+                  <div className="mt-3 flex max-h-36 flex-wrap gap-2 overflow-y-auto">{selectedUsers.map(p => <button disabled={isSaving} type="button" key={p.id} onClick={() => handleSelectUser(p.id)} aria-label={`Remover ${p.nome_completo} da seleção`} className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700">{p.nome_chamado || p.nome_completo} ×</button>)}</div>
+                  {!selectedIds.length && <p className="mt-3 text-sm text-gray-500">Selecione pessoas individualmente ou use os filtros e &quot;Selecionar resultados&quot;.</p>}
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {selectedUsers.map(p => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setSelectedIds(prev => prev.filter(id => id !== String(p.id)))}
-                      className="px-2 py-1 text-xs rounded-full bg-white border border-gray-200 text-gray-700 hover:bg-gray-100"
-                      title="Remover"
-                    >
-                      {p.nome_chamado ? p.nome_chamado : p.nome_completo} ×
-                    </button>
-                  ))}
+                <fieldset disabled={isSaving || !selectedIds.length} className="space-y-4 disabled:opacity-60">
+                  <label className="block text-sm font-medium text-gray-700">Como aplicar<select value={mode} onChange={e => changeMode(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900"><option value="add">Adicionar as permissões marcadas</option><option value="remove">Remover as permissões marcadas</option><option value="replace">Substituir todas as permissões</option></select></label>
+                  <p className="text-sm text-gray-500">{mode === 'add' ? 'Mantém os acessos existentes e libera os itens marcados.' : mode === 'remove' ? 'Retira somente os itens marcados e mantém os demais acessos.' : 'Cada selecionado ficará apenas com os itens marcados. Os acessos desmarcados serão removidos.'}</p>
+                  {selectedIds.length === 1 ? <label className="flex items-start gap-3 rounded-lg border border-purple-200 bg-purple-50 p-4 text-sm text-purple-900"><input type="checkbox" checked={superAdmin} onChange={e => setSuperAdmin(e.target.checked)} className="mt-1 accent-purple-600" /><span><strong>Super admin</strong><br />Acesso completo, incluindo gestão de permissões.</span></label> : <p className="text-xs text-gray-500">O perfil super admin é alterado individualmente. A aplicação em lote preserva esse perfil.</p>}
+                  <div className="flex flex-wrap justify-end gap-4 text-sm"><button type="button" onClick={handleSelectAll} className="text-purple-700 hover:underline">Marcar todas as permissões</button><button type="button" onClick={handleClearAll} className="text-gray-600 hover:underline">Desmarcar todas</button></div>
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    {[['pages', 'Telas', PAGE_PERMISSIONS], ['actions', 'Funções', ACTION_PERMISSIONS]].map(([group, title, items]) => <details key={group} open className="min-w-0 rounded-xl border border-gray-200 bg-white p-4"><summary className="cursor-pointer font-semibold text-gray-900">{title}</summary><div className="mt-3 space-y-1">{items.map(item => <label key={item.key} className="flex cursor-pointer items-start gap-3 rounded-lg p-2 text-sm text-gray-700 hover:bg-gray-50"><input type="checkbox" className="mt-1 accent-purple-600" checked={!!formPerms[group]?.[item.key]} onChange={() => handleToggle(group, item.key)} /><span>{item.label}</span></label>)}</div></details>)}
+                  </div>
+                </fieldset>
+                <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <p className="text-sm text-gray-600">Aplicar para <strong>{selectedIds.length}</strong> publicador(es)</p>
+                  <Button onClick={handleSave} disabled={isSaving || !selectedIds.length} className="gap-2 bg-purple-600 hover:bg-purple-700">{isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{isSaving ? 'Aplicando...' : 'Aplicar acessos'}</Button>
                 </div>
-              </div>
-            ) : (
-              <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-                <p className="text-sm text-gray-500">Selecione um publicador para editar as permissões.</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {selectedIds.length > 0 && (
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Telas</h3>
-                <div className="flex items-center gap-2">
-                  <button onClick={handleSelectAll} className="text-xs text-purple-700 hover:underline">Marcar tudo</button>
-                  <span className="text-gray-300">|</span>
-                  <button onClick={handleClearAll} className="text-xs text-gray-500 hover:underline">Limpar</button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {PAGE_PERMISSIONS.map(item => (
-                  <label key={item.key} className="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                      checked={!!formPerms.pages?.[item.key]}
-                      onChange={() => handleToggle('pages', item.key)}
-                    />
-                    {item.label}
-                  </label>
-                ))}
-              </div>
+              </section>
             </div>
-
-            <div>
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-2">Funções</h3>
-              <div className="space-y-2">
-                {ACTION_PERMISSIONS.map(item => (
-                  <label key={item.key} className="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                      checked={!!formPerms.actions?.[item.key]}
-                      onChange={() => handleToggle('actions', item.key)}
-                    />
-                    {item.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {selectedIds.length > 0 && (
-          <div className="mt-6 flex justify-end">
-            <Button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
-            >
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Salvar Permissões
-            </Button>
-          </div>
-        )}
           </TabsContent>
 
           <TabsContent value="logs">
@@ -530,4 +426,3 @@ export default function GestaoAcessosPage() {
     </DashboardLayout>
   );
 }
-

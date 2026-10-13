@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
@@ -29,6 +30,8 @@ async function ensureTable(client) {
 }
 
 export async function GET(request) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const { searchParams } = new URL(request.url);
@@ -76,6 +79,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const userId = getUserIdFromRequest(request);
@@ -154,6 +159,8 @@ export async function POST(request) {
 }
 
 export async function DELETE(request) {
+  const denied = await authorizeRequest(request, 'DELETE');
+  if (denied) return denied;
   const client = await pool.connect();
   try {
     const userId = getUserIdFromRequest(request);

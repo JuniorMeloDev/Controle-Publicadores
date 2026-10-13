@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
@@ -35,6 +36,8 @@ async function ensureTables(client) {
 }
 
 export async function GET(request) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
   const { searchParams } = new URL(request.url);
   const year = searchParams.get('year') || new Date().getFullYear();
 
@@ -62,6 +65,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
     const client = await pool.connect();
     try {
         const userId = getUserIdFromRequest(request);

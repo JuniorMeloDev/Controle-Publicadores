@@ -1,3 +1,4 @@
+import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
@@ -11,6 +12,8 @@ export const dynamic = 'force-dynamic';
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 
 export async function GET(request) {
+  const denied = await authorizeRequest(request, 'GET');
+  if (denied) return denied;
     const url = new URL(request.url);
     const ids = (url.searchParams.get('reuniao_ids') || url.searchParams.get('reuniao_id') || '')
         .split(',').filter(Boolean).map(Number);
@@ -46,6 +49,8 @@ const legacyColumns = {
 };
 
 export async function POST(request) {
+  const denied = await authorizeRequest(request, 'POST');
+  if (denied) return denied;
     const body = await request.json();
     // Preserve support for the single-meeting form used elsewhere.
     const meetings = body.reunioes || [{ reuniao_id: body.reuniao_id, assignments: body.assignments }];

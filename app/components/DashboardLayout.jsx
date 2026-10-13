@@ -15,11 +15,15 @@ import { GlobalSearch } from '@/app/components/GlobalSearch';
 import ThemeToggle from '@/app/components/ThemeToggle';
 import { NotificationBell } from '@/app/components/NotificationBell';
 import { PermissionsProvider } from '@/app/components/PermissionsContext';
+import { useUserSession } from '@/app/components/UserSessionProvider';
 import { getPageKeyForPath, isAllowed } from '@/app/lib/access-control';
 
 // Definição dos menus do sistema
 const navigation = [
   { name: "Visão Geral", href: "/admin/dashboard", icon: Home },
+  { name: 'Meus Dados', href: '/admin/meus-dados', icon: User },
+  { name: 'Minhas Designações', href: '/admin/minhas-designacoes', icon: Calendar },
+  { name: 'Meu S-21', href: '/admin/meu-s21', icon: BarChart3 },
   { name: "Publicadores", href: "/admin/gerenciar", icon: Users },
   { name: "Designações", href: "/admin/designacoes", icon: Calendar },
   { name: "Reuniões", href: "/admin/reunioes", icon: Clock },
@@ -76,35 +80,17 @@ export function DashboardLayout({ children, contentClassName = '' }) {
   const [msgSenha, setMsgSenha] = useState({ text: '', isError: false });
 
   // Dados do Usuário
-  const [usuario, setUsuario] = useState({
+  const { user: sessionUser, isLoading: isPermsLoading } = useUserSession();
+  const usuario = sessionUser || {
     id: null,
     nome_completo: '',
     nome_chamado: '',
     isAnciao: false,
     isServo: false
-  });
-  const [permissions, setPermissions] = useState(null);
-  const [isPermsLoading, setIsPermsLoading] = useState(true);
+  };
+  const permissions = sessionUser?.permissions || null;
 
   const nomeCongregacao = process.env.NEXT_PUBLIC_NOME_CONGREGACAO || 'Minha Congregação';
-
-  useEffect(() => {
-    const fetchUsuario = async () => {
-      try {
-        const res = await fetch('/api/usuario-atual');
-        if (res.ok) {
-          const data = await res.json();
-          setUsuario(data);
-          setPermissions(data.permissions || null);
-        }
-      } catch (error) {
-        console.error("Erro ao carregar usuário", error);
-      } finally {
-        setIsPermsLoading(false);
-      }
-    };
-    fetchUsuario();
-  }, []);
 
   // Fecha o menu ao clicar fora
   useEffect(() => {
@@ -124,6 +110,7 @@ export function DashboardLayout({ children, contentClassName = '' }) {
     : (usuario.nome_completo ? usuario.nome_completo.split(' ')[0] : 'Usuário');
 
   const getCargoExibicao = () => {
+    if (usuario.isSuperAdmin) return 'Super admin';
     if (usuario.isAnciao) return 'Ancião';
     if (usuario.isServo) return 'Servo Ministerial';
     return 'Publicador';
@@ -135,17 +122,19 @@ export function DashboardLayout({ children, contentClassName = '' }) {
   };
 
   const pageKey = getPageKeyForPath(pathname);
-  const canAccessPage = pathname === '/admin/configuracoes/preferencias' || !pageKey || isAllowed(permissions, pageKey, 'pages');
+  const personalPaths = ['/admin/dashboard', '/admin/meus-dados', '/admin/minhas-designacoes', '/admin/meu-s21', '/admin/configuracoes/preferencias'];
+  const canAccessPage = personalPaths.includes(pathname) || (pathname === '/admin/gestao-acessos' ? usuario.isSuperAdmin : Boolean(pageKey && isAllowed(permissions, pageKey, 'pages')));
 
   const filteredNavigation = isPermsLoading
     ? []
     : (permissions
-        ? navigation.filter(item => isAllowed(permissions, getPageKeyForPath(item.href), 'pages'))
-        : navigation);
+        ? navigation.filter(item => personalPaths.includes(item.href) || isAllowed(permissions, getPageKeyForPath(item.href), 'pages'))
+        : []);
 
   const handleLogout = async () => {
     try {
         await fetch('/api/logout', { method: 'POST' });
+        window.dispatchEvent(new Event('session:logout'));
         router.push('/');
     } catch (error) {
         console.error("Erro ao sair", error);
@@ -349,7 +338,7 @@ export function DashboardLayout({ children, contentClassName = '' }) {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">
-            <GlobalSearch />
+            {isAllowed(permissions, 'publicadores') && <GlobalSearch />}
 
             <NotificationBell userId={usuario.id} permissions={permissions} />
             <ThemeToggle />
@@ -386,7 +375,7 @@ export function DashboardLayout({ children, contentClassName = '' }) {
                     <div className="p-1">
                       {/* Link para Meus Dados usando a URL correta */}
                       <Link
-                        href={`/admin/gerenciar?id=${usuario.id}`}
+                        href="/admin/meus-dados"
                         onClick={() => setIsUserMenuOpen(false)}
                         className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 rounded-md transition-colors"
                       >
@@ -398,7 +387,7 @@ export function DashboardLayout({ children, contentClassName = '' }) {
                         className="flex min-h-11 items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 rounded-md transition-colors">
                         <Settings className="w-4 h-4" />Minhas configurações
                       </Link>
-                      {usuario.isAnciao && (
+                      {usuario.isSuperAdmin && (
                         <Link
                           href="/admin/gestao-acessos"
                           onClick={() => setIsUserMenuOpen(false)}
@@ -441,8 +430,8 @@ export function DashboardLayout({ children, contentClassName = '' }) {
         </header>
 
         <main className={`flex-1 overflow-y-auto bg-gray-50 p-2 md:p-2 print:p-0 print:overflow-visible print:bg-white ${contentClassName}`}>
-            <PermissionsProvider permissions={permissions} isLoading={isPermsLoading}>
-              {!isPermsLoading && permissions && !canAccessPage ? (
+            <PermissionsProvider permissions={permissions} isLoading={isPermsLoading} user={usuario}>
+              {isPermsLoading ? <p className="p-6 text-gray-500">Verificando acesso...</p> : !permissions || !canAccessPage ? (
                 <div className="max-w-xl mx-auto mt-10 bg-white border border-gray-200 rounded-xl p-6 text-center shadow-sm">
                   <h2 className="text-lg font-bold text-gray-900">Acesso restrito</h2>
                   <p className="text-sm text-gray-600 mt-2">
