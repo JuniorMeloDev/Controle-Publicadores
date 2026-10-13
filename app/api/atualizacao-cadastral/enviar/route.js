@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { getUserIdFromRequest } from '@/app/lib/server-access';
 import { personalData, validatePersonalData, planChanges } from '@/app/lib/cadastro-update';
-import { cadastroPool, ensureCadastroTables, limitCadastroAttempts, tokenHash, applyCadastroField } from '@/app/lib/cadastro-update-server';
+import { cadastroPool, ensureCadastroTables, limitCadastroAttempts, tokenHash } from '@/app/lib/cadastro-update-server';
 export const dynamic = 'force-dynamic';
 export async function POST(request) {
   const userId = getUserIdFromRequest(request);
@@ -28,14 +28,12 @@ export async function POST(request) {
     const changes = planChanges(personalData(publisher.rows[0]), incoming, snapshot);
     const envioId = randomUUID();
     for (const change of [...changes.automatic, ...changes.pending]) {
-      const automatic = !change.old;
       await client.query(`INSERT INTO cadastro_alteracoes (envio_id, publicador_id, campo, valor_antigo, valor_novo, status)
-        VALUES ($1, $2, $3, $4, $5, $6)`, [envioId, id, change.field, change.old || null, change.value, automatic ? 'automatico' : 'pendente']);
-      if (automatic) await applyCadastroField(client, id, change.field, change.old, change.value);
+        VALUES ($1, $2, $3, $4, $5, $6)`, [envioId, id, change.field, change.old || null, change.value, 'pendente']);
     }
     await client.query('UPDATE cadastro_sessoes SET used_at = NOW() WHERE token_hash = $1', [tokenHash(body.token)]);
     await client.query('COMMIT');
-    return NextResponse.json({ automaticos: changes.automatic.length, pendentes: changes.pending.length });
+    return NextResponse.json({ automaticos: 0, pendentes: changes.automatic.length + changes.pending.length });
   } catch (error) {
     await client.query('ROLLBACK'); console.error('Envio cadastral:', error);
     return NextResponse.json({ message: 'Não foi possível enviar. Nenhuma alteração deste envio foi aplicada. Tente novamente.' }, { status: 500 });

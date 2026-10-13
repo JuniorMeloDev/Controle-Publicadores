@@ -1,5 +1,7 @@
 'use client';
 
+import { StatusToast } from '@/app/components/ui/status-toast';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { Calendar, Loader2 } from 'lucide-react';
@@ -66,7 +68,7 @@ export function MeetingGeneratorDialog({ year, month, onCreated }) {
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={importPrograms} disabled={busy} onChange={e => setImportPrograms(e.target.checked)} />Buscar automaticamente a programação de Vida e Ministério no jw.org</label>
                 {progress && <p role="status" className="text-sm text-purple-700">{progress}</p>}
                 {error && <p role="alert" className="bg-red-50 text-red-700 p-3 rounded-md">{error}</p>}
-                {result && <p role="status" className="bg-green-50 text-green-700 p-3 rounded-md">{result}</p>}
+                <StatusToast message={result} type="success" onClose={() => setResult('')} />
                 {pendingDetails.map(detail => <p key={detail} className="text-sm text-amber-800">{detail}</p>)}
                 {sessionRequired && <Link href="/" prefetch={false} className="text-purple-700 underline font-medium">Entrar novamente</Link>}
                 {preview && <div className="space-y-3">

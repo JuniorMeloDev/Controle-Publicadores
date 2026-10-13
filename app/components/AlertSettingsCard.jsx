@@ -1,5 +1,7 @@
 'use client';
 
+import { StatusToast } from '@/app/components/ui/status-toast';
+
 import { useEffect, useState } from 'react';
 import { Bell, Save, Loader2, Mail } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
@@ -70,7 +72,7 @@ export function AlertSettingsCard() {
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <Button type="submit" className="h-10 w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white" disabled={!canEdit || saving}>{saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}Salvar alertas</Button>
-                    {message && <p role="status" className="text-sm text-green-700">{message}</p>}
+                    <StatusToast message={message} type="success" onClose={() => setMessage('')} />
                 </div>
             </form>}
         </CardContent>

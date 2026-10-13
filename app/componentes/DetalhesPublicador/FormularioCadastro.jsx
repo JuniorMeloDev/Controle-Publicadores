@@ -2,6 +2,8 @@
 
 'use client';
 
+import { StatusToast } from '@/app/components/ui/status-toast';
+
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { IMaskInput } from 'react-imask';
@@ -121,7 +123,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
       if (response.ok) {
         setMessage('Publicador criado com sucesso!');
         setIsError(false);
-        setTimeout(() => onSaveSuccess(), 1500);
+        setTimeout(() => onSaveSuccess(), 3000);
       } else {
         setMessage(data.message || 'Ocorreu um erro.');
         setIsError(true);
@@ -182,14 +184,7 @@ export default function FormularioCadastro({ onSaveSuccess, onClose }) {
           )}
         </div>
 
-        {message && (
-          <div className={`px-4 py-2 text-xs ${isError 
-            ? 'bg-red-50 text-red-700 border-t border-red-200'
-            : 'bg-green-50 text-green-700 border-t border-green-200'}`
-          }>
-            {message}
-          </div>
-        )}
+        <StatusToast message={message} type={isError ? 'error' : 'success'} onClose={() => setMessage('')} />
       </div>
 
       {/* CONTEÚDO COM SCROLL */}

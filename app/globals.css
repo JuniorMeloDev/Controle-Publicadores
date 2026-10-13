@@ -106,6 +106,20 @@
 /* --- CONFIGURAÇÃO DE IMPRESSÃO OTIMIZADA --- */
 
 /* Esconde o container de impressão na tela normal */
+@media screen {
+  .dark .s21-dark-screen .bg-white { background-color: #222228; }
+  .dark .s21-dark-screen .border-black { border-color: #52525b; }
+  .dark .s21-dark-screen .bg-black {
+    background-color: #c084fc;
+    border-color: #c084fc;
+  }
+  .dark .s21-dark-screen .bg-blue-50 { background-color: #292438; }
+  .dark .s21-dark-screen [class~="bg-blue-50/80"] { background-color: #30283f; }
+  .dark .s21-dark-screen [class~="bg-gray-200/60"] { background-color: #27272f; }
+  .dark .s21-dark-screen :is(.text-gray-600, .text-gray-500) { color: #c4c4ce; }
+  .dark .s21-dark-screen :is(.border-gray-300, .border-gray-400) { border-color: #71717a; }
+}
+
 .printable-content {
   display: none;
 }

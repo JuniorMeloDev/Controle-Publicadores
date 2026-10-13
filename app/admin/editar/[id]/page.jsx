@@ -1,5 +1,7 @@
 'use client';
 
+import { StatusToast } from '@/app/components/ui/status-toast';
+
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation'; 
@@ -457,7 +459,7 @@ export default function EditarPublicadorPage() {
       if (response.ok) {
         setMessage('Publicador alterado com sucesso');
         setIsError(false);
-        setTimeout(() => { router.push('/admin/gerenciar'); }, 2000);
+        setTimeout(() => { router.push('/admin/gerenciar'); }, 3000);
       } else {
         setMessage(data.message || 'Ocorreu um erro.');
         setIsError(true);
@@ -500,14 +502,7 @@ export default function EditarPublicadorPage() {
           </Link>
         </div>
         
-        {message && (
-          <div className={`p-3 rounded-md mb-6 text-sm ${isError 
-            ? 'bg-red-900 bg-opacity-30 text-red-300 border border-red-800' 
-            : 'bg-green-900 bg-opacity-30 text-green-300 border border-green-800'}`
-          }>
-            {message}
-          </div>
-        )}
+        <StatusToast message={message} type={isError ? 'error' : 'success'} onClose={() => setMessage('')} />
 
         <div className="border-b border-neutral-700">
           <nav className="-mb-px flex space-x-6" aria-label="Abas">

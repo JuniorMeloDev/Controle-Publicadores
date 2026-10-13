@@ -2,6 +2,8 @@
 
 'use client';
 
+import { StatusToast } from '@/app/components/ui/status-toast';
+
 import { useState, useMemo } from 'react';
 import { Loader2, Zap, Search, X } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
@@ -82,7 +84,7 @@ export default function TrocaGrupoSheet({ publicadores, gruposList, onTransferSu
         setSearchTerm('');
         setTimeout(() => {
           onTransferSuccess(selectedPublicadorIds.length); 
-        }, 1000);
+        }, 3000);
       } else {
         setMessage({ text: data.message || 'Erro ao realizar a transferência.', isError: true });
       }
@@ -97,14 +99,7 @@ export default function TrocaGrupoSheet({ publicadores, gruposList, onTransferSu
     <div className="p-6 flex flex-col h-[calc(100%-80px)] overflow-hidden">
       
       {/* Mensagens */}
-      {message.text && (
-        <div className={`p-3 rounded-md mb-6 text-sm ${message.isError 
-          ? 'bg-red-50 text-red-700 border border-red-200' 
-          : 'bg-green-50 text-green-700 border border-green-200'}`
-        }>
-          {message.text}
-        </div>
-      )}
+      <StatusToast message={message.text} type={message.isError ? 'error' : 'success'} onClose={() => setMessage({ text: '', isError: false })} />
 
       {/* DETALHES DA SELEÇÃO */}
       <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6 shrink-0">

@@ -34,6 +34,7 @@ export function canAccessRoute(access, pathname, method = 'GET') {
   if (!access) return false;
   const { permissions, isSuperAdmin } = access;
   if (pathname === '/admin/gestao-acessos' || pathname === '/api/admin/gestao-acessos') return isSuperAdmin;
+  if (pathname === '/admin/gerenciar/atualizacoes' || pathname === '/api/admin/atualizacoes-cadastrais') return isSuperAdmin;
   if (personalPages.has(pathname) || personalApis.has(pathname)) return true;
   const canViewS21 = isAllowed(permissions, 's21_visualizar', 'actions');
   const canExportS21 = canViewS21 && isAllowed(permissions, 's21_exportar', 'actions');

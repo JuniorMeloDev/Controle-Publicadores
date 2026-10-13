@@ -1,6 +1,8 @@
 // app/page.jsx
 
-'use client'; 
+'use client';
+
+import { StatusToast } from '@/app/components/ui/status-toast'; 
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation'; 
@@ -74,7 +76,7 @@ export default function LoginPage() {
         )}
 
         {recovering && <p className="mb-6 text-sm text-neutral-300">Informe seu e-mail para receber um link e definir uma nova senha.</p>}
-        {message && <p role="status" className="mb-4 rounded-md border border-green-800 bg-green-950 p-3 text-sm text-green-300">{message}</p>}
+        <StatusToast message={message} type="success" onClose={() => setMessage('')} />
         <form onSubmit={handleSubmit} className="space-y-6">
           
           <div>

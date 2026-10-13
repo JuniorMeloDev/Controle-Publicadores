@@ -1,5 +1,7 @@
 'use client';
 
+import { StatusToast } from '@/app/components/ui/status-toast';
+
 import { useEffect, useState } from 'react';
 import { Mail, Loader2, Save } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/app/components/ui/card';
@@ -47,7 +49,7 @@ export function PersonalAlertSettingsCard() {
                 <p className="text-xs text-gray-500">Essa opção não altera as notificações do sininho nem o recebimento das outras pessoas.</p>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <Button type="submit" disabled={saving} className="h-10 w-full bg-purple-600 text-white hover:bg-purple-700 sm:w-auto">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Salvar minha preferência</Button>
-                    {message && <p role="status" className="text-sm text-green-700">{message}</p>}
+                    <StatusToast message={message} type="success" onClose={() => setMessage('')} />
                 </div>
             </form>}
         </CardContent>

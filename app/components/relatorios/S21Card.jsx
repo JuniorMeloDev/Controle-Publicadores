@@ -89,13 +89,13 @@ const S21Card = ({ publisherData, serviceYear, isEditing = false, onReportChange
                     <div className="flex-1">
                         <div className="font-bold text-xs mb-1 uppercase">NOME:</div>
                         <div className="border-b border-black text-sm pb-0.5 font-bold uppercase truncate h-6">
-                            {info?.nome}
+                            {info?.nome || info?.nome_completo}
                         </div>
                     </div>
                     <div className="w-1/3">
                         <div className="font-bold text-xs mb-1 uppercase">DATA DE NASCIMENTO:</div>
                         <div className="border-b border-black text-sm pb-0.5 font-bold h-6">
-                            {formatDate(info?.nascimento)}
+                            {formatDate(info?.nascimento || info?.data_nascimento)}
                         </div>
                     </div>
                 </div>
@@ -104,7 +104,7 @@ const S21Card = ({ publisherData, serviceYear, isEditing = false, onReportChange
                     <div className="w-1/2">
                         <div className="font-bold text-xs mb-1 uppercase">DATA DE BATISMO:</div>
                         <div className="border-b border-black text-sm pb-0.5 font-bold h-6">
-                            {formatDate(info?.batismo)}
+                            {formatDate(info?.batismo || info?.data_batismo)}
                         </div>
                     </div>
                     <div className="w-1/2 grid grid-cols-2 gap-y-1 text-xs font-bold">

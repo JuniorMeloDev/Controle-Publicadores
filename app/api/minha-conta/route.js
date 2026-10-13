@@ -28,7 +28,7 @@ export async function GET(req) {
     const info = await getOwnData(client, userId);
     const reports = await client.query(`SELECT mes, ano_servico, participou_ministerio, pioneiro_auxiliar,
       estudos_biblicos, horas, observacoes FROM relatorios_mensais WHERE publicador_id = $1 ORDER BY ano_servico DESC`, [userId]);
-    const assignments = await getPublisherAssignments(client, { publisherId: userId, futureOnly: true });
+    const assignments = await getPublisherAssignments(client, { publisherId: userId, futureOnly: false });
     const pending = await client.query("SELECT COUNT(*)::int AS total FROM cadastro_alteracoes WHERE publicador_id = $1 AND status = 'pendente'", [userId]);
     return reply({ info, reports: reports.rows, assignments, pendingChanges: pending.rows[0].total });
   } catch { return reply({ message: 'Não foi possível carregar seus dados.' }, 500); }

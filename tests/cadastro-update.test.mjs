@@ -58,7 +58,7 @@ test('lookup accepts partial names with accents, returns only personal data and 
   assert.equal(ambiguous.status, 404); assert.equal(ambiguous.body.dados, undefined);
   assert.equal((await route.POST(request({ nome: ' ', nascimento: '2000-01-01' }))).status, 400);
 });
-test('submission binds to stored session, applies missing data, queues corrections, and consumes token', async () => {
+test('submission queues all changes without applying empty fields and consumes token', async () => {
   const row = { id: 99, nome_completo: 'Fulano', data_nascimento: '2000-01-01' };
   let used = false; const inserts = []; const applied = [];
   const client = fixtureClient(async (sql, params) => {
@@ -75,9 +75,9 @@ test('submission binds to stored session, applies missing data, queues correctio
   });
   const body = { token: 'a'.repeat(64), publicador_id: 100, dados: { ...personalData(row), email: 'test@example.com', data_nascimento: '2000-02-01' } };
   const response = await route.POST(request(body));
-  assert.equal(response.status, 200); assert.equal(response.body.automaticos, 1); assert.equal(response.body.pendentes, 1);
-  assert.deepEqual(applied, [[99, 'email', '', 'test@example.com']]);
-  assert.deepEqual(inserts.map(values => values[5]), ['automatico', 'pendente']);
+  assert.equal(response.status, 200); assert.equal(response.body.automaticos, 0); assert.equal(response.body.pendentes, 2);
+  assert.deepEqual(applied, []);
+  assert.deepEqual(inserts.map(values => values[5]), ['pendente', 'pendente']);
   assert.equal((await route.POST(request(body))).status, 401);
 });
 test('reviews require permissions, apply approved changes, and reject stale proposals', async () => {
@@ -90,7 +90,7 @@ test('reviews require permissions, apply approved changes, and reject stale prop
   });
   const route = loadRoute('../../app/api/admin/atualizacoes-cadastrais/route.js', {
     personalData, ...contactsHelpers, cadastroPool: { connect: async () => client }, ensureCadastroTables: noop,
-    getUserIdFromRequest: () => 7, getUserPermissions: async () => ({}), isAllowed: () => authorized,
+    getUserIdFromRequest: () => 7, getUserAccess: async () => ({ isSuperAdmin: authorized }),
     applyCadastroField: async (...args) => applied.push(args.slice(1)), registerAuditLog: noop,
   });
   assert.equal((await route.POST(request({ ids: [1], acao: 'aprovar' }))).status, 200);

@@ -1038,27 +1038,11 @@ export default function ConfiguracoesPage() {
                     onClose={() => setToast({ ...toast, message: '' })}
                 />
 
-                {/* Result Modal */}
-                <Dialog open={resultOpen} onOpenChange={setResultOpen}>
-                    <DialogContent className="w-[calc(100%_-_2rem)] max-h-[85dvh] overflow-y-auto rounded-xl bg-white">
-                        <DialogHeader>
-                            <DialogTitle className={resultData.success ? "text-green-600" : "text-red-600"}>
-                                {resultData.success ? 'Sucesso!' : 'Atenção'}
-                            </DialogTitle>
-                            <DialogDescription>
-                                {resultData.message}
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="py-2">
-                            <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
-                                {resultData.details.map((d, i) => <li key={i}>{d}</li>)}
-                            </ul>
-                        </div>
-                        <DialogFooter className="grid grid-cols-2 gap-2 sm:space-x-0 [&_button]:h-10 [&_button]:w-full">
-                            <Button onClick={() => setResultOpen(false)}>Fechar</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                {resultOpen && <StatusToast
+                    message={[resultData.message, ...resultData.details].filter(Boolean).join(' ')}
+                    type={resultData.success ? 'success' : 'error'}
+                    onClose={() => setResultOpen(false)} />}
+
 
             </div>
         </DashboardLayout>

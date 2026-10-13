@@ -1,4 +1,6 @@
 'use client';
+
+import { StatusToast } from '@/app/components/ui/status-toast';
 import { useState, useEffect, useMemo } from 'react';
 import { Loader2, Printer, Edit, Save, AlertCircle } from 'lucide-react';
 import RelatorioImprimivel from './RelatorioImprimivel';
@@ -127,15 +129,7 @@ export default function AtividadesTeocraticas({
     <div className="mt-6">
 
       {/* Mensagens */}
-      {message.text && (
-        <div className={`flex items-center gap-2 p-3 rounded-md mb-4 text-sm ${message.type === 'error'
-            ? 'bg-red-50 text-red-700 border border-red-200'
-            : 'bg-green-50 text-green-700 border border-green-200'
-          }`}>
-          <AlertCircle size={16} />
-          {message.text}
-        </div>
-      )}
+      <StatusToast message={message.text} type={message.type} onClose={() => setMessage({ text: '', type: '' })} />
 
       {/* SELETOR DE ANO */}
       <div className="mb-6 flex items-center gap-3">
@@ -185,7 +179,7 @@ export default function AtividadesTeocraticas({
               {/* Reutilizamos o componente de impressão para visualização na tela também.
                    Ele renderiza a tabela formatada.
                */}
-              <div className="min-w-[700px] p-4">
+              <div className="s21-dark-screen min-w-[700px] p-4">
                 <RelatorioImprimivel
                   publicador={publicador || { nome_completo: publicadorNome }}
                   relatorios={editableRelatorios}

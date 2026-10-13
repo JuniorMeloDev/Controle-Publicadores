@@ -3,14 +3,13 @@ import { emergencyContactsValue } from '@/app/lib/emergency-contacts';
 import { NextResponse } from 'next/server';
 import { cadastroPool, ensureCadastroTables, applyCadastroField } from '@/app/lib/cadastro-update-server';
 import { personalData } from '@/app/lib/cadastro-update';
-import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
-import { isAllowed } from '@/app/lib/access-control';
+import { getUserIdFromRequest, getUserAccess } from '@/app/lib/server-access';
 import { registerAuditLog } from '@/app/lib/audit-log';
 export const dynamic = 'force-dynamic';
 async function access(client, request) {
   const userId = getUserIdFromRequest(request);
-  const permissions = await getUserPermissions(client, userId);
-  return userId && isAllowed(permissions, 'publicadores') && isAllowed(permissions, 'publicadores_editar', 'actions') ? userId : null;
+  const role = await getUserAccess(client, userId);
+  return userId && role?.isSuperAdmin === true ? userId : null;
 }
 export async function GET(request) {
   const denied = await authorizeRequest(request, 'GET');
@@ -41,6 +40,11 @@ export async function POST(request) {
     if (!userId) return NextResponse.json({ message: 'Acesso negado.' }, { status: 403 });
     await ensureCadastroTables(client);
     await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(72904123)');
+    if (!await access(client, request)) {
+      await client.query('ROLLBACK');
+      return NextResponse.json({ message: 'Somente super admins podem validar alterações.' }, { status: 403 });
+    }
     // Lock publishers first: same order used by public submissions, avoiding races and deadlocks.
     const publishers = await client.query(`SELECT * FROM publicadores WHERE id IN
       (SELECT publicador_id FROM cadastro_alteracoes WHERE id = ANY($1::int[])) ORDER BY id FOR UPDATE`, [body.ids]);

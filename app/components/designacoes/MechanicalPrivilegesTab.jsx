@@ -1,5 +1,7 @@
 'use client';
 
+import { StatusToast } from '@/app/components/ui/status-toast';
+
 import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Calendar, ChevronRight, Loader2, Settings } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
@@ -108,7 +110,7 @@ export function MechanicalPrivilegesTab() {
                 </Button>
             </div>
             {!canEdit && <p className="text-sm text-gray-600 bg-gray-50 border rounded-lg p-3">Você pode consultar as designações, mas não tem permissão para editá-las.</p>}
-            {success && <p role="status" className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">{success}</p>}
+            <StatusToast message={success} type="success" onClose={() => setSuccess('')} />
             {error && <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center justify-between gap-3">
                 <span>{error}</span><Button variant="outline" size="sm" onClick={() => setReload(value => value + 1)}>Tentar novamente</Button>
             </div>}

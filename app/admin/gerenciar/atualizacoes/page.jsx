@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
+import { StatusToast } from '@/app/components/ui/status-toast';
 import Link from 'next/link';
 import { formatEmergencyContacts } from '@/app/lib/emergency-contacts';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
@@ -50,10 +51,10 @@ export default function AtualizacoesPage() {
       <div className="flex flex-wrap gap-2"><input aria-label="Link público de atualização" readOnly value={link} className="min-w-0 flex-1 rounded-lg border p-2 text-sm" />
       <button className="rounded-lg bg-purple-700 px-4 py-2 text-white" onClick={async () => { try { await navigator.clipboard.writeText(link); setMessage('Link copiado.'); } catch { setError('Selecione o link e copie manualmente.'); } }}>Copiar link</button>
       <a href="/atualizacao-cadastral" target="_blank" rel="noreferrer" className="rounded-lg border px-4 py-2">Abrir formulário</a></div>
-      <p className="text-sm text-gray-500">Novos dados em campos vazios entram automaticamente. Correções precisam da sua aprovação.</p>
+      <p className="text-sm text-gray-500">Todas as alterações aguardam aprovação de um super admin, incluindo o preenchimento de campos vazios.</p>
     </div>
     {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
-    {message && <p role="status" className="rounded-lg bg-green-50 p-3 text-green-800">{message}</p>}
+    <StatusToast message={message} type="success" onClose={() => setMessage('')} />
     <div className="flex flex-wrap items-center gap-4"><label className="flex items-center gap-2"><input type="checkbox" checked={history} onChange={e => setHistory(e.target.checked)} />Mostrar também preenchimentos e revisões anteriores</label><button disabled={busy || loading} onClick={load} className="rounded-lg border px-3 py-2">Atualizar lista</button></div>
     {loading ? <p>Carregando...</p> : !groups.length ? <p className="rounded-xl border bg-white p-6">{history ? 'Nenhuma atualização recebida.' : 'Nenhuma alteração pendente.'}</p> : groups.map(group => {
       const pending = group.rows.filter(row => row.status === 'pendente');

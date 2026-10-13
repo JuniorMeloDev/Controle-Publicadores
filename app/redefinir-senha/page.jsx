@@ -1,5 +1,7 @@
 'use client';
 
+import { StatusToast } from '@/app/components/ui/status-toast';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
@@ -42,7 +44,8 @@ export default function ResetPasswordPage() {
         <img src="/logo.png" alt="Congregação Praia dos Corais" width={96} height={96} className="mx-auto mb-5 object-contain" />
         <h1 className="mb-6 text-center text-3xl font-bold text-white">Redefinir senha</h1>
         {error && <p role="alert" className="mb-4 rounded-md border border-red-800 bg-red-950 p-3 text-sm text-red-300">{error}</p>}
-        {success ? <p role="status" className="text-sm text-green-300">{success}</p> : (
+        <StatusToast message={success} type="success" />
+        {!success && (
           <form onSubmit={submit} className="space-y-5">
             <p className="text-sm text-neutral-300">Use pelo menos 8 caracteres, incluindo letra maiúscula, minúscula, número e símbolo.</p>
             <div>

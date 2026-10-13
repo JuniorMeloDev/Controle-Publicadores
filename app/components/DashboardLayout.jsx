@@ -1,5 +1,7 @@
 'use client';
 
+import { StatusToast } from '@/app/components/ui/status-toast';
+
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
@@ -171,7 +173,7 @@ export function DashboardLayout({ children, contentClassName = '' }) {
           setNovaSenha('');
           setConfirmarSenha('');
           setMsgSenha({ text: '', isError: false });
-        }, 1500);
+        }, 3000);
       } else {
         setMsgSenha({ text: data.message || 'Erro ao alterar senha.', isError: true });
       }
@@ -200,11 +202,7 @@ export function DashboardLayout({ children, contentClassName = '' }) {
 
             <form onSubmit={handleAlterarSenha} className="p-6 space-y-4">
               <p className="text-sm text-gray-600">Use pelo menos 8 caracteres, incluindo letra maiúscula, minúscula, número e símbolo.</p>
-              {msgSenha.text && (
-                <div className={`p-3 rounded-md text-sm ${msgSenha.isError ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
-                  {msgSenha.text}
-                </div>
-              )}
+              <StatusToast message={msgSenha.text} type={msgSenha.isError ? 'error' : 'success'} onClose={() => setMsgSenha({ text: '', isError: false })} />
 
               <div>
                 <label htmlFor="portal-new-password" className="block text-sm font-medium text-gray-700 mb-1">Nova senha</label>

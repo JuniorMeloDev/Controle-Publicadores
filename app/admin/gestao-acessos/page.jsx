@@ -1,5 +1,7 @@
 ﻿'use client';
 
+import { StatusToast } from '@/app/components/ui/status-toast';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PAGE_PERMISSIONS, ACTION_PERMISSIONS, buildAllPermissions, normalizePermissions } from '@/app/lib/access-control';
 import { Button } from '@/app/components/ui/button';
@@ -247,11 +249,7 @@ function GestaoAcessosContent() {
           </div>
         </div>
 
-        {(error || success) && (
-          <div className={`mb-4 p-3 rounded-md text-sm ${error ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
-            {error}{error && success && <br />}{success}
-          </div>
-        )}
+        <StatusToast message={[error, success].filter(Boolean).join(' ')} type={error ? 'error' : 'success'} onClose={() => { setSuccess(''); setError(''); }} />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <p className="mb-5 text-sm text-gray-600">Todos têm acesso aos próprios dados, designações e S-21. Privilégios congregacionais não liberam funções administrativas automaticamente.</p>

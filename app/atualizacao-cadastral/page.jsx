@@ -82,7 +82,7 @@ export default function AtualizacaoCadastral() {
       {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 p-4 text-red-800">{error}</p>}
       {result ? <div className="mt-6 space-y-4" role="status">
         <h2 className="text-xl font-semibold">Dados enviados com sucesso!</h2>
-        <p>Campos preenchidos automaticamente: {result.automaticos}. Alterações aguardando validação do responsável: {result.pendentes}.</p>
+        <p>Alterações aguardando aprovação do super admin: {result.pendentes}.</p>
         {!result.automaticos && !result.pendentes && <p>Seus dados já estão atualizados. Nenhuma alteração foi necessária.</p>}
         <button onClick={reiniciar} className={buttonClass}>Voltar ao início</button>
       </div> : !dados ? <form onSubmit={buscar} className="mt-6 space-y-5">
@@ -93,7 +93,7 @@ export default function AtualizacaoCadastral() {
         <p className="text-sm text-gray-500">Se não encontrar seu cadastro ou a data registrada estiver incorreta, procure o responsável pelo cadastro.</p>
       </form> : <form onSubmit={enviar} className="mt-6 space-y-6">
         <div className="rounded-lg bg-purple-50 p-4"><h2 className="font-semibold">Verifique seus dados cadastrais.</h2><p className="mt-1">Insira as informações que faltam ou corrija os dados incorretos.</p></div>
-        <p className="text-sm text-gray-600">Campos vazios no cadastro serão preenchidos automaticamente. Correções de dados existentes serão enviadas para validação. Deixar um campo em branco não apaga o dado atual.</p>
+        <p className="text-sm text-gray-600">Todas as alterações serão enviadas para aprovação de um super admin. Deixar um campo em branco não apaga o dado atual.</p>
         <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2">
           {CADASTRO_FIELDS.filter(([, , type]) => type !== 'contacts').map(([key, label, type]) => <label key={key} className={`block space-y-2 ${key === 'nome_completo' || key === 'logradouro' ? 'sm:col-span-2' : ''}`}>
             <span className="text-sm font-medium">{label}</span>
