@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -8,9 +9,31 @@ import { Label } from '@/app/components/ui/label';
 import { Loader2, Printer, ArrowLeft, Search } from 'lucide-react';
 import Link from 'next/link';
 
+const subscribe = () => () => {};
+const formatReportDate = value => new Date(`${String(value).slice(0, 10)}T12:00:00Z`);
+const formatDate = value => formatReportDate(value).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+function CleaningSchedule({ items, period }) {
+    return <section className="cleaning-report">
+        <header className="cleaning-report-header"><h1>Programação de Limpeza</h1><p>Congregação {process.env.NEXT_PUBLIC_NOME_CONGREGACAO || 'Praia dos Corais'}</p></header>
+        <h2 className="cleaning-report-period">{period}</h2>
+        <table className="cleaning-report-table">
+            <colgroup><col style={{ width: '14%' }} /><col style={{ width: '50%' }} /><col style={{ width: '14%' }} /><col style={{ width: '22%' }} /></colgroup>
+            <thead><tr><th>Data</th><th>Tarefas</th><th>Grupo</th><th>Responsáveis</th></tr></thead>
+            <tbody>{items.map(item => <tr key={item.id}>
+                <td className="cleaning-date"><span>{formatReportDate(item.data).toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'America/Sao_Paulo' })}</span><strong>{formatDate(item.data)}</strong></td>
+                <td className="cleaning-tasks">{item.tarefas}</td>
+                <td className="cleaning-group">{item.grupo}</td>
+                <td className="cleaning-responsibles">{item.responsaveis?.trim() || '—'}</td>
+            </tr>)}{!items.length && <tr><td colSpan={4} className="cleaning-empty">Nenhuma programação encontrada para este período.</td></tr>}</tbody>
+        </table>
+    </section>;
+}
+
 export default function CleaningReportPage() {
     const [loading, setLoading] = useState(false);
     const [items, setItems] = useState([]);
+    const portalReady = useSyncExternalStore(subscribe, () => true, () => false);
 
     // Filters
     const getCurrentMonthFirstDay = () => {
@@ -36,7 +59,8 @@ export default function CleaningReportPage() {
             const res = await fetch(url);
             if (res.ok) {
                 const data = await res.json();
-                setItems(data);
+                // The calendar API includes meetings that do not have a cleaning assignment yet.
+                setItems(data.filter(item => item.id != null));
             }
         } catch (error) {
             console.error(error);
@@ -49,7 +73,9 @@ export default function CleaningReportPage() {
         window.print();
     };
 
-    const currentMonthName = new Date(startDate).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
+    const currentMonthName = endDate
+        ? `${startDate ? formatDate(startDate) : 'Início'} a ${formatDate(endDate)}`
+        : startDate ? formatReportDate(startDate).toLocaleString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' }).toUpperCase() : 'PERÍODO SELECIONADO';
 
     return (
         <DashboardLayout>
@@ -80,85 +106,61 @@ export default function CleaningReportPage() {
                             {loading ? <Loader2 className="animate-spin w-4 h-4" /> : <Search className="w-4 h-4" />}
                         </Button>
                         <div className="flex-1 text-right">
-                            <Button onClick={handlePrint} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+                            <Button onClick={handlePrint} disabled={loading || !items.length} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
                                 <Printer className="w-4 h-4" /> Imprimir
                             </Button>
                         </div>
                     </div>
                 </div>
 
-                {/* Print Area */}
-                <div id="print-area" className="bg-white print:p-0 min-h-[29.7cm] print:min-h-0 relative">
-
-                    {/* Header matching the image */}
-                    <div className="bg-[#6B9BD1] text-white p-8 text-center mb-8 print:mb-6 rounded-t-lg print:rounded-none">
-                        <div className="flex justify-center items-center gap-4 mb-2">
-                            {/* Icon placeholder if needed, or just text */}
-                            {/* <Brush className="w-10 h-10 text-white" /> */}
-                        </div>
-                        <h1 className="text-3xl font-bold uppercase tracking-wide mb-1">Programação de Limpeza</h1>
-                        <p className="text-lg font-light">Congregação {process.env.NEXT_PUBLIC_NOME_CONGREGACAO || 'Congregação'}</p>
-                    </div>
-
-                    <div className="px-8 pb-8 print:px-0 print:pb-0">
-                        <h2 className="text-xl font-bold text-blue-600 text-center mb-6 uppercase">{currentMonthName}</h2>
-
-                        <table className="w-full border-collapse border border-gray-400">
-                            <thead>
-                                <tr className="bg-white text-[#4472C4] uppercase text-sm font-bold text-center">
-                                    <th className="border border-black p-3 w-32">Data</th>
-                                    <th className="border border-black p-3">Tarefas</th>
-                                    <th className="border border-black p-3 w-40">Grupo Designado</th>
-                                    <th className="border border-black p-3 w-48">Responsáveis</th>
-                                </tr>
-                            </thead>
-                            <tbody className="text-sm text-black">
-                                {items.map((item) => (
-                                    <tr key={item.id} className="text-center">
-                                        <td className="border border-black p-3 font-bold align-middle">
-                                            <div className="capitalize">{new Date(item.data).toLocaleDateString('pt-BR', { weekday: 'long' })}</div>
-                                            <div>{new Date(item.data).toLocaleDateString('pt-BR')}</div>
-                                        </td>
-                                        <td className="border border-black p-3 text-left align-middle whitespace-pre-wrap leading-relaxed">
-                                            {item.tarefas}
-                                        </td>
-                                        <td className="border border-black p-3 font-bold align-middle uppercase">
-                                            {item.grupo}
-                                        </td>
-                                        <td className="border border-black p-3 align-middle">
-                                            {item.responsaveis}
-                                        </td>
-                                    </tr>
-                                ))}
-                                {items.length === 0 && !loading && (
-                                    <tr>
-                                        <td colSpan={4} className="border border-black p-8 text-center text-gray-400">
-                                            Nenhuma programação encontrada para este período.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <CleaningSchedule items={items} period={currentMonthName} />
+                {portalReady && createPortal(<div id="cleaning-print-root"><CleaningSchedule items={items} period={currentMonthName} /></div>, document.body)}
 
                 <style jsx global>{`
-                @media print {
-                    @page { margin: 1cm; size: A4; }
-                    body * { visibility: hidden; }
-                    #print-area, #print-area * { visibility: visible; }
-                    #print-area {
-                        position: absolute;
-                        left: 0;
-                        top: 0;
-                        width: 100%;
-                        margin: 0;
-                        padding: 0;
+                    #cleaning-print-root { display: none; }
+                    .cleaning-report { background: #fff; color: #172554; border: 1px solid #cbd5e1; border-radius: 10px; font-family: Arial, Helvetica, sans-serif; }
+                    .cleaning-report-header { padding: 22px 24px; text-align: center; background: #eff6ff; border-bottom: 2px solid #4472c4; border-radius: 10px 10px 0 0; }
+                    .cleaning-report-header h1 { margin: 0; font-size: 25px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #23477d; }
+                    .cleaning-report-header p { margin: 6px 0 0; font-size: 14px; color: #475569; }
+                    .cleaning-report-period { margin: 0; padding: 16px; font-size: 16px; font-weight: 700; text-align: center; color: #23477d; }
+                    .cleaning-report-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; color: #111827; }
+                    .cleaning-report-table th, .cleaning-report-table td { border: 1px solid #94a3b8; padding: 12px 10px; overflow-wrap: anywhere; }
+                    .cleaning-report-table th { background: #eff6ff; color: #23477d; text-align: center; font-size: 12px; text-transform: uppercase; }
+                    .cleaning-date, .cleaning-group { text-align: center; vertical-align: middle; }
+                    .cleaning-date span { display: block; margin-bottom: 4px; text-transform: capitalize; font-size: 12px; }
+                    .cleaning-date strong { display: block; }
+                    .cleaning-group { font-weight: 700; text-transform: uppercase; }
+                    .cleaning-tasks, .cleaning-responsibles { white-space: pre-line; text-align: left; vertical-align: top; line-height: 1.5; }
+                    .cleaning-responsibles { text-align: center; vertical-align: middle; }
+                    .cleaning-empty { padding: 30px !important; text-align: center; color: #64748b; }
+                    @media screen {
+                        .dark .cleaning-report { background: #18181b; color: #f4f4f5; border-color: #3f3f46; }
+                        .dark .cleaning-report-header { background: #172b46; border-bottom-color: #31577e; }
+                        .dark .cleaning-report-header h1, .dark .cleaning-report-period { color: #93c5fd; }
+                        .dark .cleaning-report-header p, .dark .cleaning-empty { color: #a1a1aa; }
+                        .dark .cleaning-report-table { color: #f4f4f5; }
+                        .dark .cleaning-report-table th { background: #172b46; color: #93c5fd; }
+                        .dark .cleaning-report-table th, .dark .cleaning-report-table td { border-color: #52525b; }
                     }
-                    /* Ensure background colors print */
-                    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-                }
-            `}</style>
+                    @media print {
+                        @page { size: A4 portrait; margin: 10mm; }
+                        html, body { background: #fff !important; color: #111827 !important; color-scheme: light !important; margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
+                        body > :not(#cleaning-print-root) { display: none !important; }
+                        #cleaning-print-root { display: block !important; position: static !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
+                        #cleaning-print-root, #cleaning-print-root * { visibility: visible !important; box-shadow: none !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        #cleaning-print-root .cleaning-report { width: 100%; border: 0; border-radius: 0; background: #fff !important; color: #111827 !important; }
+                        #cleaning-print-root .cleaning-report-header { padding: 5mm 4mm; border-radius: 0; background: #eff6ff !important; break-inside: avoid; break-after: avoid; }
+                        #cleaning-print-root .cleaning-report-header h1 { font-size: 18pt; }
+                        #cleaning-print-root .cleaning-report-header p { font-size: 10pt; }
+                        #cleaning-print-root .cleaning-report-period { padding: 4mm 0; font-size: 11pt; break-after: avoid; }
+                        #cleaning-print-root .cleaning-report-table { font-size: 10pt; }
+                        #cleaning-print-root .cleaning-report-table th { font-size: 9pt; background: #eff6ff !important; }
+                        #cleaning-print-root .cleaning-report-table th, #cleaning-print-root .cleaning-report-table td { padding: 3mm 2.5mm; border-color: #64748b; }
+                        #cleaning-print-root .cleaning-date span { font-size: 9pt; }
+                        #cleaning-print-root thead { display: table-header-group; }
+                        #cleaning-print-root tr { break-inside: avoid; page-break-inside: avoid; }
+                    }
+                `}</style>
             </div>
         </DashboardLayout>
     );

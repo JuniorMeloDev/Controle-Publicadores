@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
 import { useDesignationPeriod } from './DesignationPeriodContext';
+import { getCleaningResponsibles, changeCleaningGroup } from '@/app/lib/cleaning-responsibles';
 import { designationToolbarClass, designationActionClass, designationListHeaderClass, DesignationPeriodFilters } from './DesignationLayout';
 
 export function CleaningTab() {
@@ -24,6 +25,8 @@ export function CleaningTab() {
   const [pendingDelete, setPendingDelete] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [availableGroups, setAvailableGroups] = useState([]);
+  const [groupLeaders, setGroupLeaders] = useState([]);
+  const [groupsLoading, setGroupsLoading] = useState(true);
   
   // Filters
   const getCurrentMonthDates = () => {
@@ -52,13 +55,19 @@ export function CleaningTab() {
 
   const fetchGroups = async () => {
       try {
-          const res = await fetch('/api/get-grupos');
+          const res = await fetch('/api/admin/limpeza/grupos');
           if(res.ok) {
               const data = await res.json();
-              setAvailableGroups(data);
+              setGroupLeaders(data);
+              setAvailableGroups(data.map(item => item.nome_grupo));
+          } else {
+              setError('Não foi possível carregar os responsáveis dos grupos. Atualize a página para tentar novamente.');
           }
       } catch (e) {
           console.error("Erro ao buscar grupos", e);
+          setError('Não foi possível carregar os responsáveis dos grupos. Atualize a página para tentar novamente.');
+      } finally {
+          setGroupsLoading(false);
       }
   };
 
@@ -115,7 +124,7 @@ export function CleaningTab() {
   };
 
   const openNewModal = () => {
-      if (!canEdit) return;
+      if (!canEdit || groupsLoading) return;
       setEditId(null);
       setMeetingId(null);
       setDate('');
@@ -126,13 +135,13 @@ export function CleaningTab() {
   };
 
   const openEditModal = (item) => {
-      if (!canEdit) return;
+      if (!canEdit || groupsLoading) return;
       setEditId(item.id);
       setMeetingId(item.reuniao_id);
       setDate(new Date(item.data).toISOString().split('T')[0]);
       setTasks(item.tarefas || '');
       setGroup(item.grupo || '');
-      setResponsibles(item.responsaveis || '');
+      setResponsibles(item.responsaveis?.trim() ? item.responsaveis : defaultsForGroup(item.grupo));
       setIsModalOpen(true);
   };
 
@@ -156,6 +165,12 @@ export function CleaningTab() {
     await fetchItems();
   };
 
+  const defaultsForGroup = (name) => getCleaningResponsibles(groupLeaders.find(item => item.nome_grupo === name));
+  const handleGroupChange = (name) => {
+    setResponsibles(current => changeCleaningGroup(current, defaultsForGroup(group), defaultsForGroup(name)));
+    setGroup(name);
+  };
+
   return (
     <div className="w-full min-w-0 space-y-4 text-gray-900 font-medium">
       {error && <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-lg p-3">{error}</p>}
@@ -164,7 +179,7 @@ export function CleaningTab() {
           <h2 className="text-lg font-bold text-gray-900">Limpeza Semanal</h2>
           <p className="text-sm text-gray-500 mt-1">Organize os grupos e as tarefas de cada reunião.</p>
         </div>
-        <Button onClick={openNewModal} disabled={!canEdit} className={`${designationActionClass} bg-purple-600 hover:bg-purple-700 text-white`}>
+        <Button onClick={openNewModal} disabled={!canEdit || groupsLoading} className={`${designationActionClass} bg-purple-600 hover:bg-purple-700 text-white`}>
           <Plus className="w-4 h-4" /> Nova designação
         </Button>
       </div>
@@ -207,7 +222,7 @@ export function CleaningTab() {
               );
               return <div key={item.id || `reuniao-${item.reuniao_id}`}>
                 <div className="hidden md:flex items-center pr-4">
-                  <button type="button" onClick={() => openEditModal(item)} disabled={!canEdit || item.cancelado}
+                  <button type="button" onClick={() => openEditModal(item)} disabled={!canEdit || groupsLoading || item.cancelado}
                     aria-label={`Designar limpeza de ${dateLabel}`}
                     className="flex flex-1 min-w-0 items-center gap-4 px-4 py-3 text-left hover:bg-purple-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500 disabled:cursor-default">
                     <span className="flex items-center justify-center shrink-0 w-10 h-10 rounded-full bg-purple-100 text-purple-600 font-bold">{item.data.slice(8, 10)}</span>
@@ -237,7 +252,7 @@ export function CleaningTab() {
                     <p className="flex items-center gap-2 text-base"><Users className="w-4 h-4 shrink-0 text-gray-400" />{item.grupo || 'Grupo a definir'}</p>
                     {item.tarefas && <p className="text-sm text-gray-600 break-words">{item.tarefas}</p>}
                     {item.responsaveis && <p className="text-xs text-gray-500 break-words">Responsáveis: {item.responsaveis}</p>}
-                    {!item.cancelado && <Button disabled={!canEdit} onClick={() => openEditModal(item)} variant="outline" className="h-10 w-full text-purple-700">
+                    {!item.cancelado && <Button disabled={!canEdit || groupsLoading} onClick={() => openEditModal(item)} variant="outline" className="h-10 w-full text-purple-700">
                       {item.id ? 'Editar designação' : 'Designar limpeza'}
                     </Button>}
                   </CardContent>
@@ -267,7 +282,7 @@ export function CleaningTab() {
                   </div>
                    <div className="space-y-2">
                     <Label>Grupo Designado</Label>
-                    <Select value={group} onValueChange={setGroup} required>
+                    <Select value={group} onValueChange={handleGroupChange} required>
                         <SelectTrigger className="text-gray-900 font-medium">
                             <SelectValue placeholder="Selecione um grupo" />
                         </SelectTrigger>
@@ -292,13 +307,16 @@ export function CleaningTab() {
                 </div>
 
                 <div className="space-y-2">
-                    <Label>Responsáveis (Opcional)</Label>
+                    <Label htmlFor="cleaning-responsibles">Responsáveis (Opcional)</Label>
                     <Textarea 
+                        id="cleaning-responsibles"
                         className="min-h-[60px] text-gray-900 font-medium"
                         placeholder="Ex: Fulano, Beltrano"
                         value={responsibles}
                         onChange={e => setResponsibles(e.target.value)}
                     />
+                    <p className="text-xs text-gray-500">Preenchido com o SG e o ajudante do grupo. Você pode editar os nomes manualmente.</p>
+                    {defaultsForGroup(group) && <Button type="button" variant="outline" onClick={() => setResponsibles(defaultsForGroup(group))} className="h-9 text-sm">Usar SG e ajudante</Button>}
                 </div>
 
                 <DialogFooter className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:space-x-0">
