@@ -9,6 +9,8 @@
     "lint": "eslint",
     "test": "node --test tests/*.test.mjs",
     "migrate:calendar": "node scripts/migrate-meeting-calendar.mjs",
+    "migrate:field-service": "node scripts/migrate-field-service.mjs",
+    "verify:field-service": "node tests/field-service.integration.mjs",
     "verify:calendar": "node tests/meeting-calendar.integration.mjs"
   },
   "dependencies": {

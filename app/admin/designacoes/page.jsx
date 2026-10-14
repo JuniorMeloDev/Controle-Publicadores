@@ -8,6 +8,7 @@ import { LifeMinistryTab } from '@/app/components/designacoes/LifeMinistryTab';
 import { PublicSpeechTab } from '@/app/components/designacoes/PublicSpeechTab';
 import { MechanicalPrivilegesTab } from '@/app/components/designacoes/MechanicalPrivilegesTab';
 import { CleaningTab } from '@/app/components/designacoes/CleaningTab';
+import { FieldServiceTab } from '@/app/components/designacoes/FieldServiceTab';
 import { PublisherSummaryModal } from '@/app/components/designacoes/PublisherSummaryModal';
 import { Loader2 } from 'lucide-react';
 import { DesignationPeriodProvider } from '@/app/components/designacoes/DesignationPeriodContext';
@@ -42,11 +43,12 @@ function DesignacoesContent() {
          </div>
 
          <DesignationPeriodProvider><Tabs defaultValue="vida-ministerio" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 h-auto gap-1 p-1 bg-gray-100/80 rounded-xl">
+            <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 h-auto gap-1 p-1 bg-gray-100/80 rounded-xl">
               <TabsTrigger value="vida-ministerio" className="h-10 min-w-0 px-2 text-xs sm:text-sm">Vida e Ministério</TabsTrigger>
               <TabsTrigger value="discursos-publicos" className="h-10 min-w-0 px-2 text-xs sm:text-sm">Discursos Públicos</TabsTrigger>
               <TabsTrigger value="privilegios-mecanicos" className="h-10 min-w-0 px-2 text-xs sm:text-sm">Privilégios Mecânicos</TabsTrigger>
               <TabsTrigger value="limpeza-semanal" className="h-10 min-w-0 px-2 text-xs sm:text-sm">Limpeza Semanal</TabsTrigger>
+              <TabsTrigger value="servico-campo" className="h-10 min-w-0 px-2 text-xs sm:text-sm">Serviço de Campo</TabsTrigger>
             </TabsList>
             
             <TabsContent value="vida-ministerio">
@@ -63,6 +65,9 @@ function DesignacoesContent() {
             
             <TabsContent value="limpeza-semanal">
                 <CleaningTab />
+            </TabsContent>
+            <TabsContent value="servico-campo">
+                <FieldServiceTab />
             </TabsContent>
          </Tabs></DesignationPeriodProvider>
 

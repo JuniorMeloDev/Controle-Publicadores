@@ -5,7 +5,7 @@ const personalApis = new Set(['/api/admin/notificacoes', '/api/admin/alertas/pre
 const readGroups = {
   dashboard: ['dashboard/stats', 'get-status-relatorios'],
   publicadores: ['get-publicadores', 'get-publicador', 'get-historico', 'atualizacoes-cadastrais'],
-  designacoes: ['get-designacoes-publicador', 'get-historico-designacoes', 'get-meeting-details', 'get-reuniao-dados', 'discursos', 'temas-discursos', 'limpeza', 'privilegios/tipos', 'privilegios/atribuicoes', 'privilegios/sugestoes'],
+  designacoes: ['get-designacoes-publicador', 'get-historico-designacoes', 'get-meeting-details', 'get-reuniao-dados', 'discursos', 'temas-discursos', 'limpeza', 'servico-campo', 'privilegios/tipos', 'privilegios/atribuicoes', 'privilegios/sugestoes'],
   reunioes: ['get-reunioes', 'reunioes'],
   relatorios: ['get-relatorios', 'relatorios'],
   configuracoes: ['configuracoes', 'grupos', 'alertas/configuracoes'],
@@ -18,6 +18,7 @@ const writes = {
   'salvar-designacoes': ['designacoes_salvar'], 'parse-rtf': ['designacoes_importar'],
   'enviar-emails-lote': ['designacoes_email'], 'discursos': ['discursos_publicos_editar'],
   'temas-discursos': ['discursos_publicos_editar'], 'limpeza': ['limpeza_semanal_editar'],
+  'servico-campo': ['servico_campo_editar'],
   'privilegios/tipos': ['privilegios_mecanicos_editar'], 'privilegios/atribuicoes': ['privilegios_mecanicos_editar'],
   'privilegios/sugestoes': ['privilegios_mecanicos_editar'],
   'configuracoes': ['configuracoes_editar'], 'grupos': ['configuracoes_editar'], 'setup-grupos': ['configuracoes_editar'],

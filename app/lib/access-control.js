@@ -17,6 +17,7 @@ export const ACTION_PERMISSIONS = [
   { key: 'discursos_publicos_editar', label: 'Criar/Editar Discursos Públicos' },
   { key: 'privilegios_mecanicos_editar', label: 'Editar Privilégios Mecânicos' },
   { key: 'limpeza_semanal_editar', label: 'Editar Limpeza Semanal' },
+  { key: 'servico_campo_editar', label: 'Gerenciar Serviço de Campo e Territórios' },
   { key: 'logs_visualizar', label: 'Visualizar Logs do Sistema' },
   { key: 'publicadores_editar', label: 'Criar/Editar Publicadores' },
   { key: 'publicadores_excluir', label: 'Excluir Publicadores' },

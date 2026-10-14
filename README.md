@@ -139,6 +139,54 @@ de data, cancelamento e restauração sem modificar os registros persistentes.
 
 ## Executar os testes
 
+### Serviço de Campo
+
+Em **Designações → Serviço de Campo**, cadastre locais e registre os territórios.
+Na saída, escolha qualquer publicador pelo nome no campo **Dirigente**, sem cadastro
+adicional, ou mantenha **A definir**. Selecionar o local preenche os grupos habituais,
+que podem ser ajustados. A agenda aceita várias saídas no mesmo dia,
+grupos distintos, horário definido ou pós reunião, cartas e revisitas/estudos.
+Novas saídas podem se repetir semanalmente por até 12 semanas. Cada ocorrência
+é independente para edição e exclusão; conflitos de dirigente ou grupos no mesmo
+horário impedem a gravação de todo o lote. Sem grupos selecionados, a saída é da
+congregação. Os dirigentes e suas saídas permanecem registrados na agenda.
+
+Territórios planejados na agenda não geram designação nem conclusão automática.
+Em **Territórios**, anexe o mapa geral da congregação no topo da seção e o mapa
+individual no cadastro ou no card **Mapas individuais**, organizado por território.
+Cada território possui um PDF fixo, um link do Google Maps e referências de quadras
+e ruas. Edite as referências ou substitua o PDF quando houver atualização; o mapa
+continua vinculado ao mesmo território. Os arquivos devem ser PDFs
+de até 10 MB. **Visualizar mapa** abre o PDF e **Baixar PDF** faz o download;
+enviar outro arquivo substitui o anterior. Cadastro e PDF podem ser salvos juntos.
+Os PDFs são armazenados no PostgreSQL, incluídos no backup e acessíveis somente
+a usuários com acesso a Designações. Upload exige permissão de Serviço de Campo.
+Use **Compartilhar** na agenda para revisar uma mensagem com data, horário, dirigente,
+grupos, local da consideração e territórios, incluindo os links do Google Maps e
+orientações. Nos mapas individuais, o botão compartilha somente o território.
+Você pode editar/copiar a mensagem ou abrir o WhatsApp para escolher o destinatário
+e enviar. O app não envia automaticamente. Os PDFs privados não são transformados
+em links públicos; os links do Google Maps podem ser abertos sem acesso ao sistema.
+Use **Designar** para registrar a entrega ao publicador e **Registrar conclusão**
+para devolver o território. O histórico é consultado por ano de serviço (setembro
+a agosto). Locais e territórios são desativados para preservar seus
+vínculos históricos. As planilhas de referência não são importadas automaticamente.
+
+Para instalar as tabelas em outro ambiente e verificar o banco:
+
+```bash
+npm run migrate:field-service
+npm run verify:field-service
+```
+
+A migração é idempotente e converte as saídas com antigos dirigentes para o vínculo
+direto ao publicador, preservando os registros anteriores. A verificação grava registros de teste dentro de uma
+transação e reverte todos eles no final. Requer `.env.local` com PostgreSQL.
+Edição exige a permissão **Gerenciar Serviço de Campo e Territórios** na gestão de
+acessos; visualização usa a permissão de Designações, e PDF usa **Gerar PDF
+(Designações)**. As alterações são auditadas na mesma transação e as novas tabelas
+integram o backup. Esta versão não envia notificações ou e-mails de campo.
+
 ### Programação automática de Vida e Ministério
 
 Nos geradores de reuniões (Designações, Reuniões e Configurações), a opção
