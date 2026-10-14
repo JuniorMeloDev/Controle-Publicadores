@@ -128,6 +128,7 @@ test('overview excludes cancelled meetings and publishes programme titles withou
     ensureBoardTables: async () => {}, getVisiblePosts: async () => [],
     getPublisherAssignments: async (_client, options) => { assert.equal(options.publisherId, 10); return []; },
     recordOverviewChanges: async (_client, id) => { assert.equal(id, 10); return []; },
+    getOwnFieldGroup: async (_client, id) => { assert.equal(id, 10); return null; },
   });
   userId = null;
   assert.equal((await route.GET(request({}))).status, 401); assert.equal(reads, 0);

@@ -25,6 +25,11 @@ try {
   for (const key of ['meetings', 'cancelled', 'events', 'posts', 'changes']) assert.ok(Array.isArray(overview[key]));
   assert.ok(overview.meetings.every(meeting => !meeting.cancelado));
   assert.equal(overview.info, undefined); assert.equal(overview.reports, undefined);
+  if (overview.group) {
+    assert.ok(Array.isArray(overview.group.members));
+    assert.ok(overview.group.members.every(member => member.phone === undefined && member.email === undefined && member.senha === undefined));
+    assert.ok(overview.group.members.some(member => member.isSelf && member.id === userId));
+  }
   assert.equal((await call('/api/mural?manage=1', userId)).status, 403);
   assert.equal((await call('/api/mural', userId, { action: 'delete', id: 999999 })).status, 403);
   assert.equal((await call('/api/mural?manage=1', elder.rows[0].id)).status, 200);

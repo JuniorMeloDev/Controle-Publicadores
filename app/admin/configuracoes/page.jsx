@@ -5,6 +5,7 @@ import { AlertSettingsCard } from '@/app/components/AlertSettingsCard';
 import { PersonalAlertSettingsCard } from '@/app/components/PersonalAlertSettingsCard';
 import { SettingsTabs, SettingsPanel } from '@/app/components/SettingsTabs';
 import { SettingsEventsList } from '@/app/components/SettingsEventsList';
+import GroupLeadershipDialog from '@/app/components/GroupLeadershipDialog';
 import { useState, useEffect } from 'react';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
@@ -247,7 +248,7 @@ export default function ConfiguracoesPage() {
 
             if (res.ok) {
                 const data = await res.json();
-                setGrupos(grupos.map(g => g.id === selectedGroup.id ? data.grupo : g));
+                setGrupos(grupos.map(g => g.id === selectedGroup.id ? { ...g, ...data.grupo } : g));
                 setToast({ message: 'Grupo renomeado com sucesso!', type: 'success' });
                 setGroupModalOpen(false);
                 setGroupInputValue('');
@@ -298,7 +299,7 @@ export default function ConfiguracoesPage() {
 
             if (res.ok) {
                 const data = await res.json();
-                setGrupos(grupos.map(g => g.id === group.id ? data.grupo : g));
+                setGrupos(grupos.map(g => g.id === group.id ? { ...g, ...data.grupo } : g));
                 setToast({ message: data.message, type: 'success' });
             } else {
                 const err = await res.json();
@@ -921,9 +922,11 @@ export default function ConfiguracoesPage() {
                                                             <span className={`min-w-0 break-words text-sm font-medium ${grupo.ativo ? 'text-gray-900' : 'text-gray-500'}`}>
                                                                 {grupo.nome_grupo}
                                                                 {!grupo.ativo && <span className="ml-2 text-xs text-gray-400 italic">(Inativo)</span>}
+                                                                <span className="mt-1 block text-xs font-normal text-gray-500">Superintendente: {grupo.superintendente_nome || 'Não informado'}{grupo.ajudante_nome ? ` · Ajudante: ${grupo.ajudante_nome}` : ''}</span>
                                                             </span>
                                                         </div>
                                                         <div className="flex shrink-0 self-end sm:self-auto gap-1">
+                                                            <GroupLeadershipDialog group={grupo} canEdit={canEditConfig} onSaved={fetchGrupos} />
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"

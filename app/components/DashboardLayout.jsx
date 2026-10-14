@@ -26,6 +26,7 @@ const navigation = [
   { name: 'Meus Dados', href: '/admin/meus-dados', icon: User },
   { name: 'Minhas Designações', href: '/admin/minhas-designacoes', icon: Calendar },
   { name: 'Meu S-21', href: '/admin/meu-s21', icon: BarChart3 },
+  { name: 'Minhas Configurações', href: '/admin/configuracoes/preferencias', icon: Settings },
   { name: "Publicadores", href: "/admin/gerenciar", icon: Users },
   { name: "Designações", href: "/admin/designacoes", icon: Calendar },
   { name: "Reuniões", href: "/admin/reunioes", icon: Clock },
@@ -67,6 +68,7 @@ export function DashboardLayout({ children, contentClassName = '' }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [navigationChoice, setNavigationChoice] = useState(null);
 
   // Estado do Menu do Usuário
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -132,6 +134,17 @@ export function DashboardLayout({ children, contentClassName = '' }) {
     : (permissions
         ? navigation.filter(item => personalPaths.includes(item.href) || isAllowed(permissions, getPageKeyForPath(item.href), 'pages'))
         : []);
+
+  const navigationSection = href => href === '/admin/dashboard'
+    ? (permissions?.pages?.dashboard ? 'congregacao' : 'pessoal')
+    : personalPaths.includes(href) ? 'pessoal' : 'congregacao';
+  const congregationNavigation = filteredNavigation.filter(item => navigationSection(item.href) === 'congregacao');
+  const routeSection = personalPaths.includes(pathname) ? navigationSection(pathname) : 'congregacao';
+  const activeSection = congregationNavigation.length
+    ? navigationChoice?.pathname === pathname ? navigationChoice.section : routeSection
+    : 'pessoal';
+  const sectionNavigation = filteredNavigation.filter(item => navigationSection(item.href) === activeSection);
+  const navigationSections = [{ key: 'pessoal', label: 'Pessoal' }, { key: 'congregacao', label: 'Congregação' }];
 
   const handleLogout = async () => {
     try {
@@ -284,13 +297,30 @@ export function DashboardLayout({ children, contentClassName = '' }) {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
-            <nav className="space-y-1">
-              {filteredNavigation.map((item) => {
-                const isActive = pathname === item.href;
+            {congregationNavigation.length > 0 ? <div role="tablist" aria-label="Áreas do menu" className="mb-4 grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1">
+              {navigationSections.map((section, index) => <button key={section.key} type="button" role="tab"
+                id={`sidebar-tab-${section.key}`} aria-selected={activeSection === section.key} aria-controls={`sidebar-panel-${section.key}`}
+                tabIndex={activeSection === section.key ? 0 : -1}
+                onClick={() => setNavigationChoice({ pathname, section: section.key })}
+                onKeyDown={event => {
+                  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                  event.preventDefault();
+                  const target = event.key === 'Home' ? 0 : event.key === 'End' ? 1 : 1 - index;
+                  setNavigationChoice({ pathname, section: navigationSections[target].key });
+                  event.currentTarget.parentElement.querySelectorAll('[role="tab"]')[target].focus();
+                }}
+                className={`min-h-10 rounded-md px-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 ${activeSection === section.key ? 'bg-purple-50 text-purple-700 shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}>{section.label}</button>)}
+            </div> : filteredNavigation.length > 0 && <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Pessoal</p>}
+            <div role={congregationNavigation.length ? 'tabpanel' : undefined} id={`sidebar-panel-${activeSection}`}
+              aria-labelledby={congregationNavigation.length ? `sidebar-tab-${activeSection}` : undefined}>
+            <nav aria-label={`Menu ${activeSection === 'pessoal' ? 'pessoal' : 'da congregação'}`} className="space-y-1">
+              {sectionNavigation.map((item) => {
+                const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
                 return (
                   <Link
                     key={item.name}
                     href={item.href}
+                    aria-current={isActive ? 'page' : undefined}
                     onClick={() => setIsSidebarOpen(false)}
                     className={`flex items-center w-full justify-start px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
                       isActive
@@ -304,6 +334,7 @@ export function DashboardLayout({ children, contentClassName = '' }) {
                 );
               })}
             </nav>
+            </div>
           </div>
 
           <div className="p-4 border-t border-gray-200 md:hidden">

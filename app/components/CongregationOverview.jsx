@@ -4,9 +4,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { CalendarDays, Megaphone, MapPin, Clock, Pin, Check, ExternalLink, Users, FileText, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useUserSession } from './UserSessionProvider';
+import MyFieldGroup from './MyFieldGroup';
+import { addCalendarDays } from '@/app/lib/meeting-calendar';
 
 const card = 'rounded-xl border border-gray-200 bg-white p-5';
-const dateLabel = value => new Date(`${String(value).slice(0, 10)}T12:00:00Z`).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+const dateLabel = value => {
+  const date = String(value).slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const relative = date === today ? 'Hoje · ' : date === addCalendarDays(today, 1) ? 'Amanhã · ' : '';
+  return relative + new Date(`${date}T12:00:00Z`).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+};
 
 function AttachmentLink({ post }) {
   return post.anexo_nome ? <a href={`/api/mural/anexo/${post.id}`} target="_blank" rel="noopener noreferrer" className="mt-3 flex items-center gap-2 break-all text-sm font-medium text-purple-700"><FileText className="h-4 w-4 shrink-0" />Abrir anexo: {post.anexo_nome}</a> : null;
@@ -73,6 +80,7 @@ export default function CongregationOverview() {
   return <div className="space-y-4">
     {error && <div role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}<button type="button" onClick={() => load()} className="ml-3 underline">Tentar novamente</button></div>}
     {!data ? <p role="status" className="text-sm text-gray-500">{error ? 'Agenda indisponível no momento.' : 'Carregando agenda e anúncios...'}</p> : <>
+      <MyFieldGroup key={data.group?.id || 'no-group'} group={data.group} />
       {data.changes?.length > 0 && <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2 text-lg font-semibold text-amber-900"><RefreshCw className="h-5 w-5" />Mudanças recentes</h2><button type="button" disabled={dismissing} onClick={dismissChanges} className="text-sm font-medium text-amber-900 underline disabled:opacity-50">{dismissing ? 'Registrando...' : 'Marcar como vistas'}</button></div>
         <ul className="space-y-3">{data.changes.map(change => <li key={change.id}><h3 className="text-sm font-semibold text-amber-900">{change.title}</h3><p className="mt-1 break-words text-sm text-amber-800">{change.description}</p>{change.href && <Link href={change.href} className="mt-1 inline-block text-sm font-medium text-amber-900 underline">Conferir designações</Link>}</li>)}</ul>

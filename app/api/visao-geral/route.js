@@ -6,6 +6,7 @@ import { addCalendarDays } from '@/app/lib/meeting-calendar';
 import { ensureBoardTables, getVisiblePosts } from '@/app/lib/congregation-board-server';
 import { getPublisherAssignments } from '@/app/lib/publisher-assignments';
 import { recordOverviewChanges, ensureOverviewState } from '@/app/lib/overview-changes-server';
+import { getOwnFieldGroup } from '@/app/lib/field-group-server';
 
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 export const dynamic = 'force-dynamic';
@@ -43,7 +44,8 @@ export async function GET(req) {
     await ensureBoardTables(client);
     const assignments = await getPublisherAssignments(client, { publisherId: userId, futureOnly: true });
     const changes = await recordOverviewChanges(client, userId, calendar, assignments, today);
-    return reply({ meetings, cancelled, events: events.rows, posts: await getVisiblePosts(client, userId), changes });
+    const group = await getOwnFieldGroup(client, userId);
+    return reply({ meetings, cancelled, events: events.rows, posts: await getVisiblePosts(client, userId), changes, group });
   } catch { return reply({ message: 'Não foi possível carregar a agenda da congregação.' }, 500); }
   finally { client?.release(); }
 }
