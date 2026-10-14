@@ -56,26 +56,25 @@ export default function LoginPage() {
     }
   };
 
-  // --- Classes do Tailwind (sem mudança) ---
-  const labelClass = "block text-sm font-medium text-neutral-300";
-  const inputClass = "mt-1 block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-neutral-100 placeholder-neutral-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50";
+  const labelClass = "block text-sm font-medium text-gray-700";
+  const inputClass = "mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-900 placeholder-gray-400 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 transition-colors";
 
   return (
-    <main className="min-h-screen w-full flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-neutral-900 p-8 rounded-xl shadow-2xl border border-neutral-800">
+    <main className="min-h-dvh w-full flex items-center justify-center bg-[#f5f3f8] dark:bg-[#101014] p-4 sm:p-6">
+      <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl shadow-purple-950/10 dark:shadow-black/30 border border-gray-200">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png" alt="Congregação Praia dos Corais" width={96} height={96} className="mx-auto mb-5 object-contain" />
-        <h2 className="text-3xl font-bold text-center mb-6 text-white">
+        <h2 className="text-3xl font-bold text-center mb-6 text-gray-900">
           {recovering ? 'Recuperar senha' : 'Acesso Restrito'}
         </h2>
         
         {error && (
-          <div className="p-3 rounded-md mb-4 bg-red-900 bg-opacity-30 text-red-300 border border-red-800 text-sm">
+          <div role="alert" className="p-3 rounded-md mb-4 bg-red-50 text-red-700 border border-red-200 dark:border-red-900 text-sm">
             {error}
           </div>
         )}
 
-        {recovering && <p className="mb-6 text-sm text-neutral-300">Informe seu e-mail para receber um link e definir uma nova senha.</p>}
+        {recovering && <p className="mb-6 text-sm text-gray-600">Informe seu e-mail para receber um link e definir uma nova senha.</p>}
         <StatusToast message={message} type="success" onClose={() => setMessage('')} />
         <form onSubmit={handleSubmit} className="space-y-6">
           
@@ -112,7 +111,7 @@ export default function LoginPage() {
               <button
                 type="button" // Impede o submit do formulário
                 aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-neutral-400 hover:text-neutral-100"
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-purple-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded-lg"
                 onClick={() => setShowPassword(!showPassword)}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -124,12 +123,12 @@ export default function LoginPage() {
           <button 
             type="submit" 
             disabled={isLoading} 
-            className="w-full flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-neutral-900 disabled:opacity-50 transition-colors"
+            className="w-full flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-zinc-900 disabled:opacity-50 transition-colors"
           >
             {isLoading ? (recovering ? 'Enviando...' : 'Verificando...') : (recovering ? 'Enviar link por e-mail' : 'Entrar')}
           </button>
         </form>
-        <button type="button" disabled={isLoading} onClick={() => { setRecovering(!recovering); setError(''); setMessage(''); setSenha(''); }} className="mt-5 w-full text-sm text-blue-400 hover:text-blue-300 disabled:opacity-50">
+        <button type="button" disabled={isLoading} onClick={() => { setRecovering(!recovering); setError(''); setMessage(''); setSenha(''); }} className="mt-5 w-full rounded-md text-sm text-purple-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:opacity-50">
           {recovering ? 'Voltar para o login' : 'Esqueci minha senha'}
         </button>
       </div>
