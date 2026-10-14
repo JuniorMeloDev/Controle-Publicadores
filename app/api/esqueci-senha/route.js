@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { getEmailLogoAttachment } from '@/app/lib/email-brand';
 import { buildPasswordResetEmail } from '@/app/lib/password-reset-email';
+import { emailSender } from '@/app/lib/email-layout';
 import { RESET_MESSAGE, ensurePasswordResetTable, issuePasswordReset, hashResetToken } from '@/app/lib/password-reset';
 
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
@@ -34,7 +35,7 @@ export async function POST(request) {
         user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS,
       } });
       await transporter.sendMail({
-        from: { name: 'Praia dos Corais | Controle de Publicadores', address: process.env.EMAIL_USER }, to: email,
+        from: emailSender(process.env.EMAIL_USER), to: email,
         ...message,
         attachments: [await getEmailLogoAttachment()],
       });

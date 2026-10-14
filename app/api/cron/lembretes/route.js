@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { getAlertSettings, getActiveAssignments, deliverReminders } from '@/app/lib/alert-service';
 import { todayInBrazil, buildEmailReminders, reminderMessage } from '@/app/lib/alerts';
+import { getEmailLogoAttachment } from '@/app/lib/email-brand';
+import { emailSender } from '@/app/lib/email-layout';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -35,8 +37,9 @@ export async function GET(request) {
         const reminders = buildEmailReminders({ assignments, publishers, settings, today, retries });
         const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
             connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000 });
+        const logo = reminders.length ? await getEmailLogoAttachment() : null;
         const totals = await deliverReminders(client, reminders, reminder => transporter.sendMail({
-            from: `"Gestão Congregacional" <${process.env.EMAIL_USER}>`, to: reminder.email, ...reminderMessage(reminder),
+            from: emailSender(process.env.EMAIL_USER), to: reminder.email, ...reminderMessage(reminder), attachments: [logo],
         }));
         return NextResponse.json({ message: 'Lembretes processados.', ...totals }, { status: totals.failed ? 503 : 200 });
     } catch (error) {

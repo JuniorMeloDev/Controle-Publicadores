@@ -252,6 +252,8 @@ test('cron builds personalized messages using a simulated mail transport only', 
         getAlertSettings: async () => ({ ...defaults, emailEnabled: true }),
         todayInBrazil: () => today, getActiveAssignments: async () => assignments,
         buildEmailReminders, reminderMessage,
+        getEmailLogoAttachment: async () => ({ filename: 'logo.png', content: Buffer.from('fixture'), cid: 'congregacao-logo' }),
+        emailSender: address => ({ name: 'Praia dos Corais | Controle de Publicadores', address }),
         nodemailer: { createTransport: () => ({ sendMail: async mail => { outgoing.push(mail); return { accepted: [mail.to], rejected: [] }; } }) },
         deliverReminders: async (_client, reminders, send) => { for (const reminder of reminders) await send(reminder); return { sent: reminders.length, skipped: 0, failed: 0 }; },
     });

@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 export async function loadModule(path) {
-    const source = readFileSync(new URL(path, import.meta.url), 'utf8');
+    const moduleUrl = new URL(path, import.meta.url);
+    const source = readFileSync(moduleUrl, 'utf8').replace(/from (['"])(\.{1,2}\/[^'"]+)\1/g,
+        (_match, quote, relative) => `from ${quote}${new URL(relative, moduleUrl).href}${quote}`);
     return import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 }
 

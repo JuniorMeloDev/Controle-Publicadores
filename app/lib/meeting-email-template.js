@@ -1,3 +1,5 @@
+import { escapeEmailHtml } from './email-layout.js';
+
 export const normalizeText = (text) => {
   if (!text) return '';
   return text
@@ -16,6 +18,7 @@ export const formatName = (fullName, nameMap) => {
 };
 
 export function generateMeetingHtml(weekText, schedule, assignments, nameMap) {
+  const safeName = name => escapeEmailHtml(formatName(name, nameMap));
   const sTable = 'width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 14px; border: 2px solid #000;';
   const sHeaderTitle = 'background-color: #f3f4f6; padding: 10px; text-align: center; border-right: 2px solid #000; width: 65%;';
   const sHeaderRoles = 'width: 35%; padding: 0; vertical-align: top;';
@@ -23,7 +26,7 @@ export function generateMeetingHtml(weekText, schedule, assignments, nameMap) {
   const sHeaderRoleLabel = 'padding: 4px 8px; font-size: 13px; font-weight: bold; width: 80px;';
   const sHeaderRoleValue = 'padding: 4px 8px; font-size: 13px; font-weight: bold;';
 
-  const sSection = 'background-color: #1e3a8a; color: white; font-weight: bold; padding: 5px 10px; text-transform: uppercase; border: 1px solid #000; text-align: center;';
+  const sSection = 'background-color: #581c87; color: white; font-weight: bold; padding: 5px 10px; text-transform: uppercase; border: 1px solid #000; text-align: center;';
   const sTime = 'width: 60px; padding: 8px; border: 1px solid #000; background-color: #e5e7eb; text-align: center; font-weight: bold; color: #000;';
   const sPart = 'padding: 8px; border: 1px solid #000; color: #000;';
   const sName = 'width: 30%; padding: 8px; border: 1px solid #000; font-weight: bold; text-align: center; color: #000; vertical-align: middle;';
@@ -32,7 +35,7 @@ export function generateMeetingHtml(weekText, schedule, assignments, nameMap) {
     <table style="width: 100%; border: 2px solid #000; border-bottom: none; border-collapse: collapse; font-family: Arial, sans-serif;">
       <tr>
         <td style="${sHeaderTitle}">
-           <h2 style="margin:0; color:#1e3a8a; text-transform: uppercase;">${weekText}</h2>
+           <h2 style="margin:0; color:#581c87; text-transform: uppercase;">${escapeEmailHtml(weekText)}</h2>
            <p style="margin:5px 0 0; font-size: 16px;">Nossa Vida e Ministério Cristão</p>
         </td>
         <td style="${sHeaderRoles}">
@@ -40,11 +43,11 @@ export function generateMeetingHtml(weekText, schedule, assignments, nameMap) {
            <table style="width: 100%; border-collapse: collapse;">
              <tr>
                <td style="${sHeaderRoleLabel}">Presidente:</td>
-               <td style="${sHeaderRoleValue}">${formatName(assignments['presidente'], nameMap)}</td>
+               <td style="${sHeaderRoleValue}">${safeName(assignments['presidente'])}</td>
              </tr>
              <tr>
                <td style="${sHeaderRoleLabel}">Ajudante:</td>
-               <td style="${sHeaderRoleValue}">${formatName(assignments['ajudante'], nameMap)}</td>
+               <td style="${sHeaderRoleValue}">${safeName(assignments['ajudante'])}</td>
              </tr>
            </table>
         </td>
@@ -66,8 +69,8 @@ export function generateMeetingHtml(weekText, schedule, assignments, nameMap) {
   };
 
   const formatDual = (mainLabel, mainVal, subLabel, subVal) => {
-    const main = formatName(mainVal, nameMap);
-    const sub = formatName(subVal, nameMap);
+    const main = safeName(mainVal);
+    const sub = safeName(subVal);
     if (sub && sub !== '---') {
       return `
         <div><strong>${mainLabel}:</strong> ${main || '---'}</div>
@@ -86,8 +89,8 @@ export function generateMeetingHtml(weekText, schedule, assignments, nameMap) {
   rows += `
     <tr>
       <td style="${sTime}">${formatTime(currentMinutes)}</td>
-      <td style="${sPart}"><span style="color: #1e40af; font-weight: bold;">${initialSong}</span> <span style="float: right;">Oração Inicial &rarr;</span></td>
-      <td style="${sName}">${formatName(assignments['oracao_inicial'], nameMap)}</td>
+      <td style="${sPart}"><span style="color: #7e22ce; font-weight: bold;">${escapeEmailHtml(initialSong)}</span> <span style="float: right;">Oração Inicial &rarr;</span></td>
+      <td style="${sName}">${safeName(assignments['oracao_inicial'])}</td>
     </tr>
   `;
   currentMinutes += 5;
@@ -97,20 +100,20 @@ export function generateMeetingHtml(weekText, schedule, assignments, nameMap) {
   rows += `
     <tr>
       <td style="${sTime}">${formatTime(currentMinutes)}</td>
-      <td style="${sPart}"><strong>${commentsText}</strong></td>
-      <td style="${sName}">${formatName(assignments['comentarios_iniciais'], nameMap)}</td>
+      <td style="${sPart}"><strong>${escapeEmailHtml(commentsText)}</strong></td>
+      <td style="${sName}">${safeName(assignments['comentarios_iniciais'])}</td>
     </tr>
   `;
   currentMinutes += commentsDuration;
 
   rows += `<tr><td colspan="3" style="${sSection}">TESOUROS DA PALAVRA DE DEUS</td></tr>`;
   schedule.treasures?.forEach((part, idx) => {
-    rows += `<tr><td style="${sTime}">${formatTime(currentMinutes)}</td><td style="${sPart}">${part.title}</td><td style="${sName}">${formatName(assignments['tesouro_' + idx], nameMap)}</td></tr>`;
+    rows += `<tr><td style="${sTime}">${formatTime(currentMinutes)}</td><td style="${sPart}">${escapeEmailHtml(part.title)}</td><td style="${sName}">${safeName(assignments['tesouro_' + idx])}</td></tr>`;
     currentMinutes += getDuration(part.title) + 1;
   });
   if (assignments.leitura_biblia) {
     const bibleText = 'Leitura da Bíblia (4 min)';
-    rows += `<tr><td style="${sTime}">${formatTime(currentMinutes)}</td><td style="${sPart}">${bibleText}</td><td style="${sName}">${formatName(assignments['leitura_biblia'], nameMap)}</td></tr>`;
+    rows += `<tr><td style="${sTime}">${formatTime(currentMinutes)}</td><td style="${sPart}">${bibleText}</td><td style="${sName}">${safeName(assignments['leitura_biblia'])}</td></tr>`;
     currentMinutes += getDuration(bibleText) + 1;
   }
 
@@ -119,16 +122,16 @@ export function generateMeetingHtml(weekText, schedule, assignments, nameMap) {
     const isDiscurso = part.title.toLowerCase().includes('discurso');
     let assignedHtml = '';
     if (isDiscurso) {
-      assignedHtml = formatName(assignments['ministerio_' + idx], nameMap);
+      assignedHtml = safeName(assignments['ministerio_' + idx]);
     } else {
       assignedHtml = formatDual('Estudante', assignments['ministerio_' + idx + '_1'], 'Ajudante', assignments['ministerio_' + idx + '_2']);
     }
-    rows += `<tr><td style="${sTime}">${formatTime(currentMinutes)}</td><td style="${sPart}">${part.title}</td><td style="${sName}">${assignedHtml}</td></tr>`;
+    rows += `<tr><td style="${sTime}">${formatTime(currentMinutes)}</td><td style="${sPart}">${escapeEmailHtml(part.title)}</td><td style="${sName}">${assignedHtml}</td></tr>`;
     currentMinutes += getDuration(part.title) + 1;
   });
 
   rows += `<tr><td colspan="3" style="${sSection}">NOSSA VIDA CRISTÃ</td></tr>`;
-  rows += `<tr><td style="${sTime}">${formatTime(currentMinutes)}</td><td style="${sPart}"><span style="color: #1e40af; font-weight: bold;">${schedule.middleSong || 'Cântico'}</span></td><td style="${sName}">${formatName(assignments['cantico_meio'], nameMap)}</td></tr>`;
+  rows += `<tr><td style="${sTime}">${formatTime(currentMinutes)}</td><td style="${sPart}"><span style="color: #7e22ce; font-weight: bold;">${escapeEmailHtml(schedule.middleSong || 'Cântico')}</span></td><td style="${sName}">${safeName(assignments['cantico_meio'])}</td></tr>`;
   currentMinutes += 3;
 
   schedule.living?.forEach((part, idx) => {
@@ -137,9 +140,9 @@ export function generateMeetingHtml(weekText, schedule, assignments, nameMap) {
     if (isBibleStudy) {
       assignedHtml = formatDual('Dirigente', assignments['vida_' + idx + '_1'], 'Leitor', assignments['vida_' + idx + '_2']);
     } else {
-      assignedHtml = formatName(assignments['vida_' + idx], nameMap);
+      assignedHtml = safeName(assignments['vida_' + idx]);
     }
-    rows += `<tr><td style="${sTime}">${formatTime(currentMinutes)}</td><td style="${sPart}">${part.title}</td><td style="${sName}">${assignedHtml}</td></tr>`;
+    rows += `<tr><td style="${sTime}">${formatTime(currentMinutes)}</td><td style="${sPart}">${escapeEmailHtml(part.title)}</td><td style="${sName}">${assignedHtml}</td></tr>`;
     currentMinutes += getDuration(part.title);
   });
 
@@ -148,8 +151,8 @@ export function generateMeetingHtml(weekText, schedule, assignments, nameMap) {
   rows += `
     <tr>
       <td style="${sTime}">${formatTime(currentMinutes)}</td>
-      <td style="${sPart}"><strong>${finalCommentsText}</strong></td>
-      <td style="${sName}">${formatName(assignments['comentarios_finais'], nameMap)}</td>
+      <td style="${sPart}"><strong>${escapeEmailHtml(finalCommentsText)}</strong></td>
+      <td style="${sName}">${safeName(assignments['comentarios_finais'])}</td>
     </tr>
   `;
   currentMinutes += finalCommentsDuration;
@@ -157,8 +160,8 @@ export function generateMeetingHtml(weekText, schedule, assignments, nameMap) {
   rows += `
     <tr>
       <td style="${sTime}">${formatTime(currentMinutes)}</td>
-      <td style="${sPart}"><span style="color: #1e40af; font-weight: bold;">${schedule.finalSong || ''}</span> <span style="float: right;">Oração Final &rarr;</span></td>
-      <td style="${sName}">${formatName(assignments['oracao_final'], nameMap)}</td>
+      <td style="${sPart}"><span style="color: #7e22ce; font-weight: bold;">${escapeEmailHtml(schedule.finalSong || '')}</span> <span style="float: right;">Oração Final &rarr;</span></td>
+      <td style="${sName}">${safeName(assignments['oracao_final'])}</td>
     </tr>
   `;
 

@@ -1,16 +1,14 @@
 import { authorizeRequest } from '@/app/lib/request-authorization';
-﻿import { Pool } from '@neondatabase/serverless';
+import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
 import { isAllowed } from '@/app/lib/access-control';
 import { registerAuditLog } from '@/app/lib/audit-log';
 import nodemailer from 'nodemailer';
-import {
-  generateMeetingHtml,
-  getFriendlyTitleWithSection,
-  normalizeText,
-  formatName
-} from '@/app/lib/meeting-email-template';
+import { generateMeetingHtml, getFriendlyTitleWithSection } from '@/app/lib/meeting-email-template';
+import { buildEmailHtml, brandEmailText, emailSender, escapeEmailHtml } from '@/app/lib/email-layout';
+import { getEmailLogoAttachment } from '@/app/lib/email-brand';
+import { load } from 'cheerio';
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
@@ -61,6 +59,7 @@ export async function POST(request) {
     });
 
     const tabelaHtml = generateMeetingHtml(weekText, schedule, assignments, nameFormattingMap);
+    const logo = await getEmailLogoAttachment();
 
     const emailPromises = recipientsList.map(async (email) => {
         const cleanEmail = email.trim().toLowerCase();
@@ -92,17 +91,17 @@ export async function POST(request) {
                     const tituloParte = resto.join(' - ');
 
                     return `<li style="margin-bottom: 8px;">
-                              <span style="font-weight: bold; color: #1e3a8a; font-size: 13px;">${secao}</span><br/>
-                              <span style="color: #333; font-weight: normal;">${tituloParte}</span>
+                              <span style="font-weight: bold; color: #581c87; font-size: 13px;">${escapeEmailHtml(secao)}</span><br/>
+                              <span style="color: #52525b; font-weight: normal;">${escapeEmailHtml(tituloParte)}</span>
                             </li>`;
                 })
                 .join('');
 
             if (minhasPartes) {
                 personalBlock = `
-                    <div style="background-color: #eef2ff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #c7d2fe;">
-                        <h2 style="color: #3730a3; margin-top: 0;">Olá, ${nomeCurto}!</h2>
-                        <p style="font-size: 16px;">Suas designações para a semana de <strong>${weekText}</strong>:</p>
+                    <div style="background-color: #faf5ff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e9d5ff;">
+                        <h2 style="color: #581c87; margin-top: 0;">Olá, ${escapeEmailHtml(nomeCurto)}!</h2>
+                        <p style="font-size: 16px;">Suas designações para a semana de <strong>${escapeEmailHtml(weekText)}</strong>:</p>
                         <ul style="list-style-type: none; padding-left: 0;">
                             ${minhasPartes}
                         </ul>
@@ -112,7 +111,7 @@ export async function POST(request) {
                 // Caso raro: tem email cadastrado, estava na lista, mas não tem partes (ou foi filtrado)
                  personalBlock = `
                     <div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e5e7eb;">
-                        <p style="margin: 0; font-size: 14px;">Olá <strong>${nomeCurto}</strong>, segue a programação da semana.</p>
+                        <p style="margin: 0; font-size: 14px;">Olá <strong>${escapeEmailHtml(nomeCurto)}</strong>, segue a programação da semana.</p>
                     </div>
                 `;
             }
@@ -124,22 +123,25 @@ export async function POST(request) {
             `;
         }
 
-        const htmlBody = `
-            <div style="font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto;">
+        const content = `
                 ${personalBlock}
                 <p style="font-size: 14px; margin-bottom: 10px; font-weight: bold;">Programação completa:</p>
                 ${tabelaHtml}
-                <p style="font-size: 11px; color: #888; text-align: center; margin-top: 20px;">
-                    Gerado automaticamente pelo Sistema de Gestão Congregacional.
-                </p>
-            </div>
         `;
+        const subject = `Designações: ${weekText}`;
+        const htmlBody = buildEmailHtml({ subject, preheader: `Confira suas designações e a programação de ${weekText}.`,
+            label: 'PROGRAMAÇÃO DA REUNIÃO', title: 'Suas designações da semana', content, width: 800,
+            footerNote: 'Programação da reunião e designações disponibilizadas pela congregação.' });
+        const plain = load(content);
+        plain('br').replaceWith('\n');
+        plain('td').append(' | ');
+        plain('p,li,tr,h2').append('\n');
+        const text = brandEmailText(plain.root().text().split('\n').map(line => line.trim()).filter(Boolean).join('\n'));
 
         return transporter.sendMail({
-            from: `"Gestão Congregacional" <${process.env.EMAIL_USER}>`,
+            from: emailSender(process.env.EMAIL_USER),
             to: cleanEmail,
-            subject: `Designações: ${weekText}`,
-            html: htmlBody,
+            subject, text, html: htmlBody, attachments: [logo],
         });
     });
 
