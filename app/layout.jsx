@@ -12,6 +12,7 @@ const geistMono = Geist_Mono({
 });
 
 import { ServiceWorkerRegister } from "@/app/components/ServiceWorkerRegister";
+import PwaInstallBanner from "@/app/components/PwaInstallBanner";
 
 export const metadata = {
   title: "Gestão Congregacional",
@@ -52,6 +53,7 @@ export default function RootLayout({ children }) {
       >
         <ServiceWorkerRegister />
         {children}
+        <PwaInstallBanner />
       </body>
     </html>
   );
