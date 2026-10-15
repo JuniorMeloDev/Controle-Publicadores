@@ -13,6 +13,7 @@ import { PublisherSummaryModal } from '@/app/components/designacoes/PublisherSum
 import { Loader2 } from 'lucide-react';
 import { DesignationPeriodProvider } from '@/app/components/designacoes/DesignationPeriodContext';
 import Link from 'next/link';
+import { AssignmentConfirmationsButton } from '@/app/components/designacoes/AssignmentConfirmations';
 
 function DesignacoesContent() {
   const searchParams = useSearchParams();
@@ -34,12 +35,15 @@ function DesignacoesContent() {
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Gerenciamento de Designações</h1>
               <p className="text-gray-500 text-sm mt-0.5">Planeje e organize as reuniões e privilégios da congregação.</p>
             </div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
+            <AssignmentConfirmationsButton />
             <Link 
               href="/admin/reunioes" 
               className="inline-flex h-10 items-center justify-center gap-2 px-4 rounded-md text-sm font-medium bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors w-full sm:w-auto shrink-0"
             >
               📅 Abrir calendário de reuniões
             </Link>
+            </div>
          </div>
 
          <DesignationPeriodProvider><Tabs defaultValue="vida-ministerio" className="w-full">

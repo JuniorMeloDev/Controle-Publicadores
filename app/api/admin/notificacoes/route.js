@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { getUserIdFromRequest } from '@/app/lib/server-access';
 import { getPersonalNotifications } from '@/app/lib/alert-service';
 import { todayInBrazil } from '@/app/lib/alerts';
+import { getRefusalNotifications } from '@/app/lib/assignment-refusals';
 
 export const dynamic = 'force-dynamic';
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
@@ -14,6 +15,10 @@ async function handle(request, markRead) {
     const client = await pool.connect();
     try {
         const notifications = await getPersonalNotifications(client, userId, todayInBrazil());
+        const refusals = await getRefusalNotifications(client, userId);
+        const { rows: readRefusals } = refusals.length ? await client.query('SELECT notificacao_id FROM alertas_lidos WHERE publicador_id=$1', [userId]) : { rows: [] };
+        const readIds = new Set(readRefusals.map(r => r.notificacao_id));
+        notifications.unshift(...refusals.map(n => ({ ...n, read: readIds.has(n.id) })));
         if (markRead) {
             const body = await request.json();
             if (!Array.isArray(body.ids) || body.ids.length > 500 || body.ids.some(id => typeof id !== 'string')) {

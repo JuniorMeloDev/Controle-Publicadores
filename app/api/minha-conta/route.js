@@ -1,3 +1,4 @@
+import { withAssignmentResponses } from '@/app/lib/assignment-response';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { randomBytes } from 'node:crypto';
@@ -30,7 +31,7 @@ export async function GET(req) {
       estudos_biblicos, horas, observacoes FROM relatorios_mensais WHERE publicador_id = $1 ORDER BY ano_servico DESC`, [userId]);
     const assignments = await getPublisherAssignments(client, { publisherId: userId, futureOnly: false });
     const pending = await client.query("SELECT COUNT(*)::int AS total FROM cadastro_alteracoes WHERE publicador_id = $1 AND status = 'pendente'", [userId]);
-    return reply({ info, reports: reports.rows, assignments, pendingChanges: pending.rows[0].total });
+    return reply({ info, reports: reports.rows, assignments: await withAssignmentResponses(client, assignments), pendingChanges: pending.rows[0].total });
   } catch { return reply({ message: 'Não foi possível carregar seus dados.' }, 500); }
   finally { client?.release(); }
 }

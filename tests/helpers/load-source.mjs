@@ -16,6 +16,13 @@ export function loadRoute(path, dependencies) {
         NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200 }) },
         // Feature unit tests run with an authorized boundary; access-control tests supply the real guard.
         authorizeRequest: async () => null,
+        withAssignmentResponses: async (_client, assignments) => assignments,
+        getRefusalNotifications: async () => [],
+        deliverRefusalEmails: async () => {},
+        confirmationEmailContent: async () => ({ html: '', text: '' }),
+        getActiveAssignments: async () => [],
+        meaningfulAssignments: items => items,
+        todayInBrazil: () => '2030-01-07',
         ...dependencies
     });
     vm.runInContext(source + '\nglobalThis.handlers = { ' +

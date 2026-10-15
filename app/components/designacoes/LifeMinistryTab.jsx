@@ -1155,6 +1155,7 @@ export function LifeMinistryTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           recipientsList: emailsList,
+          meetingDate: meetingDates[currentIndex],
           weekText: weekDescriptions[currentIndex],
           schedule: schedules[currentIndex],
           assignments: assignmentsList[currentIndex]

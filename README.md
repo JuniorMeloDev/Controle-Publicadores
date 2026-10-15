@@ -137,6 +137,37 @@ conexão direta e cria somente tabelas temporárias com dados fictícios. Verifi
 migração repetida, geração, agendas pendentes, importação, preenchimento, mudança
 de data, cancelamento e restauração sem modificar os registros persistentes.
 
+## Confirmação das designações
+
+Em **Minhas designações**, cada pessoa pode responder **Sim** ou **Não**.
+Sem resposta, a designação continua válida e a pessoa permanece na escala.
+Uma recusa mantém o registro e sinaliza **Recusada — aguardando substituição**;
+a troca de publicador continua sendo feita pelo responsável na escala.
+
+O super admin e quem tiver a permissão **Gerenciar confirmações e receber recusas**
+acompanham as respostas em Designações e em Minhas designações. As recusas geram
+avisos no sininho e emails para esses responsáveis. A permissão deve ser concedida
+explicitamente aos demais usuários na gestão de acessos.
+
+Os emails manuais de Vida e Ministério e os lembretes automáticos incluem links
+individuais para as designações já salvas. O link abre uma página para concluir a
+resposta sem login; apenas abrir o link não responde. A resposta é compartilhada
+com o app, que atualiza a lista ao recuperar o foco e a cada 30 segundos.
+A primeira resposta é preservada; links reenviados mostram a resposta registrada.
+Links expiram ao final do dia da designação, no horário de Brasília, e deixam de
+funcionar quando a designação é alterada, excluída ou a reunião é cancelada.
+
+Configure `APP_URL` com a URL pública do app (por exemplo, `https://seu-app.com`).
+Na Vercel, `VERCEL_PROJECT_PRODUCTION_URL` é usado como alternativa.
+O SMTP usa `EMAIL_USER` e `EMAIL_PASS`, já utilizados pelos demais emails.
+O cron existente `/api/cron/lembretes`, protegido por `CRON_SECRET`, também tenta
+novamente os avisos de recusa que não foram entregues, mesmo com os lembretes
+automáticos desativados. Esses avisos são administrativos e independem da
+preferência pessoal de recebimento de lembretes.
+
+As tabelas `designacoes_respostas`, `designacoes_respostas_tokens` e
+`designacoes_recusas_avisos` são criadas no primeiro uso. Não é necessário SQL manual.
+
 ## Executar os testes
 
 ### Serviço de Campo

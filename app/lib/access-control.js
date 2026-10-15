@@ -8,6 +8,7 @@ export const PAGE_PERMISSIONS = [
 ];
 
 export const ACTION_PERMISSIONS = [
+  { key: 'designacoes_confirmacoes', label: 'Gerenciar confirmações e receber recusas' },
   { key: 's21_visualizar', label: 'Visualizar S-21 de outros publicadores' },
   { key: 's21_exportar', label: 'Exportar PDF / imprimir S-21 de outros publicadores' },
   { key: 'designacoes_importar', label: 'Importar RTF (Designações)' },

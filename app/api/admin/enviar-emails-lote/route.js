@@ -1,3 +1,6 @@
+import { confirmationEmailContent } from '@/app/lib/assignment-response-email';
+import { getActiveAssignments } from '@/app/lib/alert-service';
+import { todayInBrazil, meaningfulAssignments, dateKey } from '@/app/lib/alerts';
 import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
@@ -27,7 +30,7 @@ export async function POST(request) {
   const denied = await authorizeRequest(request, 'POST');
   if (denied) return denied;
   const body = await request.json();
-  const { recipientsList, weekText, schedule, assignments } = body;
+  const { recipientsList, weekText, schedule, assignments, meetingDate } = body;
 
   if (!recipientsList || !schedule || !assignments) {
     return NextResponse.json({ message: 'Dados incompletos.' }, { status: 400 });
@@ -41,7 +44,7 @@ export async function POST(request) {
     if (!isAllowed(perms, 'designacoes_email', 'actions')) {
       return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
     }
-    const pubRes = await client.query('SELECT nome_completo, nome_chamado, email FROM publicadores');
+    const pubRes = await client.query('SELECT id, nome_completo, nome_chamado, email FROM publicadores');
     const emailToPubMap = new Map();
     const nameFormattingMap = new Map();
 
@@ -58,6 +61,7 @@ export async function POST(request) {
         }
     });
 
+    const activeAssignments = await getActiveAssignments(client, { today: todayInBrazil() });
     const tabelaHtml = generateMeetingHtml(weekText, schedule, assignments, nameFormattingMap);
     const logo = await getEmailLogoAttachment();
 
@@ -123,7 +127,13 @@ export async function POST(request) {
             `;
         }
 
+        const savedAssignments = publicador ? meaningfulAssignments(activeAssignments.filter(a =>
+            Number(a.publicador_id) === Number(publicador.id) && a.origem === 'vida_ministerio'
+            && (meetingDate ? dateKey(a.data_reuniao) === meetingDate : a.descricao_semana === weekText)
+        )) : [];
+        const confirmation = await confirmationEmailContent(client, savedAssignments);
         const content = `
+                ${confirmation.html}
                 ${personalBlock}
                 <p style="font-size: 14px; margin-bottom: 10px; font-weight: bold;">Programação completa:</p>
                 ${tabelaHtml}
@@ -136,7 +146,7 @@ export async function POST(request) {
         plain('br').replaceWith('\n');
         plain('td').append(' | ');
         plain('p,li,tr,h2').append('\n');
-        const text = brandEmailText(plain.root().text().split('\n').map(line => line.trim()).filter(Boolean).join('\n'));
+        const text = confirmation.text + brandEmailText(plain.root().text().split('\n').map(line => line.trim()).filter(Boolean).join('\n'));
 
         return transporter.sendMail({
             from: emailSender(process.env.EMAIL_USER),
@@ -145,7 +155,8 @@ export async function POST(request) {
         });
     });
 
-    await Promise.allSettled(emailPromises);
+    const deliveryResults = await Promise.allSettled(emailPromises);
+    const failed = deliveryResults.filter(result => result.status === 'rejected' || result.value?.rejected?.length).length;
 
     await registerAuditLog(client, {
       userId,
@@ -154,7 +165,7 @@ export async function POST(request) {
       details: { total: recipientsList.length, weekText }
     });
 
-    return NextResponse.json({ message: 'Envio concluído.' }, { status: 200 });
+    return NextResponse.json({ message: failed ? `${failed} envio(s) falharam. Confira a configuração de email e APP_URL e tente novamente.` : 'Envio concluído.', failed }, { status: failed ? 503 : 200 });
 
   } catch (err) {
     console.error('Erro no envio em lote:', err);

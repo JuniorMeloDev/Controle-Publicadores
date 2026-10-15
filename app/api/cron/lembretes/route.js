@@ -1,3 +1,4 @@
+import { confirmationEmailContent, deliverRefusalEmails } from '@/app/lib/assignment-response-email';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
@@ -17,6 +18,7 @@ export async function GET(request) {
     }
     const client = await pool.connect();
     try {
+        await deliverRefusalEmails(client);
         const settings = await getAlertSettings(client);
         if (!settings.emailEnabled) return NextResponse.json({ message: 'Lembretes por e-mail desativados.' });
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -38,9 +40,12 @@ export async function GET(request) {
         const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
             connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000 });
         const logo = reminders.length ? await getEmailLogoAttachment() : null;
-        const totals = await deliverReminders(client, reminders, reminder => transporter.sendMail({
-            from: emailSender(process.env.EMAIL_USER), to: reminder.email, ...reminderMessage(reminder), attachments: [logo],
-        }));
+        const totals = await deliverReminders(client, reminders, async reminder => {
+            reminder.confirmation = await confirmationEmailContent(client, reminder.assignments);
+            return transporter.sendMail({
+                from: emailSender(process.env.EMAIL_USER), to: reminder.email, ...reminderMessage(reminder), attachments: [logo],
+            });
+        });
         return NextResponse.json({ message: 'Lembretes processados.', ...totals }, { status: totals.failed ? 503 : 200 });
     } catch (error) {
         console.error('Falha ao processar lembretes:', error.message);

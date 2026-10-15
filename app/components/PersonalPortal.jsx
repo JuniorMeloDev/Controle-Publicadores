@@ -31,6 +31,26 @@ export default function PersonalPortal({ section = 'overview' }) {
     if (user) loadPersonalData();
   }, [loadPersonalData, user]);
 
+  useEffect(() => {
+    if (!user || section !== 'assignments') return;
+    const refresh = () => { if (document.visibilityState === 'visible') loadPersonalData({ force: true }); };
+    window.addEventListener('focus', refresh);
+    const timer = window.setInterval(refresh, 30000);
+    return () => { window.removeEventListener('focus', refresh); window.clearInterval(timer); };
+  }, [user, section, loadPersonalData]);
+
+  async function respond(item, resposta) {
+    setSaving(true); setError(''); setMessage('');
+    try {
+      const response = await fetch('/api/designacoes/resposta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ versao: item.versao, resposta }) });
+      const result = await response.json();
+      await loadPersonalData({ force: true });
+      if (!response.ok) throw new Error(result.message);
+      setMessage(resposta === 'sim' ? 'Designação confirmada.' : 'Recusa registrada. Os responsáveis serão avisados.');
+      window.dispatchEvent(new Event('notifications:changed'));
+    } catch (err) { setError(err.message); } finally { setSaving(false); }
+  }
+
   async function startEdit() {
     setError(''); setMessage(''); setSaving(true);
     try {
@@ -90,7 +110,7 @@ export default function PersonalPortal({ section = 'overview' }) {
         </div>}
       </div>
       {invalidPeriod && section === 'assignments' && <p role="alert" className="mb-3 text-sm text-red-600">A data final deve ser igual ou posterior à inicial.</p>}
-      {!assignments.length ? <p className="text-gray-500">Nenhuma designação neste período.</p> : <ul className="grid gap-3 lg:grid-cols-2">{assignments.map(item => <li key={item.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3"><p className="text-sm font-semibold text-gray-900">{item.nome_parte}</p><p className="mt-1 text-sm text-gray-600">{formatDate(item.data_reuniao)} · {item.categoria}</p>{item.descricao_semana && <p className="mt-2 text-sm text-gray-500">{item.descricao_semana}</p>}</li>)}</ul>}
+      {!assignments.length ? <p className="text-gray-500">Nenhuma designação neste período.</p> : <ul className="grid gap-3 lg:grid-cols-2">{assignments.map(item => <li key={item.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3"><p className="text-sm font-semibold text-gray-900">{item.nome_parte}</p><p className="mt-1 text-sm text-gray-600">{formatDate(item.data_reuniao)} · {item.categoria}</p>{item.descricao_semana && <p className="mt-2 text-sm text-gray-500">{item.descricao_semana}</p>}<p className="mt-3 text-sm font-medium text-gray-900">{item.resposta === 'sim' ? 'Confirmada' : item.resposta === 'nao' ? 'Recusada — aguardando substituição' : 'Sem resposta — designação válida'}</p>{String(item.data_reuniao).slice(0, 10) >= today && (!item.resposta || item.resposta === 'sem_resposta') && <div className="mt-3"><p className="text-sm text-gray-700">Confirma sua designação?</p><div className="mt-2 flex gap-3"><button disabled={saving} onClick={() => respond(item, 'sim')} className="rounded-lg bg-purple-700 px-4 py-2 text-sm text-white disabled:opacity-50">Sim</button><button disabled={saving} onClick={() => respond(item, 'nao')} className="rounded-lg border border-red-300 px-4 py-2 text-sm text-red-700 disabled:opacity-50">Não</button></div></div>}</li>)}</ul>}
     </section>}
     {section === 'overview' && <CongregationOverview />}
     {section === 'data' && <section className={cardClass}>

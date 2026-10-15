@@ -105,8 +105,8 @@ export function reminderMessage(reminder) {
     const parts = reminder.assignments.map(a => `${a.categoria}: ${a.nome_parte}${a.origem === 'limpeza_semanal' ? ` — ${a.descricao_semana || ''}` : ''}`);
     const intro = `Olá, ${reminder.name}! Suas designações para ${date}:`;
     const subject = `Lembrete de designações — ${date}`;
-    return { subject, text: brandEmailText(`${intro}\n\n${parts.join('\n')}\n\nConfira a programação no aplicativo.`),
+    return { subject, text: brandEmailText(`${intro}\n\n${parts.join('\n')}\n${reminder.confirmation?.text || ''}\nConfira a programação no aplicativo.`),
         html: buildEmailHtml({ subject, preheader: `Suas designações para ${date}.`, label: 'LEMBRETE DE DESIGNAÇÕES', title: 'Suas próximas designações',
-            content: `<p style="font-size:16px;line-height:26px;color:#52525b">${escapeHtml(intro)}</p><ul style="padding-left:20px">${parts.map(p => `<li style="margin-bottom:12px;line-height:24px;color:#52525b">${escapeHtml(p)}</li>`).join('')}</ul><p style="font-size:14px;color:#71717a">Confira a programação no aplicativo.</p>`,
+            content: `<p style="font-size:16px;line-height:26px;color:#52525b">${escapeHtml(intro)}</p><ul style="padding-left:20px">${parts.map(p => `<li style="margin-bottom:12px;line-height:24px;color:#52525b">${escapeHtml(p)}</li>`).join('')}</ul>${reminder.confirmation?.html || ''}<p style="font-size:14px;color:#71717a">Confira a programação no aplicativo.</p>`,
             footerNote: 'Você recebeu este lembrete porque tem designações agendadas e os lembretes por e-mail estão ativados.' }) };
 }
