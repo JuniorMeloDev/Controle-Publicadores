@@ -1,7 +1,8 @@
 'use client';
 
 import { cloneElement, useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Plus, Pencil, Trash2, Loader2, MapPin, CheckCircle2 } from 'lucide-react';
+import { Plus, Pencil, Loader2, MapPin, CheckCircle2 } from 'lucide-react';
+import { DesignationRowActions } from './DesignationRowActions';
 import { Button } from '@/app/components/ui/button';
 import { StatusToast } from '@/app/components/ui/status-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
@@ -161,7 +162,7 @@ export function FieldServiceTab() {
         {section === 'saidas' && (agenda.length ? agenda.map(row => <article key={row.id} className="p-4 flex flex-col sm:flex-row gap-3 sm:items-start"><div className="min-w-0 flex-1 space-y-1">
           <div className="font-semibold text-gray-900">{displayDate(row.data)} · {row.horario}</div><div className="text-sm text-gray-700">{name('publicadores', row.dirigente_publicador_id) || 'Dirigente a definir'}</div>
           <div className="text-sm text-gray-500 break-words">{groupsLabel(row.grupos)} · {name('locais', row.local_id) || 'Local a definir'}</div><div className="text-sm text-purple-700">{FIELD_MODES[row.modalidade]}{row.territorios.length ? `: ${territoryLabel(row.territorios)}` : ''}</div>
-          {row.observacoes && <p className="text-sm text-gray-600 whitespace-pre-wrap break-words">{row.observacoes}</p>}</div><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" onClick={() => openShare(buildFieldOutingMessage(row, data))}>Compartilhar</Button>{buttons('saidas', row)}{canEdit && <Button variant="outline" size="sm" aria-label={`Excluir saída de ${displayDate(row.data)} às ${row.horario}`} onClick={() => setPendingDelete(row)}><Trash2 className="h-4 w-4 text-red-600" /></Button>}</div></article>) : <p className="p-10 text-center text-sm text-gray-500">Nenhuma saída neste período. Escolha um publicador e um local para começar a programação.</p>)}
+          {row.observacoes && <p className="text-sm text-gray-600 whitespace-pre-wrap break-words">{row.observacoes}</p>}</div><div className="flex flex-wrap gap-2">{buttons('saidas', row)}<DesignationRowActions label={`Saída de ${displayDate(row.data)} ${row.horario}`} message={buildFieldOutingMessage(row, data)} filename={`campo-${row.data}-${row.id}`} canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')} onDelete={canEdit ? () => setPendingDelete(row) : undefined} /></div></article>) : <p className="p-10 text-center text-sm text-gray-500">Nenhuma saída neste período. Escolha um publicador e um local para começar a programação.</p>)}
         {section !== 'saidas' && (data[section].filter(row => showInactive || row.ativo).length ? data[section].filter(row => showInactive || row.ativo).map(row => <article key={row.id} className="p-4 flex flex-col sm:flex-row gap-3"><div className="min-w-0 flex-1 space-y-1">
           <div className="font-semibold text-gray-900">{row.nome || `Território ${row.numero}`}{!row.ativo && <span className="ml-2 text-xs text-gray-500">Inativo</span>}</div>
           {section === 'locais' && <><p className="text-sm text-gray-600 break-words">{row.endereco || 'Endereço a cadastrar'}</p><p className="text-sm text-gray-500">{groupsLabel(row.grupos)}</p>{row.mapa_url && /^https?:\/\//i.test(row.mapa_url) && <a href={row.mapa_url} target="_blank" rel="noopener noreferrer" className="inline-flex gap-1 items-center text-sm text-purple-700 underline"><MapPin className="w-4 h-4" />Abrir mapa</a>}{row.observacoes && <p className="text-sm text-gray-600 whitespace-pre-wrap break-words">{row.observacoes}</p>}</>}

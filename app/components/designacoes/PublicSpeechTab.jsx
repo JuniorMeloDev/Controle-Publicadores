@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
-import { Loader2, Calendar, User, BookOpen, Music, Users, Plus, Trash2, Edit, Menu, AlertTriangle, Printer, FileText, ChevronRight } from 'lucide-react';
+import { DesignationRowActions } from './DesignationRowActions';
+import { publicSpeechMessage } from '@/app/lib/designation-share';
+import { Loader2, Calendar, User, BookOpen, Music, Users, Plus, Edit, Menu, AlertTriangle, Printer, FileText, ChevronRight } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { ConfirmationDialog } from '@/app/components/ui/confirmation-dialog';
 import { Input } from '@/app/components/ui/input';
@@ -540,12 +542,9 @@ export function PublicSpeechTab() {
                                             </div>
                                             <ChevronRight size={20} className="shrink-0 text-gray-400 group-hover:text-purple-500" />
                                         </button>
-                                        {talk.id && !talk.cancelado && <button
-                                            type="button" disabled={!canEdit} onClick={() => setPendingDelete(talk)}
-                                            aria-label={`Excluir designações do discurso de ${formatDate(talk.data)}`}
-                                            title="Excluir designações"
-                                            className="p-2 mr-4 rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        ><Trash2 size={16} /></button>}
+                                        {talk.id && !talk.cancelado && <div className="pr-4"><DesignationRowActions
+                                            label={`Discurso de ${formatDate(talk.data)}`} message={publicSpeechMessage(talk)} filename={`discurso-${talk.data}`}
+                                            canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')} onDelete={canEdit ? () => setPendingDelete(talk) : undefined} /></div>}
                                     </div>
                                 <Card className="md:hidden hover:shadow-md transition-all group border-gray-200">
                                     <CardHeader className="pb-3 border-b border-gray-100 bg-white rounded-t-xl">
@@ -558,7 +557,7 @@ export function PublicSpeechTab() {
                                             </div>
                                             <div className="flex gap-1">
                                                 <button disabled={!canEdit || talk.cancelado} onClick={() => handleEdit(talk)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Editar"><Edit size={16} /></button>
-                                                <button disabled={!canEdit || !talk.id || talk.cancelado} onClick={() => setPendingDelete(talk)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Excluir"><Trash2 size={16} /></button>
+                                                {talk.id && !talk.cancelado && <DesignationRowActions label={`Discurso de ${formatDate(talk.data)}`} message={publicSpeechMessage(talk)} filename={`discurso-${talk.data}`} canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')} onDelete={canEdit ? () => setPendingDelete(talk) : undefined} />}
                                             </div>
                                         </div>
                                         <CardDescription className="flex items-center gap-1.5 mt-2 text-gray-500 font-medium bg-gray-50 py-1 px-2 rounded w-fit">

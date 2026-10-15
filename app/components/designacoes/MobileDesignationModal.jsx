@@ -5,6 +5,7 @@ import { User, BookOpen, Music, Mic, Users, Save, Loader2, Printer, Edit2, Check
 import { useState, useEffect, useRef } from 'react';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
+import { updateDraftAssignments, updateDraftSchedule } from '@/app/lib/life-ministry-draft';
 
 const footerButtonClass = 'h-10 min-w-0 w-full px-3 rounded-md text-sm font-medium inline-flex items-center justify-center gap-2 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:shrink-0';
 
@@ -126,7 +127,11 @@ const normalizeText = (text) => {
       .replace(/[\u0300-\u036f]/g, '');
 };
 
-export function MobileDesignationModal({ isOpen, onClose, schedule, assignments, weekDescription, publicadores, historyData = [], onAssignmentChange, onSave, isSaving, onPrint, onScheduleUpdate, onOpenEmail, onShareWhatsApp }) {
+export function MobileDesignationModal({ isOpen, onClose, schedule: savedSchedule, assignments: savedAssignments, weekDescription, publicadores, historyData = [], onSave, isSaving, onPrint, onOpenEmail, onShareWhatsApp }) {
+   const [schedule, setSchedule] = useState(() => structuredClone(savedSchedule));
+   const [assignments, setAssignments] = useState(() => ({ ...savedAssignments }));
+   const onAssignmentChange = (partId, name) => setAssignments(prev => updateDraftAssignments(prev, partId, name));
+   const onScheduleUpdate = (section, index, title) => setSchedule(prev => updateDraftSchedule(prev, section, index, title));
    const { permissions } = usePermissions();
    const canSave = isAllowed(permissions, 'designacoes_salvar', 'actions');
    const canPdf = isAllowed(permissions, 'designacoes_pdf', 'actions');
@@ -348,7 +353,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
    };
 
    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
+      <Dialog open={isOpen} onOpenChange={open => { if (!open && !isSaving) onClose(); }}>
          <DialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] z-50 w-[calc(100%-2rem)] max-w-xl max-h-[90dvh] p-0 gap-0 overflow-hidden rounded-xl bg-white flex flex-col border shadow-lg outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:rounded-xl">
 
             {/* --- HISTORY MODAL (NESTED ABSOLUTE OVERLAY) --- */}
@@ -554,7 +559,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
 
                   <button 
                      type="button" 
-                     onClick={onPrint} 
+                     onClick={() => onPrint({ schedule, assignments, description: weekDescription })}
                      disabled={!canPdf} 
                      className={`${footerButtonClass} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50`}
                   >
@@ -563,7 +568,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule, assignments,
 
                   <button 
                      type="button" 
-                     onClick={async () => { if (onSave) await onSave(); onClose(); }} 
+                     onClick={async () => { if (onSave && await onSave({ schedule, assignments })) onClose(); }}
                      disabled={isSaving || !canSave} 
                      className={`${footerButtonClass} bg-purple-600 hover:bg-purple-700 text-white`}
                   >

@@ -11,6 +11,37 @@ import { dateOnly, meetingCancellation } from '@/app/lib/meeting-calendar';
 export const dynamic = 'force-dynamic';
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 
+export async function DELETE(request) {
+    const denied = await authorizeRequest(request, 'DELETE');
+    if (denied) return denied;
+    const ids = (new URL(request.url).searchParams.get('reuniao_ids') || '').split(',').map(Number);
+    if (!ids.length || ids.length > 7 || ids.some(id => !Number.isSafeInteger(id) || id <= 0) || new Set(ids).size !== ids.length) {
+        return NextResponse.json({ message: 'Reuniões inválidas.' }, { status: 400 });
+    }
+    const client = await pool.connect();
+    let transaction = false;
+    try {
+        const userId = getUserIdFromRequest(request);
+        const permissions = await getUserPermissions(client, userId);
+        if (!isAllowed(permissions, 'privilegios_mecanicos_editar', 'actions')) return NextResponse.json({ message: 'Acesso negado.' }, { status: 403 });
+        await client.query('BEGIN'); transaction = true;
+        const { rows } = await client.query('SELECT id, data FROM reunioes_registro WHERE id=ANY($1::int[]) AND cancelada=FALSE ORDER BY id FOR UPDATE', [ids]);
+        if (rows.length !== ids.length || new Set(rows.map(m => getWeekStart(m.data))).size !== 1) {
+            await client.query('ROLLBACK'); transaction = false;
+            return NextResponse.json({ message: 'Selecione reuniões ativas de uma mesma semana.' }, { status: 400 });
+        }
+        await client.query('DELETE FROM reunioes_privilegios WHERE reuniao_id=ANY($1::int[])', [ids]);
+        const columns = [...new Set(Object.values(legacyColumns))];
+        await client.query(`UPDATE reunioes_registro SET ${columns.map(column => `${column}=NULL`).join(', ')} WHERE id=ANY($1::int[])`, [ids]);
+        await registerAuditLog(client, { userId, action: 'privilegios_excluidos', entity: 'reuniao', entityId: ids.join(','), details: { reuniao_ids: ids } });
+        await client.query('COMMIT'); transaction = false;
+        return NextResponse.json({ message: 'Privilégios removidos. As reuniões foram preservadas.' });
+    } catch {
+        if (transaction) await client.query('ROLLBACK');
+        return NextResponse.json({ message: 'Não foi possível excluir os privilégios.' }, { status: 500 });
+    } finally { client.release(); }
+}
+
 export async function GET(request) {
   const denied = await authorizeRequest(request, 'GET');
   if (denied) return denied;

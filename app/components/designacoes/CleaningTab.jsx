@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { DesignationRowActions } from './DesignationRowActions';
+import { cleaningMessage } from '@/app/lib/designation-share';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { ConfirmationDialog } from '@/app/components/ui/confirmation-dialog';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea'; 
-import { Plus, Trash2, Calendar as CalendarIcon, Loader2, ChevronRight, Users } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Loader2, ChevronRight, Users } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { usePermissions } from '@/app/components/PermissionsContext';
@@ -214,12 +216,10 @@ export function CleaningTab() {
               const dateLabel = meetingDate.toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
               const status = item.cancelado ? `Cancelada: ${item.motivo_cancelamento || 'Reunião cancelada'}` : !item.grupo || !item.tarefas ? 'Designações pendentes' : 'Designação completa';
               const statusClass = `text-xs ${item.cancelado ? 'text-red-600' : 'text-purple-600'}`;
-              const deleteButton = canEdit && item.id && !item.cancelado && (
-                <button type="button" onClick={() => setPendingDelete(item)} aria-label={`Excluir limpeza de ${dateLabel}`}
-                  className="shrink-0 h-10 w-10 inline-flex items-center justify-center rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              );
+              const deleteButton = item.id && !item.cancelado && <DesignationRowActions label={`Limpeza de ${dateLabel}`}
+                message={cleaningMessage(item)} filename={`limpeza-${item.data.slice(0, 10)}`}
+                canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')}
+                onDelete={canEdit ? () => setPendingDelete(item) : undefined} />;
               return <div key={item.id || `reuniao-${item.reuniao_id}`}>
                 <div className="hidden md:flex items-center pr-4">
                   <button type="button" onClick={() => openEditModal(item)} disabled={!canEdit || groupsLoading || item.cancelado}

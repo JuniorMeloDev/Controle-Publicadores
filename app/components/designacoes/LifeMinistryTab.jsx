@@ -9,9 +9,12 @@ import { Loader2, Printer, UploadCloud, Save, ChevronLeft, ChevronRight, Calenda
 import TabelaDesignacoes from '@/app/componentes/TabelaDesignacoes';
 import { Button } from '@/app/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/app/components/ui/sheet';
+import { ConfirmationDialog } from '@/app/components/ui/confirmation-dialog';
+import { DesignationRowActions } from './DesignationRowActions';
 import { StatusToast } from '@/app/components/ui/status-toast';
 import { useDesignationPeriod } from './DesignationPeriodContext';
 import { requestMeetingProgram } from '@/app/lib/import-programs-client';
+import { fetchLifeMinistryExportDetails, meetingExportKey } from '@/app/lib/life-ministry-export';
 import { buildLifeMinistryWhatsAppMessage, lifeMinistryWhatsAppUrl } from '@/app/lib/life-ministry-whatsapp';
 import { DesignationPeriodFilters, designationToolbarClass, designationActionClass, designationListHeaderClass } from './DesignationLayout';
 
@@ -194,6 +197,8 @@ export function LifeMinistryTab() {
   const canEmail = isAllowed(permissions, 'designacoes_email', 'actions');
   const [publicadores, setPublicadores] = useState([]);
   const [savedMeetingsList, setSavedMeetingsList] = useState([]);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [exportingMeeting, setExportingMeeting] = useState(null);
   const [historyData, setHistoryData] = useState([]); // New state for history
   const [isLoading, setIsLoading] = useState(true);
 
@@ -270,6 +275,18 @@ export function LifeMinistryTab() {
       const res = await fetch('/api/admin/get-reunioes');
       if (res.ok) setSavedMeetingsList(await res.json());
     } catch (e) { console.error(e); }
+  };
+
+  const handleDeleteAssignments = async (meeting) => {
+    const response = await fetch(`/api/admin/salvar-designacoes?date=${encodeURIComponent(meeting.dataSQL)}`, { method: 'DELETE' });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || 'Não foi possível excluir as designações.');
+    setAssignmentsList(prev => prev.map((item, idx) => meetingDates[idx] === meeting.dataSQL ? {} : item));
+    setSchedules(prev => prev.map((item, idx) => meetingDates[idx] === meeting.dataSQL ? { ...item, participantes_externos: [] } : item));
+    const history = await fetch('/api/admin/get-historico-designacoes');
+    if (history.ok) setHistoryData(await history.json());
+    await refreshSavedMeetings();
+    setToastData({ message: result.message, type: 'success' });
   };
 
   // Filter Logic centralized
@@ -531,44 +548,13 @@ export function LifeMinistryTab() {
     }
   };
 
-  const handleAssignmentChange = (partId, name) => {
-    setAssignmentsList(prevList => {
-      const newList = [...prevList];
-      const currentAssignments = { ...newList[currentIndex] };
-
-      if (typeof partId === 'object' && partId !== null) {
-        // Bulk Update
-        Object.assign(currentAssignments, partId);
-
-        // Special logic for President in bulk update if present
-        if (partId.presidente) {
-          currentAssignments['comentarios_iniciais'] = partId.presidente;
-          currentAssignments['comentarios_finais'] = partId.presidente;
-          currentAssignments['cantico_meio'] = partId.presidente;
-        }
-      } else {
-        // Single Update
-        currentAssignments[partId] = name;
-
-        if (partId === 'presidente') {
-          currentAssignments['comentarios_iniciais'] = name;
-          currentAssignments['comentarios_finais'] = name;
-          currentAssignments['cantico_meio'] = name;
-        }
-      }
-
-      newList[currentIndex] = currentAssignments;
-      return newList;
-    });
-  };
-
   const handleDescriptionChange = (newText) => {
     setWeekDescriptions(prev => { const next = [...prev]; next[currentIndex] = newText; return next; });
   };
 
-  const handleSaveCurrent = async () => {
-    const currentSchedule = schedules[currentIndex];
-    const currentAssignments = assignmentsList[currentIndex];
+  const handleSaveCurrent = async (draft) => {
+    const currentSchedule = draft?.schedule || schedules[currentIndex];
+    const currentAssignments = draft?.assignments || assignmentsList[currentIndex];
     const currentDescription = weekDescriptions[currentIndex];
     const currentDateSQL = meetingDates[currentIndex];
 
@@ -593,19 +579,23 @@ export function LifeMinistryTab() {
         const result = await response.json();
         throw new Error(result.message || 'Erro ao salvar designações.');
       }
+      setSchedules(prev => prev.map((item, idx) => idx === currentIndex ? currentSchedule : item));
+      setAssignmentsList(prev => prev.map((item, idx) => idx === currentIndex ? currentAssignments : item));
       setToastData({ message: 'Salvo com sucesso!', type: 'success' });
       refreshSavedMeetings();
+      return true;
     } catch (err) {
       setToastData({ message: err.message, type: 'error' });
+      return false;
     } finally { setIsSaving(false); }
   };
 
   const handleGeneratePDF = (indexOverride) => {
     const targetIdx = typeof indexOverride === 'number' ? indexOverride : currentIndex;
     const doc = new jsPDF('p', 'mm', 'a4');
-    const schedule = schedules[targetIdx];
-    const assignments = assignmentsList[targetIdx];
-    const weekText = weekDescriptions[targetIdx];
+    const schedule = indexOverride?.schedule || schedules[targetIdx];
+    const assignments = indexOverride?.assignments || assignmentsList[targetIdx];
+    const weekText = indexOverride?.description || weekDescriptions[targetIdx];
 
     if (!schedule || !assignments) return;
 
@@ -1177,7 +1167,7 @@ export function LifeMinistryTab() {
     }
   };
 
-  const handleShareWhatsApp = (scheduleOverride, assignmentsOverride, descriptionOverride) => {
+  const handleShareWhatsApp = (scheduleOverride, assignmentsOverride, descriptionOverride, shareWindow) => {
     let currentSchedule = scheduleOverride;
     let currentAssignments = assignmentsOverride;
     let currentDescription = descriptionOverride;
@@ -1204,7 +1194,31 @@ export function LifeMinistryTab() {
         setToastData({ message: 'Mensagem copiada. Você também pode colá-la no WhatsApp.', type: 'success' });
       }).catch(() => {});
     }
-    window.open(lifeMinistryWhatsAppUrl(decodeURIComponent(text)), '_blank', 'noopener,noreferrer');
+    const url = lifeMinistryWhatsAppUrl(decodeURIComponent(text));
+    if (shareWindow) shareWindow.location.replace(url);
+    else window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleExportSavedMeeting = async (meeting, type) => {
+    if (exportingMeeting) return;
+    const idx = meetingDates.findIndex((date, index) => date === meeting.dataSQL && schedules[index]);
+    if (idx >= 0) {
+      if (type === 'pdf') handleGeneratePDF(idx);
+      else handleShareWhatsApp(idx);
+      return;
+    }
+    // Reserve the tab during the click so loading saved data does not trigger popup blockers.
+    const shareWindow = type === 'whatsapp' ? window.open('about:blank', '_blank') : null;
+    if (shareWindow) shareWindow.opener = null;
+    setExportingMeeting(meeting.dataSQL);
+    try {
+      const [details] = await fetchLifeMinistryExportDetails([meeting], new Set([meetingExportKey(meeting)]));
+      if (type === 'pdf') handleGeneratePDF({ schedule: details.schedule, assignments: details.assignments, description: details.weekDescription });
+      else handleShareWhatsApp(details.schedule, details.assignments, details.weekDescription, shareWindow);
+    } catch (err) {
+      shareWindow?.close();
+      setToastData({ message: err.message, type: 'error' });
+    } finally { setExportingMeeting(null); }
   };
 
   const handlePrintAll = () => { window.print(); };
@@ -1223,27 +1237,6 @@ export function LifeMinistryTab() {
   // Let's replace the whole JSX first.
 
   // --- HANDLERS (UPDATED) ---
-  const handleSchedulePartUpdate = (section, partIndex, newTitle) => {
-    setSchedules(prev => {
-      const newSchedules = [...prev];
-      const currentSchedule = { ...newSchedules[currentIndex] };
-
-      if (section in currentSchedule) {
-        if (typeof partIndex === 'number') {
-          const newSection = [...currentSchedule[section]];
-          if (newSection[partIndex]) {
-            newSection[partIndex] = { ...newSection[partIndex], title: newTitle };
-            currentSchedule[section] = newSection;
-          }
-        } else {
-          currentSchedule[section] = newTitle;
-        }
-        newSchedules[currentIndex] = currentSchedule;
-      }
-      return newSchedules;
-    });
-  };
-
   const handleCloseMobileModal = () => {
     if (importQueue.length > 0) {
       // Open next in queue
@@ -1259,6 +1252,9 @@ export function LifeMinistryTab() {
   return (
     <div className="w-full min-w-0">
       <StatusToast message={toastData.message} type={toastData.type} onClose={() => setToastData({ message: '', type: '' })} />
+      {pendingDelete && <ConfirmationDialog destructive title="Excluir designações de Vida e Ministério?" confirmLabel="Excluir"
+        description={`As pessoas designadas para ${formatFullDateBR(pendingDelete.dataSQL)} serão removidas. A programação e a reunião continuarão disponíveis para preencher novamente.`}
+        onConfirm={() => handleDeleteAssignments(pendingDelete)} onCancel={() => setPendingDelete(null)} />}
       {error && <p role="alert" className="mb-4 bg-red-50 text-red-700 border border-red-200 rounded-lg p-3 text-sm">{error}
         {programSessionRequired && <Link href="/" prefetch={false} className="block mt-2 font-semibold underline">Entrar novamente</Link>}
       </p>}
@@ -1318,7 +1314,8 @@ export function LifeMinistryTab() {
       )}
 
       {/* MODAL DE EDIÇÃO (ÚNIO) */}
-      <MobileDesignationModal
+      {isMobileModalOpen && <MobileDesignationModal
+        key={meetingDates[currentIndex]}
         isOpen={isMobileModalOpen}
         onClose={handleCloseMobileModal}
         schedule={schedules[currentIndex]}
@@ -1326,14 +1323,12 @@ export function LifeMinistryTab() {
         weekDescription={weekDescriptions[currentIndex]}
         publicadores={publicadores}
         historyData={historyData}
-        onAssignmentChange={handleAssignmentChange}
         onSave={handleSaveCurrent}
         isSaving={isSaving}
         onPrint={handleGeneratePDF}
-        onScheduleUpdate={handleSchedulePartUpdate}
         onOpenEmail={handleOpenEmailModal}
         onShareWhatsApp={handleShareWhatsApp}
-      />
+      />}
 
       <div className="flex flex-col gap-4">
 
@@ -1425,17 +1420,12 @@ export function LifeMinistryTab() {
                       <ChevronRight size={20} />
                       </span>
                     </button>
-                    {schedule && !item.meeting.cancelado && <div className="flex gap-2 px-4 pb-4 sm:pb-0 sm:pl-0">
-                      <button type="button" onClick={() => handleShareWhatsApp(idx)} title="Compartilhar no WhatsApp"
-                        aria-label={`Compartilhar ${item.label} no WhatsApp`}
-                        className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200">
-                        <MessageCircle size={16} />
-                      </button>
-                      <button type="button" onClick={() => handleGeneratePDF(idx)} title="Gerar PDF"
-                        aria-label={`Gerar PDF de ${item.label}`}
-                        className="p-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg border border-gray-200">
-                        <FileText size={16} />
-                      </button>
+                    {(schedule || item.meeting.tem_programacao) && !item.meeting.cancelado && <div className="flex gap-2 px-4 pb-4 sm:pb-0 sm:pl-0">
+                      <DesignationRowActions label={item.label} disabled={isSaving || Boolean(exportingMeeting)}
+                        onWhatsApp={() => handleExportSavedMeeting(item.meeting, 'whatsapp')}
+                        onPdf={() => handleExportSavedMeeting(item.meeting, 'pdf')}
+                        canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')}
+                        onDelete={isAllowed(permissions, 'designacoes_salvar', 'actions') ? () => setPendingDelete(item.meeting) : undefined} />
                     </div>}
                   </div>
                   );

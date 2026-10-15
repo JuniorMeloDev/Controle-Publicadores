@@ -26,6 +26,6 @@ export function loadRoute(path, dependencies) {
         ...dependencies
     });
     vm.runInContext(source + '\nglobalThis.handlers = { ' +
-        ['GET', 'POST'].filter(name => source.includes('async function ' + name + '(')).join(', ') + ' };', context);
+        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].filter(name => source.includes('async function ' + name + '(')).join(', ') + ' };', context);
     return context.handlers;
 }

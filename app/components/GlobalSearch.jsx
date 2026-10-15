@@ -4,12 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import { Search, FileText, User, Calendar, Loader2, ArrowRight, LayoutDashboard, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { PublisherSummaryModal } from '@/app/components/designacoes/PublisherSummaryModal';
 
 export function GlobalSearch() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState({ pages: [], publishers: [] });
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [publisherId, setPublisherId] = useState(null);
   const containerRef = useRef(null);
   const router = useRouter();
 
@@ -136,14 +138,14 @@ export function GlobalSearch() {
                                     >
                                         <FileText className="w-3 h-3" /> S-21
                                     </Link>
-                                    <Link 
-                                        href={`/admin/designacoes?highlight=${pub.id}`} 
-                                        onClick={clearAndClose}
+                                    <button
+                                        type="button"
+                                        onClick={() => { clearAndClose(); setPublisherId(pub.id); }}
                                         className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 hover:bg-green-50 hover:text-green-700 rounded border border-gray-100 transition-colors"
                                         title="Ver Designações"
                                     >
                                         <Calendar className="w-3 h-3" /> Designações
-                                    </Link>
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -153,6 +155,7 @@ export function GlobalSearch() {
         </div>
       )}
 
+      {publisherId && <PublisherSummaryModal publisherId={publisherId} isOpen onClose={() => setPublisherId(null)} />}
       {/* No Results */}
       {isOpen && query.length >= 2 && !loading && results.pages.length === 0 && results.publishers.length === 0 && (
           <div className="absolute top-full left-1/2 -translate-x-1/2 text-left mt-2 w-[80vw] sm:w-80 bg-white rounded-xl shadow-xl border border-gray-100 p-4 z-50 text-center">

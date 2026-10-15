@@ -50,7 +50,7 @@ export function MechanicalWeekModal({ week, types, publishers, savedAssignments,
             });
             setNotice(data.unfilled.length
                 ? `Sugestões inseridas. ${data.unfilled.length} campo(s) ficaram vazios por falta de candidatos disponíveis sem repetir pessoas na semana. Você pode preenchê-los manualmente.`
-                : 'Sugestões inseridas. Confira as designações e clique em Salvar semana.');
+                : 'Sugestões inseridas. Confira as designações e clique em Salvar reunião.');
         } catch (err) {
             setError(err.message);
         } finally {
@@ -69,7 +69,7 @@ export function MechanicalWeekModal({ week, types, publishers, savedAssignments,
                 body: JSON.stringify({ reunioes: rows })
             });
             const data = await response.json();
-            if (!response.ok) throw new Error(data.message || 'Não foi possível salvar a semana.');
+            if (!response.ok) throw new Error(data.message || 'Não foi possível salvar a reunião.');
             onSaved(rows);
         } catch (err) {
             setError(err.message);
@@ -80,15 +80,15 @@ export function MechanicalWeekModal({ week, types, publishers, savedAssignments,
 
     return (
         <>
-            <Dialog open onOpenChange={open => !open && !busy && onClose()}>
-                <DialogContent className="bg-white text-gray-900 w-[calc(100%-2rem)] max-w-4xl sm:max-w-4xl max-h-[90dvh] flex flex-col p-0 gap-0 rounded-xl overflow-hidden">
-                    <DialogHeader className="px-5 py-5 pr-12 border-b text-left shrink-0">
+            <Dialog open onOpenChange={open => !open && !busy && !publisherId && onClose()}>
+                <DialogContent className="border-gray-200 bg-white text-gray-900 w-[calc(100%-2rem)] max-w-xl sm:max-w-xl max-h-[90dvh] flex flex-col p-0 gap-0 rounded-xl overflow-hidden">
+                    <DialogHeader className="px-5 py-5 pr-12 border-b border-gray-200 text-left shrink-0">
                         <DialogTitle className="flex items-center gap-2"><Calendar className="text-purple-600 w-5 h-5 shrink-0" /> Privilégios Mecânicos</DialogTitle>
-                        <DialogDescription>Semana de {formatDate(week.start)} a {formatDate(week.end)}</DialogDescription>
+                        <DialogDescription className="text-gray-600">{meetings.length === 1 ? `${meetings[0].tipo} em ${formatDate(meetings[0].data)}` : `Semana de ${formatDate(week.start)} a ${formatDate(week.end)}`}</DialogDescription>
                     </DialogHeader>
-                    <div className="px-5 py-4 border-b bg-purple-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+                    <div className="px-5 py-4 border-b border-gray-200 bg-purple-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
                         <p className="text-xs text-gray-600 max-w-lg">O automático preenche os campos vazios, priorizando quem está há mais tempo sem designação. As escolhas já feitas são mantidas.</p>
-                        <Button variant="outline" onClick={insertAutomatic} disabled={!canEdit || busy || !types.length} className="gap-2 shrink-0 border-purple-200 text-purple-700">
+                        <Button variant="outline" onClick={insertAutomatic} disabled={!canEdit || busy || !types.length} className="gap-2 shrink-0 border-purple-200 bg-white text-purple-700 hover:bg-purple-100">
                             {automatic ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Inserir automático
                         </Button>
                     </div>
@@ -97,10 +97,10 @@ export function MechanicalWeekModal({ week, types, publishers, savedAssignments,
                         {notice && <p role="status" className="p-3 rounded-lg bg-purple-50 text-purple-700 text-sm">{notice}</p>}
                         {week.meetings.filter(m => m.cancelado).map(meeting => <p key={meeting.id} className="text-xs text-amber-700 bg-amber-50 rounded-lg p-3">{formatDate(meeting.data)}: {meeting.motivo_cancelamento || 'Reunião cancelada'}</p>)}
                         {!types.length && <p className="text-sm text-gray-500">Cadastre um tipo de privilégio para inserir designações.</p>}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="grid grid-cols-1 gap-5">
                             {meetings.map(meeting => (
                                 <section key={meeting.id} className="border border-gray-200 rounded-xl p-4 space-y-4 min-w-0">
-                                    <div className="border-b pb-3">
+                                    <div className="border-b border-gray-200 pb-3">
                                         <h3 className="font-semibold text-gray-900">{meeting.tipo}</h3>
                                         <p className="text-sm text-purple-600 mt-1">{formatDate(meeting.data)} · {new Date(meeting.data + 'T00:00:00Z').toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'UTC' })}</p>
                                     </div>
@@ -125,15 +125,15 @@ export function MechanicalWeekModal({ week, types, publishers, savedAssignments,
                             ))}
                         </div>
                     </div>
-                    <DialogFooter className="px-5 py-4 border-t bg-gray-50 gap-2 shrink-0">
-                        <Button variant="outline" onClick={onClose} disabled={busy}>{canEdit ? 'Cancelar' : 'Fechar'}</Button>
+                    <DialogFooter className="px-5 py-4 border-t border-gray-200 bg-gray-50 gap-2 shrink-0">
+                        <Button variant="outline" className="border-gray-300 bg-white text-gray-700 hover:bg-gray-100" onClick={onClose} disabled={busy}>{canEdit ? 'Cancelar' : 'Fechar'}</Button>
                         {canEdit && <Button onClick={save} disabled={busy || !types.length} className="bg-purple-600 hover:bg-purple-700 text-white gap-2">
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar semana
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar reunião
                         </Button>}
                     </DialogFooter>
+                    {publisherId && <PublisherSummaryModal publisherId={publisherId} isOpen onClose={() => setPublisherId(null)} />}
                 </DialogContent>
             </Dialog>
-            <PublisherSummaryModal publisherId={publisherId} isOpen={Boolean(publisherId)} onClose={() => setPublisherId(null)} />
         </>
     );
 }

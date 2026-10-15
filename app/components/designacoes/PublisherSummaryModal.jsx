@@ -42,7 +42,7 @@ export function PublisherSummaryModal({ publisherId, isOpen, onClose }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-lg bg-white">
+      <DialogContent className="w-[calc(100%-2rem)] max-h-[85dvh] overflow-y-auto rounded-xl border-gray-200 bg-white text-gray-900 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-gray-900">
              <Calendar className="w-5 h-5 text-purple-600" />
