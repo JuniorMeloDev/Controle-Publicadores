@@ -30,6 +30,16 @@ export default function RelatoriosHubPage() {
 
   const reports = [
     {
+      title: "Designações do Serviço de Campo",
+      description: "Escala dos dirigentes por período, grupo e local. Exportar PDF ou XLSX.",
+      href: "/admin/relatorios/servico-campo",
+      icon: Calendar,
+      color: "text-teal-600",
+      bgColor: "bg-teal-50",
+      hoverRing: "group-hover:ring-teal-100",
+      active: true
+    },
+    {
       title: "Registro de Publicador (S-21)",
       description: "Imprimir cartões S-21 individuais ou em lote.",
       href: "/admin/relatorios/registro-publicador",

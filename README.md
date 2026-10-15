@@ -141,6 +141,20 @@ de data, cancelamento e restauração sem modificar os registros persistentes.
 
 ### Serviço de Campo
 
+Para cadastrar vários territórios com seus mapas, use **Territórios → Cadastro e registro de territórios
+→ Importar PDFs em lote**. Selecione os arquivos `1.pdf`, `2.pdf`, `3.pdf` etc.;
+o nome preenche o número do território. Confira ou ajuste os números e clique em
+**Importar**. PDFs têm limite de 10 MB por arquivo. Números repetidos no lote ou já
+cadastrados bloqueiam a importação; mapas existentes são alterados pela edição
+individual. Os arquivos são enviados um por vez. Em caso de erro, os concluídos
+permanecem salvos e somente os pendentes são enviados na próxima tentativa.
+
+Em **Relatórios → Designações do Serviço de Campo**, consulte a escala dos dirigentes
+por período (inicialmente o mês atual), dirigente, grupo e local. As exportações
+**PDF** (A4 paisagem) e **XLSX** respeitam os filtros e incluem data, horário,
+dirigente, local e grupos. Saídas sem dirigente aparecem como **A definir**.
+O relatório usa as saídas já cadastradas e exige acesso a Relatórios.
+
 Em **Designações → Serviço de Campo**, cadastre locais e registre os territórios.
 Na saída, escolha qualquer publicador pelo nome no campo **Dirigente**, sem cadastro
 adicional, ou mantenha **A definir**. Selecionar o local preenche os grupos habituais,
@@ -151,9 +165,16 @@ Novas saídas podem se repetir semanalmente por até 12 semanas. Cada ocorrênci
 horário impedem a gravação de todo o lote. Sem grupos selecionados, a saída é da
 congregação. Os dirigentes e suas saídas permanecem registrados na agenda.
 
-Territórios planejados na agenda não geram designação nem conclusão automática.
+Na agenda, marque **Registrar entrega dos territórios ao dirigente ao salvar**
+para registrar a responsabilidade pelos territórios selecionados na mesma transação
+da saída. Exige dirigente e territórios, sem conflito com entregas existentes.
+Em saídas semanais, a entrega é registrada uma vez, com a primeira data.
+Sem marcar a opção, os territórios ficam apenas planejados. A conclusão é sempre
+manual, por território, no histórico. Editar a saída sincroniza as entregas pendentes
+criadas por ela, mesmo sem marcar a opção novamente; entregas manuais, de outras
+saídas e conclusões registradas são preservadas. Excluir a saída preserva as entregas.
 Em **Territórios**, anexe o mapa geral da congregação no topo da seção e o mapa
-individual no cadastro ou no card **Mapas individuais**, organizado por território.
+individual no cadastro ou no card **Cadastro e registro de territórios**, organizado por território.
 Cada território possui um PDF fixo, um link do Google Maps e referências de quadras
 e ruas. Edite as referências ou substitua o PDF quando houver atualização; o mapa
 continua vinculado ao mesmo território. Os arquivos devem ser PDFs

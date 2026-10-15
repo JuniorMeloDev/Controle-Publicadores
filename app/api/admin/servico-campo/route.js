@@ -50,7 +50,7 @@ export async function POST(request) {
     try { result = await mutateFieldService(client, body); }
     catch (error) { if (!error.code && !error.status) error.status = 400; throw error; }
     if (map) await saveFieldMap(client, result.id, map);
-    await registerAuditLog(client, { userId: getUserIdFromRequest(request), action: `campo_${body.entity}_${body.action}`, entity: `campo_${body.entity}`, entityId: result.id, details: { ...body, ids: result.ids, ...(map ? { mapa: map.name } : {}) } });
+    await registerAuditLog(client, { userId: getUserIdFromRequest(request), action: `campo_${body.entity}_${body.action}`, entity: `campo_${body.entity}`, entityId: result.id, details: { ...body, ids: result.ids, ...(result.entregas_sincronizadas ? { entregas_anteriores_removidas: result.entregas_anteriores_removidas } : {}), ...(map ? { mapa: map.name } : {}) } });
     await client.query('COMMIT');
     transaction = false;
     return NextResponse.json(result);

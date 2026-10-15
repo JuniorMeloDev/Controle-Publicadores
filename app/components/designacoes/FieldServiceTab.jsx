@@ -1,13 +1,15 @@
 'use client';
 
 import { cloneElement, useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Plus, Pencil, Trash2, Loader2, MapPin, FileDown, CheckCircle2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, MapPin, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
+import { StatusToast } from '@/app/components/ui/status-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
 import { ConfirmationDialog } from '@/app/components/ui/confirmation-dialog';
 import { PublisherCombobox } from '@/app/components/reunioes/PublisherCombobox';
 import { FieldMapAttachment, FieldMapLinks } from './FieldMapAttachment';
-import { IndividualFieldMaps } from './IndividualFieldMaps';
+import { TerritoryMapDetails } from './IndividualFieldMaps';
+import { FieldMapBatchImport } from './FieldMapBatchImport';
 import { buildFieldOutingMessage, fieldWhatsAppUrl } from '@/app/lib/field-service-share';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
@@ -55,7 +57,6 @@ function Choices({ label, options, selected, onChange }) {
 export function FieldServiceTab() {
   const { permissions } = usePermissions();
   const canEdit = isAllowed(permissions, 'servico_campo_editar', 'actions');
-  const canExport = isAllowed(permissions, 'designacoes_pdf', 'actions');
   const { month, year } = useDesignationPeriod();
   const [section, setSection] = useState('saidas');
   const [data, setData] = useState(blankData);
@@ -69,14 +70,15 @@ export function FieldServiceTab() {
   const [shareMessage, setShareMessage] = useState(null);
   const [shareFeedback, setShareFeedback] = useState('');
   const [busy, setBusy] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [groupFilter, setGroupFilter] = useState('');
   const [serviceYear, setServiceYear] = useState(String(fieldServiceYear(today())));
   const [showInactive, setShowInactive] = useState(false);
+  const [mapTerritoryId, setMapTerritoryId] = useState(null);
+  const [registerHandover, setRegisterHandover] = useState(false);
   const saving = useRef(false);
-  const refresh = useCallback(async signal => {
-    setLoading(true);
+  const refresh = useCallback(async (signal, silent = false) => {
+    if (!silent) setLoading(true);
     setError('');
     try { const result = await api(null, signal); if (!signal?.aborted) setData(result); }
     catch (err) { if (err.name !== 'AbortError') setError(err.message); }
@@ -95,6 +97,7 @@ export function FieldServiceTab() {
   const update = (key, value) => setForm(current => ({ ...current, [key]: value }));
   const openEditor = (entity, row) => {
     if (!canEdit) return;
+    setRegisterHandover(false);
     setEditor({ entity, id: row?.id });
     setForm(entity === 'complete' ? defaults(entity) : { ...defaults(entity), ...row });
     setFormError('');
@@ -110,12 +113,13 @@ export function FieldServiceTab() {
     saving.current = true; setBusy(true); setFormError(''); setFeedback('');
     try {
       let body = editor.entity === 'complete' ? { action: 'complete', entity: 'designacoes', id: editor.id, data_conclusao: form.data_conclusao } : { action: 'save', entity: editor.entity, record: form };
+      if (editor.entity === 'saidas') body.registrar_entrega = registerHandover && form.modalidade === 'territorio';
       if (editor.entity === 'territorios' && mapFile) {
         const multipart = new FormData(); multipart.append('dados', JSON.stringify(body)); multipart.append('arquivo', mapFile); body = multipart;
       }
       const result = await api(body);
       setEditor(null);
-      setFeedback(result.ids.length > 1 ? `${result.ids.length} saídas semanais criadas.` : 'Registro salvo com sucesso.');
+      setFeedback(result.entregas ? `Saída salva e ${result.entregas} território(s) entregue(s) ao dirigente.` : result.ids.length > 1 ? `${result.ids.length} saídas semanais criadas.` : 'Registro salvo com sucesso.');
       await refresh();
     } catch (err) { setFormError(err.message); }
     finally { saving.current = false; setBusy(false); }
@@ -130,29 +134,6 @@ export function FieldServiceTab() {
     try { await navigator.clipboard.writeText(shareMessage); setShareFeedback('Mensagem copiada.'); }
     catch { setShareFeedback('Selecione o texto acima e copie a mensagem.'); }
   }
-  async function exportPdf() {
-    setExporting(true); setError('');
-    try {
-      const { jsPDF } = await import('jspdf');
-      const doc = new jsPDF();
-      doc.setFontSize(16); doc.text('Serviço de Campo', 14, 18);
-      doc.setFontSize(10); doc.text(`${month ? `${month}/` : ''}${year || 'Todos os anos'}${groupFilter ? ` · ${name('grupos', groupFilter)}` : ''}`, 14, 26);
-      let y = 36;
-      for (const row of agenda) {
-        const lines = doc.splitTextToSize([
-          `${displayDate(row.data)} · ${row.horario} · ${name('publicadores', row.dirigente_publicador_id) || 'Dirigente a definir'}`,
-          `${groupsLabel(row.grupos)} · ${name('locais', row.local_id) || 'Local a definir'}`,
-          `${FIELD_MODES[row.modalidade]}${row.territorios.length ? `: ${territoryLabel(row.territorios)}` : ''}`,
-          ...(row.observacoes ? [row.observacoes] : [])
-        ].join('\n'), 180);
-        // Paginate even a single long observation instead of clipping it.
-        for (const line of lines) { if (y > 278) { doc.addPage(); y = 18; } doc.text(line, 14, y); y += 5; }
-        y += 7;
-      }
-      doc.save(`servico-campo-${year || 'todos'}-${month || 'todos'}.pdf`);
-    } catch { setError('Não foi possível gerar o PDF. Tente novamente.'); }
-    finally { setExporting(false); }
-  }
   const select = (key, entity, placeholder, handler) => <select className={controlClass} value={form[key] ?? ''} onChange={e => handler ? handler(e.target.value) : update(key, e.target.value)} required={['publicador_id', 'territorio_id'].includes(key)}>
     <option value="">{placeholder}</option>{options(entity).map(row => <option key={row.id} value={row.id}>{row.nome || `Território ${row.numero}`}{row.ativo === false ? ' (inativo)' : ''}</option>)}
   </select>;
@@ -162,17 +143,17 @@ export function FieldServiceTab() {
 
   return <div className="min-w-0 space-y-4">
     <div className={designationToolbarClass}><div><h2 className="text-lg font-bold text-gray-900">Serviço de Campo</h2><p className="text-sm text-gray-500 mt-1">Organize as saídas, os dirigentes e o trabalho nos territórios.</p></div>
-      <div className="flex flex-wrap gap-2">{section === 'saidas' && <Button variant="outline" onClick={exportPdf} disabled={!canExport || !agenda.length || loading || exporting || Boolean(error)}><FileDown className="h-4 w-4 mr-2" />{exporting ? 'Gerando…' : 'Exportar PDF'}</Button>}
-      {canEdit && <Button disabled={loading || Boolean(error)} className="bg-purple-600 hover:bg-purple-700 text-white" onClick={() => openEditor(section)}><Plus className="h-4 w-4 mr-2" />{section === 'saidas' ? 'Nova saída' : section === 'locais' ? 'Novo local' : 'Novo território'}</Button>}</div>
+      <div className="flex flex-wrap gap-2">
+      {canEdit && section !== 'territorios' && <Button disabled={loading || Boolean(error)} className="bg-purple-600 hover:bg-purple-700 text-white" onClick={() => openEditor(section)}><Plus className="h-4 w-4 mr-2" />{section === 'saidas' ? 'Nova saída' : section === 'locais' ? 'Novo local' : 'Novo território'}</Button>}</div>
     </div>
     {!canEdit && <p className="text-sm text-gray-500">Você tem acesso de leitura. A edição depende da permissão de Serviço de Campo na gestão de acessos.</p>}
     <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-xl" role="tablist" aria-label="Seções do Serviço de Campo">{Object.entries(sections).map(([key, label]) => <button type="button" key={key} id={`campo-tab-${key}`} role="tab" aria-selected={section === key} aria-controls={`campo-panel-${key}`} onClick={() => { setSection(key); setFeedback(''); }} className={`h-10 rounded-lg text-sm font-medium focus-visible:ring-2 focus-visible:ring-purple-500 ${section === key ? 'bg-white shadow-sm text-purple-700' : 'text-gray-600 hover:bg-white/50'}`}>{label}</button>)}</div>
     {error && <div role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}<button className="ml-3 underline" onClick={() => refresh()}>Tentar novamente</button></div>}
-    {feedback && <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-800">{feedback}</p>}
+    <StatusToast message={feedback} type="success" onClose={() => setFeedback('')} />
     {section === 'territorios' && !loading && !error && <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3"><h3 className="font-semibold text-gray-900">Mapa geral da congregação</h3><FieldMapAttachment map={data.mapas.find(map => map.chave === 'geral')} canEdit={canEdit} onSaved={() => refresh()} /></div>}
-    {section === 'territorios' && !loading && !error && <IndividualFieldMaps territories={data.territorios} maps={data.mapas} canEdit={canEdit} showInactive={showInactive} onEdit={row => openEditor('territorios', row)} onShare={openShare} onSaved={() => refresh()} />}
     <section id={`campo-panel-${section}`} role="tabpanel" aria-labelledby={`campo-tab-${section}`} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className={designationListHeaderClass}><h3 className="font-semibold text-gray-900">{section === 'saidas' ? 'Programação de campo' : section === 'territorios' ? 'Cadastro e registro de territórios' : sections[section]}</h3>
+        {section === 'territorios' && canEdit && !loading && !error && <div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => openEditor('territorios')}>Cadastrar território</Button><FieldMapBatchImport territories={data.territorios} onSaved={() => refresh(undefined, true)} /></div>}
         {section === 'saidas' ? <div className="flex flex-wrap gap-2 min-w-0"><DesignationPeriodFilters years={data.saidas.map(row => row.data.slice(0, 4))} onClear={() => setGroupFilter('')} hasAdditionalFilters={Boolean(groupFilter)} /><select className={`${controlClass} sm:w-44`} aria-label="Filtrar saídas por grupo" value={groupFilter} onChange={e => setGroupFilter(e.target.value)}><option value="">Todos os grupos</option>{data.grupos.map(row => <option key={row.id} value={row.id}>{row.nome}</option>)}</select></div>
           : <label className="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />Mostrar inativos</label>}
       </div>
@@ -185,17 +166,22 @@ export function FieldServiceTab() {
           <div className="font-semibold text-gray-900">{row.nome || `Território ${row.numero}`}{!row.ativo && <span className="ml-2 text-xs text-gray-500">Inativo</span>}</div>
           {section === 'locais' && <><p className="text-sm text-gray-600 break-words">{row.endereco || 'Endereço a cadastrar'}</p><p className="text-sm text-gray-500">{groupsLabel(row.grupos)}</p>{row.mapa_url && /^https?:\/\//i.test(row.mapa_url) && <a href={row.mapa_url} target="_blank" rel="noopener noreferrer" className="inline-flex gap-1 items-center text-sm text-purple-700 underline"><MapPin className="w-4 h-4" />Abrir mapa</a>}{row.observacoes && <p className="text-sm text-gray-600 whitespace-pre-wrap break-words">{row.observacoes}</p>}</>}
           {section === 'territorios' && <><p className="text-sm text-gray-600 break-words">{row.descricao || 'Sem descrição'}{row.fim_semana ? ' · Preferência: fim de semana' : ''}</p><p className="text-xs text-gray-500">Última conclusão: {displayDate(row.ultima_conclusao)}</p><p className="text-sm text-purple-700">{openAssignments.some(item => item.territorio_id === row.id) ? `Designado para ${name('publicadores', openAssignments.find(item => item.territorio_id === row.id).publicador_id)}` : 'Disponível'}</p></>}
-          </div><div className="flex flex-wrap gap-2 items-start">{buttons(section, row)}{section === 'territorios' && canEdit && row.ativo && !openAssignments.some(item => item.territorio_id === row.id) && <Button variant="outline" size="sm" onClick={() => openEditor('designacoes', { territorio_id: row.id })}>Designar</Button>}</div></article>) : <p className="p-10 text-center text-sm text-gray-500">Nenhum cadastro encontrado.</p>)}
+          </div><div className="flex flex-wrap gap-2 items-start">{section === 'territorios' && <Button type="button" variant="outline" size="sm" onClick={() => setMapTerritoryId(row.id)}>Mapa e referências</Button>}{buttons(section, row)}{section === 'territorios' && canEdit && row.ativo && !openAssignments.some(item => item.territorio_id === row.id) && <Button variant="outline" size="sm" onClick={() => openEditor('designacoes', { territorio_id: row.id })}>Designar</Button>}</div></article>) : <p className="p-10 text-center text-sm text-gray-500">Nenhum cadastro encontrado.</p>)}
       </div>}
     </section>
     {section === 'territorios' && !loading && !error && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden"><div className={designationListHeaderClass}><div><h3 className="font-semibold text-gray-900">Histórico de designações</h3><p className="text-xs text-gray-500 mt-1">Ano de serviço: setembro a agosto. Saídas programadas não registram conclusão.</p></div><label className="text-sm text-gray-600">Ano de serviço<select className={`${controlClass} mt-1`} value={serviceYear} onChange={e => setServiceYear(e.target.value)}><option value="">Todos</option>{serviceYears.map(value => <option key={value}>{value}</option>)}</select></label></div>
       <div className="divide-y divide-gray-100">{history.length ? history.map(row => <article key={row.id} className="p-4 flex flex-col sm:flex-row gap-3"><div className="flex-1 min-w-0"><p className="font-medium text-gray-900">Território {data.territorios.find(item => item.id === row.territorio_id)?.numero} · {name('publicadores', row.publicador_id)}</p><p className="text-sm text-gray-500 mt-1">Designado: {displayDate(row.data_designacao)} · {row.data_conclusao ? `Concluído: ${displayDate(row.data_conclusao)}` : 'Conclusão pendente'}</p>{row.observacoes && <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap break-words">{row.observacoes}</p>}</div>{!row.data_conclusao && canEdit && <Button variant="outline" size="sm" onClick={() => openEditor('complete', row)}><CheckCircle2 className="h-4 w-4 mr-2" />Registrar conclusão</Button>}</article>) : <p className="p-8 text-sm text-center text-gray-500">Nenhuma designação neste ano de serviço.</p>}</div></div>}
+    <TerritoryMapDetails territory={data.territorios.find(row => row.id === mapTerritoryId)} maps={data.mapas} canEdit={canEdit} onEdit={row => openEditor('territorios', row)} onShare={openShare} onSaved={() => refresh(undefined, true)} onClose={() => setMapTerritoryId(null)} />
     {pendingDelete && <ConfirmationDialog destructive title="Excluir saída de campo?" confirmLabel="Excluir" description={`A saída de ${displayDate(pendingDelete.data)} às ${pendingDelete.horario} será excluída. Os registros de designação e conclusão dos territórios serão preservados.`} onConfirm={remove} onCancel={() => setPendingDelete(null)} />}
     <Dialog open={shareMessage !== null} onOpenChange={open => { if (!open) setShareMessage(null); }}><DialogContent className="w-[calc(100%-2rem)] max-w-xl max-h-[90dvh] overflow-y-auto bg-white text-gray-900"><DialogHeader><DialogTitle>Compartilhar serviço de campo</DialogTitle><DialogDescription>Confira a mensagem e escolha como compartilhar. Os links do Google Maps podem ser abertos pelos publicadores.</DialogDescription></DialogHeader><Field label="Mensagem"><textarea className={controlClass} rows={12} value={shareMessage || ''} onChange={e => setShareMessage(e.target.value)} /></Field>{shareFeedback && <p role="status" className="text-sm text-gray-600">{shareFeedback}</p>}<DialogFooter className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={copyMessage}>Copiar mensagem</Button><a className="inline-flex items-center justify-center rounded-md bg-purple-600 hover:bg-purple-700 px-4 py-2 text-sm font-medium text-white" href={fieldWhatsAppUrl(shareMessage || '')} target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a></DialogFooter></DialogContent></Dialog>
     <Dialog open={Boolean(editor)} onOpenChange={open => { if (!open && !saving.current) setEditor(null); }}><DialogContent className="w-[calc(100%-2rem)] max-w-2xl max-h-[90dvh] overflow-y-auto bg-white text-gray-900" onEscapeKeyDown={event => { if (busy) event.preventDefault(); }} onInteractOutside={event => { if (busy) event.preventDefault(); }}>
       <DialogHeader><DialogTitle>{editor?.entity === 'complete' ? 'Registrar conclusão' : `${editor?.id ? 'Editar' : 'Cadastrar'} ${titles[editor?.entity] || ''}`}</DialogTitle><DialogDescription>{editor?.entity === 'saidas' ? 'Escolha o dirigente, os grupos e o local da consideração. Sem grupos selecionados, a saída é da congregação.' : editor?.entity === 'designacoes' ? 'Registre a entrega do território ao responsável. A conclusão será registrada separadamente.' : 'Preencha os dados abaixo. Desative cadastros para preservar o histórico.'}</DialogDescription></DialogHeader>
       <form onSubmit={submit} className="space-y-4"><fieldset disabled={busy} className="space-y-4">
         {editor?.entity === 'saidas' && <><div className="grid sm:grid-cols-2 gap-4"><Field label="Data">{input('data', 'date', true)}</Field><Field label="Horário"><div className="space-y-2"><label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={form.horario === 'Pós reunião'} onChange={e => update('horario', e.target.checked ? 'Pós reunião' : '08:30')} />Pós reunião</label>{form.horario !== 'Pós reunião' && input('horario', 'time', true)}</div></Field><PublisherCombobox label="Dirigente" value={form.dirigente_publicador_id} onChange={value => update('dirigente_publicador_id', value)} publishers={data.publicadores.map(row => ({ id: row.id, nome_completo: row.nome }))} placeholder="A definir" disabled={busy} /><Field label="Local da consideração">{select('local_id', 'locais', 'A definir', setLocation)}</Field></div><Choices label="Grupos (nenhum = congregação)" options={options('grupos')} selected={form.grupos || []} onChange={value => update('grupos', value)} /><Field label="Modalidade"><select className={controlClass} value={form.modalidade} onChange={e => update('modalidade', e.target.value)}>{Object.entries(FIELD_MODES).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></Field>{form.modalidade === 'territorio' && <Choices label="Territórios planejados (opcional)" options={options('territorios')} selected={form.territorios || []} onChange={value => update('territorios', value)} />}{!editor.id && <Field label="Repetir semanalmente"><select className={controlClass} value={form.semanas} onChange={e => update('semanas', Number(e.target.value))}>{Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{i ? `${i + 1} saídas, uma por semana` : 'Somente esta saída'}</option>)}</select></Field>}{notes('observacoes', 'Observações')}</>}
+        {editor?.entity === 'saidas' && form.modalidade === 'territorio' && <div className="rounded-lg border border-purple-200 p-3 space-y-2">
+          <label className="flex items-start gap-2 text-sm font-medium"><input type="checkbox" checked={registerHandover} onChange={event => setRegisterHandover(event.target.checked)} />Registrar entrega dos territórios ao dirigente ao salvar</label>
+          <p className="text-xs text-gray-500">A entrega usa a data da saída (a primeira, se houver repetição). Escolha um dirigente e os territórios. Ao editar, as entregas pendentes desta saída acompanham as alterações, mesmo sem marcar esta opção novamente. Conclusões registradas são preservadas. Excluir a saída preserva as entregas.</p>
+        </div>}
         {editor?.entity === 'locais' && <><Field label="Nome do local">{input('nome', 'text', true, { maxLength: 120 })}</Field><Field label="Endereço">{input('endereco', 'text', false, { maxLength: 2000 })}</Field><Field label="Link do mapa (opcional)">{input('mapa_url', 'url', false, { maxLength: 1000 })}</Field><Choices label="Grupos habituais" options={options('grupos')} selected={form.grupos || []} onChange={value => update('grupos', value)} />{notes('observacoes', 'Observações')}</>}
         {editor?.entity === 'territorios' && <><Field label="Número do território">{input('numero', 'number', true, { min: 1, max: 2147483647, step: 1 })}</Field>{notes('descricao', 'Descrição / bairro')}<Field label="Link do Google Maps do território (opcional)">{input('mapa_url', 'url', false, { maxLength: 1000, placeholder: 'Cole o link do território ou ponto de referência' })}</Field>{notes('referencias', 'Referências das quadras e orientações')}<Field label="Mapa do território (PDF, até 10 MB)"><input type="file" accept=".pdf,application/pdf" className={controlClass} onChange={e => setMapFile(e.target.files?.[0] || null)} /></Field>{editor.id && <FieldMapLinks territoryId={editor.id} map={data.mapas.find(map => map.territorio_id === editor.id)} />}<label className="flex gap-2 text-sm items-center"><input type="checkbox" checked={form.fim_semana || false} onChange={e => update('fim_semana', e.target.checked)} />Preferencialmente aos fins de semana</label></>}
         {editor?.entity === 'designacoes' && <><div className="grid sm:grid-cols-2 gap-4"><Field label="Território">{select('territorio_id', 'territorios', 'Selecione o território')}</Field><Field label="Responsável">{select('publicador_id', 'publicadores', 'Selecione um publicador')}</Field><Field label="Data da designação">{input('data_designacao', 'date', true)}</Field><Field label="Data da conclusão (opcional)">{input('data_conclusao', 'date', false, { min: form.data_designacao })}</Field></div>{notes('observacoes', 'Observações')}<FieldMapLinks territoryId={form.territorio_id} map={data.mapas.find(map => map.territorio_id === Number(form.territorio_id))} /></>}

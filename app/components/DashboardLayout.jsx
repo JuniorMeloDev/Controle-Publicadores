@@ -40,6 +40,7 @@ const routeTitleMap = {
   "/admin/designacoes": "Designações",
   "/admin/reunioes": "Reuniões",
   "/admin/relatorios": "Relatórios",
+  "/admin/relatorios/servico-campo": "Designações do Serviço de Campo",
   "/admin/configuracoes": "Configurações",
   "/admin/gestao-acessos": "Gestão de Acessos",
   "/admin/relatorios/vida-e-ministerio": "Relatório Vida e Ministério",

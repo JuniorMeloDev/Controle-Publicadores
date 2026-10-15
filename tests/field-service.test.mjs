@@ -52,6 +52,51 @@ function serviceFixture({ conflict = false, inactive = false, existing = {}, ove
   return { client, calls };
 }
 
+test('outing handover is optional, requires leader and creates open deliveries only once for recurring outings', async () => {
+  const fixture = serviceFixture();
+  const result = await mutateFieldService(fixture.client, { entity: 'saidas', action: 'save', registrar_entrega: true,
+    record: outing({ dirigente_publicador_id: 2, territorios: [3, 4], semanas: 3 }) });
+  assert.equal(result.entregas, 2);
+  const deliveries = fixture.calls.filter(call => call.sql.startsWith('INSERT INTO campo_designacoes'));
+  assert.equal(deliveries.length, 2);
+  for (const delivery of deliveries) {
+    assert.equal(delivery.params[1], 2);
+    assert.equal(delivery.params[2], '2026-10-17');
+    assert.equal(delivery.params[3], null);
+  }
+  for (const record of [outing(), outing({ dirigente_publicador_id: 2, territorios: [] }), outing({ dirigente_publicador_id: 2, modalidade: 'cartas' })]) {
+    await assert.rejects(mutateFieldService(serviceFixture().client, { entity: 'saidas', action: 'save', registrar_entrega: true, record }), /dirigente/);
+  }
+});
+
+test('an outing cannot hand over territories already assigned in the period', async () => {
+  await assert.rejects(mutateFieldService(serviceFixture({ overlap: true }).client, {
+    entity: 'saidas', action: 'save', registrar_entrega: true, record: outing({ dirigente_publicador_id: 2 })
+  }), error => error.status === 409);
+});
+
+test('editing an outing synchronizes its pending deliveries without touching completed or unrelated records', async () => {
+  const fixture = serviceFixture({ existing: { id: 11, grupos: [1], territorios: [7, 8, 9] } });
+  const original = fixture.client.query;
+  fixture.client.query = async (sql, params) => {
+    if (sql.includes('WHERE observacoes = $1 FOR UPDATE')) {
+      assert.equal(params[0], 'Entrega registrada pela saída 11.');
+      return { rows: [
+        { id: 70, territorio_id: 7, publicador_id: 2, data_designacao: '2026-10-17', data_conclusao: null },
+        { id: 80, territorio_id: 8, publicador_id: 2, data_designacao: '2026-10-17', data_conclusao: null },
+        { id: 90, territorio_id: 9, publicador_id: 2, data_designacao: '2026-10-17', data_conclusao: '2026-10-18' }
+      ] };
+    }
+    return original(sql, params);
+  };
+  const result = await mutateFieldService(fixture.client, { entity: 'saidas', action: 'save',
+    record: outing({ id: 11, dirigente_publicador_id: 2, territorios: [8] }) });
+  assert.equal(result.entregas_sincronizadas, true);
+  assert.deepEqual(fixture.calls.filter(call => call.sql.startsWith('DELETE FROM campo_designacoes')).map(call => call.params[0]), [70]);
+  assert.equal(fixture.calls.filter(call => call.sql.startsWith('INSERT INTO campo_designacoes')).length, 0);
+  assert.equal(result.entregas_anteriores_removidas[0].territorio_id, 7);
+});
+
 test('recurring outings are planned separately from territory handovers and conclusions', async () => {
   const fixture = serviceFixture();
   const result = await mutateFieldService(fixture.client, { entity: 'saidas', action: 'save', record: outing({ semanas: 3 }) });

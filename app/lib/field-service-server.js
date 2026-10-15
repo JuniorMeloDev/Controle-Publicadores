@@ -49,10 +49,22 @@ export async function mutateFieldService(client, body) {
     return { id, ids: [id] };
   }
   const record = validateFieldRecord(body.entity, body.record);
+  if (body.registrar_entrega !== undefined && typeof body.registrar_entrega !== 'boolean') throw fieldError('Opção de entrega inválida.');
+  const handover = body.registrar_entrega === true;
+  if (handover && (body.entity !== 'saidas' || record.modalidade !== 'territorio' || !record.dirigente_publicador_id || !record.territorios.length)) {
+    throw fieldError('Para registrar a entrega, escolha um dirigente e pelo menos um território.');
+  }
+  const handoverDate = handover ? record.data : null;
+  let linkedDeliveries = [];
   let old = {};
   if (record.id) {
     old = (await client.query(`SELECT * FROM ${table} WHERE id = $1 FOR UPDATE`, [record.id])).rows[0];
     if (!old) throw fieldError('Registro não encontrado.', 404);
+    if (body.entity === 'saidas') {
+      // Exact system-generated source marker also recognizes deliveries already saved.
+      linkedDeliveries = (await client.query('SELECT *, data_designacao::text AS data_designacao FROM campo_designacoes WHERE observacoes = $1 FOR UPDATE',
+        [`Entrega registrada pela saída ${record.id}.`])).rows;
+    }
   }
   if (record.grupos) await reference(client, 'grupos', record.grupos, old.grupos || []);
   if (record.local_id) await reference(client, 'campo_locais', [record.local_id], [old.local_id]);
@@ -87,5 +99,30 @@ export async function mutateFieldService(client, body) {
     } else sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((_, index) => `$${index + 1}`).join(', ')}) RETURNING id`;
     created.push((await client.query(sql, values)).rows[0].id);
   }
-  return { id: created[0], ids: created };
+  const syncDeliveries = body.entity === 'saidas' && linkedDeliveries.length > 0;
+  const deliveryChanges = [];
+  if (handover || syncDeliveries) {
+    // Same transaction and advisory lock as the outing. One handover per territory,
+    // starting on the first date even when the outing repeats weekly.
+    const targets = record.modalidade === 'territorio' && record.dirigente_publicador_id ? record.territorios : [];
+    const completed = linkedDeliveries.filter(row => row.data_conclusao);
+    const retained = new Set(completed.map(row => row.territorio_id));
+    for (const delivery of linkedDeliveries.filter(row => !row.data_conclusao)) {
+      if (targets.includes(delivery.territorio_id) && delivery.publicador_id === record.dirigente_publicador_id
+        && String(delivery.data_designacao).slice(0, 10) === record.data) {
+        retained.add(delivery.territorio_id);
+      } else {
+        await client.query('DELETE FROM campo_designacoes WHERE id = $1 AND data_conclusao IS NULL', [delivery.id]);
+        deliveryChanges.push(delivery);
+      }
+    }
+    for (const territorioId of targets.filter(id => !retained.has(id))) {
+      await mutateFieldService(client, { entity: 'designacoes', action: 'save', record: {
+        territorio_id: territorioId, publicador_id: record.dirigente_publicador_id,
+        data_designacao: handoverDate || record.data, observacoes: `Entrega registrada pela saída ${created[0]}.`
+      } });
+    }
+  }
+  return { id: created[0], ids: created, ...(handover ? { entregas: record.territorios.length } : {}),
+    ...(syncDeliveries ? { entregas_sincronizadas: true, entregas_anteriores_removidas: deliveryChanges } : {}) };
 }
