@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { formatEmergencyContacts } from '@/app/lib/emergency-contacts';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { CADASTRO_FIELDS } from '@/app/lib/cadastro-update';
+import { CadastroProgressModal } from '@/app/components/CadastroProgressModal';
 const labels = Object.fromEntries(CADASTRO_FIELDS.map(([key, label]) => [key, label]));
 const statusLabels = { pendente: 'Pendente', automatico: 'Preenchido automaticamente', aprovado: 'Aprovado', rejeitado: 'Rejeitado' };
 function formatValue(field, value) {
@@ -21,6 +22,7 @@ export default function AtualizacoesPage() {
   const [error, setError] = useState('');
   const [history, setHistory] = useState(false);
   const [link, setLink] = useState('');
+  const [progressOpen, setProgressOpen] = useState(false);
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -47,6 +49,8 @@ export default function AtualizacoesPage() {
   return <DashboardLayout><div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 text-gray-900">
     <Link href="/admin/gerenciar" className="text-sm text-purple-700">← Publicadores</Link>
     <h1 className="text-2xl font-bold">Atualizações cadastrais</h1>
+    <button type="button" onClick={() => setProgressOpen(true)} className="rounded-lg border border-purple-300 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700">Acompanhar atualizações</button>
+    {progressOpen && <CadastroProgressModal onClose={() => setProgressOpen(false)} />}
     <div className="rounded-xl border bg-white p-4 space-y-3"><p>Envie este mesmo link para todos os publicadores:</p>
       <div className="flex flex-wrap gap-2"><input aria-label="Link público de atualização" readOnly value={link} className="min-w-0 flex-1 rounded-lg border p-2 text-sm" />
       <button className="rounded-lg bg-purple-700 px-4 py-2 text-white" onClick={async () => { try { await navigator.clipboard.writeText(link); setMessage('Link copiado.'); } catch { setError('Selecione o link e copie manualmente.'); } }}>Copiar link</button>

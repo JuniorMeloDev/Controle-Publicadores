@@ -47,7 +47,7 @@ test('lookup accepts partial names with accents, returns only personal data and 
   let candidates = [{ id: 99, nome_completo: 'Jos\u00e9 da Silva', data_nascimento: '2000-01-01', senha: 'secret' }];
   const client = fixtureClient(async sql => ({ rows: sql.startsWith('SELECT p.id') ? candidates : [] }));
   const route = loadRoute('../../app/api/atualizacao-cadastral/buscar/route.js', {
-    ...helpers, getUserIdFromRequest: () => 99, cadastroPool: { connect: async () => client }, ensureCadastroTables: noop,
+    ...helpers, getUserIdFromRequest: () => null, cadastroPool: { connect: async () => client }, ensureCadastroTables: noop,
     limitCadastroAttempts: async () => true, tokenHash: value => value, randomBytes: () => ({ toString: () => 'a'.repeat(64) }),
   });
   const response = await route.POST(request({ nome: 'Jose Silva', nascimento: '01/01/2000' }));
@@ -69,7 +69,7 @@ test('submission queues all changes without applying empty fields and consumes t
     return { rows: [] };
   });
   const route = loadRoute('../../app/api/atualizacao-cadastral/enviar/route.js', {
-    ...helpers, getUserIdFromRequest: () => 99, cadastroPool: { connect: async () => client }, ensureCadastroTables: noop,
+    ...helpers, getUserIdFromRequest: () => null, cadastroPool: { connect: async () => client }, ensureCadastroTables: noop,
     limitCadastroAttempts: async () => true, tokenHash: value => value, randomUUID: () => 'submission',
     applyCadastroField: async (...args) => applied.push(args.slice(1)),
   });
@@ -78,7 +78,40 @@ test('submission queues all changes without applying empty fields and consumes t
   assert.equal(response.status, 200); assert.equal(response.body.automaticos, 0); assert.equal(response.body.pendentes, 2);
   assert.deepEqual(applied, []);
   assert.deepEqual(inserts.map(values => values[5]), ['pendente', 'pendente']);
+  assert.ok(inserts.every(values => values[1] === 99), 'A submission can only update the publisher bound to its temporary token');
   assert.equal((await route.POST(request(body))).status, 401);
+});
+
+test('public lookup remains rate limited and submissions still require a valid temporary token', async () => {
+  let queriedPublisher = false;
+  const route = loadRoute('../../app/api/atualizacao-cadastral/buscar/route.js', {
+    ...helpers, cadastroPool: { connect: async () => fixtureClient(async sql => { if (sql.startsWith('SELECT p.id')) queriedPublisher = true; return { rows: [] }; }) },
+    ensureCadastroTables: noop, limitCadastroAttempts: async () => false,
+  });
+  assert.equal((await route.POST(request({ nome: 'Nome de teste', nascimento: '2000-01-01' }))).status, 429);
+  assert.equal(queriedPublisher, false);
+  let connected = false;
+  const submission = loadRoute('../../app/api/atualizacao-cadastral/enviar/route.js', {
+    ...helpers, cadastroPool: { connect: async () => { connected = true; } },
+  });
+  assert.equal((await submission.POST(request({ dados: {} }))).status, 400);
+  assert.equal(connected, false);
+});
+
+test('unchanged submissions persist confirmation atomically without creating pending changes', async () => {
+  const row = { id: 99, nome_completo: 'Publicador de teste', data_nascimento: '2000-01-01' };
+  const calls = [];
+  const route = loadRoute('../../app/api/atualizacao-cadastral/enviar/route.js', {
+    ...helpers, cadastroPool: { connect: async () => fixtureClient(async (sql, params) => {
+      calls.push({ sql, params });
+      return { rows: sql.includes('SELECT * FROM cadastro_sessoes') ? [{ publicador_id: 99, snapshot: personalData(row) }] : sql.includes('SELECT * FROM publicadores') ? [row] : [] };
+    }) }, ensureCadastroTables: noop, limitCadastroAttempts: async () => true, tokenHash: value => value, randomUUID: () => 'submission',
+  });
+  const response = await route.POST(request({ token: 'a'.repeat(64), dados: personalData(row) }));
+  assert.equal(response.status, 200); assert.equal(response.body.pendentes, 0);
+  assert.deepEqual(Array.from(calls.find(call => call.sql.includes('INSERT INTO cadastro_confirmacoes')).params), [99]);
+  assert.ok(!calls.some(call => call.sql.includes('INSERT INTO cadastro_alteracoes')));
+  assert.equal(calls.at(-1).sql, 'COMMIT');
 });
 test('reviews require permissions, apply approved changes, and reject stale proposals', async () => {
   let authorized = true; let stale = false; const applied = []; const queries = [];

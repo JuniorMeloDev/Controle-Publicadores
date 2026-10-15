@@ -11,7 +11,7 @@ const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
   const protectedExtra = ['/api/recuperar-designacoes', '/api/enviar-relatorio-mensal/manual'].includes(pathname);
-  const ownPages = ['/relatorio-mensal', '/atualizacao-cadastral'].includes(pathname);
+  const ownPages = pathname === '/relatorio-mensal';
   const personalPage = ['/admin/dashboard', '/admin/meus-dados', '/admin/minhas-designacoes', '/admin/meu-s21', '/admin/configuracoes/preferencias'].includes(pathname);
   const tokenCookie = request.cookies.get('auth_token');
 

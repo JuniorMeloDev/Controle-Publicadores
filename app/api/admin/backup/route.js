@@ -36,6 +36,7 @@ export async function GET(request) {
     const tabelas = [
       { nome: 'publicadores', query: 'SELECT * FROM publicadores ORDER BY id ASC' },
       { nome: 'grupos', query: 'SELECT * FROM grupos ORDER BY id ASC' },
+      { nome: 'cadastro_confirmacoes', query: 'SELECT * FROM cadastro_confirmacoes ORDER BY publicador_id ASC' },
       ...['campo_locais', 'campo_dirigentes', 'campo_territorios', 'campo_saidas', 'campo_designacoes'].map(nome => ({ nome, query: `SELECT * FROM ${nome} ORDER BY id ASC` })),
       { nome: 'campo_mapas', query: 'SELECT * FROM campo_mapas ORDER BY chave' },
       { nome: 'reunioes_registro', query: 'SELECT * FROM reunioes_registro ORDER BY data DESC' },

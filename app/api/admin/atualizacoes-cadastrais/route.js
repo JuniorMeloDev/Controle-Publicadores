@@ -5,6 +5,7 @@ import { cadastroPool, ensureCadastroTables, applyCadastroField } from '@/app/li
 import { personalData } from '@/app/lib/cadastro-update';
 import { getUserIdFromRequest, getUserAccess } from '@/app/lib/server-access';
 import { registerAuditLog } from '@/app/lib/audit-log';
+import { getCadastroProgress } from '@/app/lib/cadastro-progress';
 export const dynamic = 'force-dynamic';
 async function access(client, request) {
   const userId = getUserIdFromRequest(request);
@@ -18,6 +19,9 @@ export async function GET(request) {
   try {
     if (!await access(client, request)) return NextResponse.json({ message: 'Acesso negado.' }, { status: 403 });
     await ensureCadastroTables(client);
+    if (request.url && new URL(request.url).searchParams.get('acompanhamento') === '1') {
+      return NextResponse.json(await getCadastroProgress(client), { headers: { 'Cache-Control': 'private, no-store' } });
+    }
     const result = await client.query(`SELECT a.*, p.nome_completo,
       to_jsonb(p) ->> a.campo AS valor_atual FROM cadastro_alteracoes a JOIN publicadores p ON p.id = a.publicador_id
       WHERE a.status = 'pendente' OR a.id IN (SELECT id FROM cadastro_alteracoes WHERE status <> 'pendente' ORDER BY criado_em DESC, id DESC LIMIT 1000)

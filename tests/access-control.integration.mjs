@@ -15,7 +15,11 @@ try {
   const adminId = admins.rows[0].id, userId = users.rows[0].id;
   const call = (path, id) => fetch(base + path, { headers: id ? { Cookie: 'auth_token=' + jwt.sign({ userId: id }, process.env.JWT_SECRET, { expiresIn: '5m' }) } : {}, redirect: 'manual' });
   assert.equal((await call('/api/admin/get-publicadores')).status, 401);
-  for (const path of ['/api/atualizacao-cadastral/buscar', '/api/atualizacao-cadastral/enviar', '/api/enviar-relatorio-mensal']) {
+  assert.equal((await call('/atualizacao-cadastral')).status, 200);
+  for (const path of ['/api/atualizacao-cadastral/buscar', '/api/atualizacao-cadastral/enviar']) {
+    assert.equal((await fetch(base + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 400);
+  }
+  for (const path of ['/api/enviar-relatorio-mensal']) {
     assert.equal((await fetch(base + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
   }
   assert.equal((await call('/api/admin/get-publicadores', userId)).status, 403);

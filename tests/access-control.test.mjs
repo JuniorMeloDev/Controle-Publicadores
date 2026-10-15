@@ -116,8 +116,8 @@ test('assignment directories disclose names and eligibility, without personal da
   assert.equal(result.body[0].email, undefined);
 });
 
-test('legacy personal-data and report endpoints reject anonymous requests before accessing data', async () => {
-  for (const file of ['atualizacao-cadastral/buscar', 'atualizacao-cadastral/enviar', 'enviar-relatorio-mensal']) {
+test('legacy report endpoint rejects anonymous requests before accessing data', async () => {
+  for (const file of ['enviar-relatorio-mensal']) {
     let connects = 0;
     const { POST } = loadRoute(`../../app/api/${file}/route.js`, {
       getUserIdFromRequest: () => null,

@@ -71,6 +71,9 @@ test('middleware authorizes notification and programme POSTs and rejects expired
         cookies: { get: () => token ? { value: token } : undefined } });
     const valid = jwt.sign({ userId: 990001 }, secret, { expiresIn: '1h' });
     const expired = jwt.sign({ userId: 990001, exp: 1 }, secret);
+    for (const token of [null, expired, valid]) {
+        assert.equal((await context.handler(request(token, '/atualizacao-cadastral'))).status, 200, 'Public registration link does not require a login session');
+    }
     for (const pathname of ['/api/admin/notificacoes', '/api/admin/reunioes/importar-programacao']) {
         assert.equal((await context.handler(request(valid, pathname))).status, 200);
         assert.equal((await context.handler(request(expired, pathname))).status, 401);

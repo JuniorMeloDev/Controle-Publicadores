@@ -27,6 +27,17 @@ async function createCadastroTables(client) {
   await client.query(`CREATE TABLE IF NOT EXISTS cadastro_tentativas (
     chave TEXT PRIMARY KEY, inicio TIMESTAMPTZ NOT NULL, quantidade INTEGER NOT NULL
   )`);
+  await client.query(`CREATE TABLE IF NOT EXISTS cadastro_confirmacoes (
+    publicador_id INTEGER PRIMARY KEY REFERENCES publicadores(id) ON DELETE CASCADE,
+    enviado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  // Recover previous submissions, including unchanged forms whose tokens were consumed.
+  await client.query(`INSERT INTO cadastro_confirmacoes (publicador_id, enviado_em)
+    SELECT publicador_id, MAX(enviado_em) FROM (
+      SELECT publicador_id, criado_em AS enviado_em FROM cadastro_alteracoes
+      UNION ALL SELECT publicador_id, used_at AS enviado_em FROM cadastro_sessoes WHERE used_at IS NOT NULL
+    ) historico GROUP BY publicador_id
+    ON CONFLICT (publicador_id) DO UPDATE SET enviado_em = GREATEST(cadastro_confirmacoes.enviado_em, EXCLUDED.enviado_em)`);
 }
 export async function limitCadastroAttempts(client, request, scope) {
   const ip = request.headers.get('x-vercel-forwarded-for') || request.headers.get('x-forwarded-for') || 'local';
