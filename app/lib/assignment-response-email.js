@@ -20,10 +20,9 @@ export async function confirmationEmailContent(client, assignments) {
     const link = await createResponseLink(client, assignment, origin);
     const label = `${assignment.nome_parte} — ${String(assignment.data_reuniao instanceof Date ? assignment.data_reuniao.toISOString() : assignment.data_reuniao).slice(0, 10)}`;
     const separator = link.includes('#') ? '&' : '?';
-    html += `<p><strong>${escapeEmailHtml(label)}</strong><br>Confirma sua designação?<br><a href="${escapeEmailHtml(link + separator + 'resposta=sim')}">Sim</a> &nbsp; <a href="${escapeEmailHtml(link + separator + 'resposta=nao')}">Não</a></p>`;
-    text += `\n${label}\nConfirma sua designação?\nSim: ${link + separator + 'resposta=sim'}\nNão: ${link + separator + 'resposta=nao'}\n`;
+    html += `<p style="margin-bottom:16px;"><strong>${escapeEmailHtml(label)}</strong><br>Caso não possa cumprir com sua designação, clique no botão abaixo:<br><a href="${escapeEmailHtml(link + separator + 'resposta=nao')}" style="display:inline-block;margin-top:6px;padding:8px 18px;background-color:#dc2626;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;font-size:14px;">Não</a></p>`;
+    text += `\n${label}\nCaso não possa cumprir com sua designação, clique no botão abaixo:\nNão: ${link + separator + 'resposta=nao'}\n`;
   }
-  if (assignments.length) { html += '<p>Sem resposta, sua designação continua válida. Abra o link e conclua sua resposta.</p>'; text += '\nSem resposta, sua designação continua válida.\n'; }
   return { html, text };
 }
 

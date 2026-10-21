@@ -111,9 +111,11 @@ function emailModule(dependencies) {
 test('confirmation email buttons preserve the chosen answer and include plain-text bearer links', async () => {
   const mailApi = emailModule({ createResponseLink: async () => 'https://example.test/confirmar-designacao#token=fixture' });
   const content = await mailApi.confirmationEmailContent({}, [{ ...assignment, nome_parte: '<script>fake</script>' }]);
-  assert.match(content.html, /resposta=sim/); assert.match(content.html, /resposta=nao/);
-  assert.ok(!content.html.includes('<script>')); assert.match(content.text, /#token=fixture&resposta=nao/);
-  assert.match(content.text, /continua válida/);
+  assert.ok(!content.html.includes('resposta=sim'));
+  assert.match(content.html, /resposta=nao/);
+  assert.ok(!content.html.includes('<script>'));
+  assert.match(content.text, /#token=fixture&resposta=nao/);
+  assert.ok(!content.text.includes('continua válida'));
 });
 
 test('SMTP failure leaves refusal email pending for cron and retries recheck current assignments and permission', async () => {

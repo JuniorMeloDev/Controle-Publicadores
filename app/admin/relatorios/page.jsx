@@ -40,6 +40,16 @@ export default function RelatoriosHubPage() {
       active: true
     },
     {
+      title: "Dados dos Publicadores",
+      description: "Relatório cadastral completo com endereços, contatos de emergência e grupos. Exportar em PDF e XLSX.",
+      href: "/admin/relatorios/publicadores",
+      icon: Users,
+      color: "text-purple-600",
+      bgColor: "bg-purple-50",
+      hoverRing: "group-hover:ring-purple-100",
+      active: true
+    },
+    {
       title: "Registro de Publicador (S-21)",
       description: "Imprimir cartões S-21 individuais ou em lote.",
       href: "/admin/relatorios/registro-publicador",
