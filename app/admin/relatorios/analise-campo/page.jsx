@@ -39,6 +39,8 @@ export default function AnaliseCampoPage() {
     // Filters
     const [selectedMes, setSelectedMes] = useState(defaultPeriod.mes);
     const [selectedAno, setSelectedAno] = useState(defaultPeriod.ano);
+    const [anosDisponiveis, setAnosDisponiveis] = useState([]);
+    const anoCalendario = Number(selectedAno) - (meses.indexOf(selectedMes) >= 8 ? 1 : 0);
     const [tipoPioneiro, setTipoPioneiro] = useState('todos'); // todos, regular, auxiliar, publicador
 
     // Toast
@@ -122,7 +124,7 @@ export default function AnaliseCampoPage() {
         XLSX.utils.book_append_sheet(wb, ws, "Análise de Campo");
 
         // Download
-        XLSX.writeFile(wb, `Analise_Campo_${selectedMes}_${selectedAno}.xlsx`);
+        XLSX.writeFile(wb, `Analise_Campo_${selectedMes}_${anoCalendario}_Ano_Servico_${selectedAno}.xlsx`);
     };
 
     const fetchStats = async () => {
@@ -138,6 +140,11 @@ export default function AnaliseCampoPage() {
             const res = await fetch(`/api/admin/relatorios/analise?${query.toString()}`);
             if (res.ok) {
                 const json = await res.json();
+                const anos = json.anos_disponiveis;
+                setAnosDisponiveis(anos);
+                if (anos.length > 0 && !anos.includes(Number(selectedAno))) {
+                    setSelectedAno(anos[0]);
+                }
                 setData(json);
             } else {
                 throw new Error('Falha ao carregar dados');
@@ -198,10 +205,12 @@ export default function AnaliseCampoPage() {
 
                                 <select
                                     value={selectedAno}
+                                    aria-label="Ano de serviço"
                                     onChange={(e) => setSelectedAno(e.target.value)}
                                     className="border-none bg-transparent text-sm font-medium text-gray-700 focus:ring-0 cursor-pointer py-1.5 px-3 hover:bg-gray-50 rounded-md transition-colors"
                                 >
-                                    {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                                    {anosDisponiveis.length === 0 && <option value={selectedAno}>Ano de serviço: {selectedAno}</option>}
+                                    {anosDisponiveis.map(y => <option key={y} value={y}>Ano de serviço: {y}</option>)}
                                 </select>
 
                                 <div className="w-px h-6 bg-gray-200 hidden sm:block mx-1" />
@@ -232,11 +241,16 @@ export default function AnaliseCampoPage() {
                     </div>
                 </div>
 
+                <p className="text-sm text-gray-600 print:hidden">
+                    Relatórios de <strong>{selectedMes} de {anoCalendario}</strong> (ano calendário).
+                    {' '}Ano de serviço {selectedAno}: setembro de {Number(selectedAno) - 1} a agosto de {selectedAno}.
+                </p>
+
                 {/* Print Header (Visible only when printing) */}
                 <div className="hidden print:block mb-6 text-center">
                     <h1 className="text-2xl font-bold text-gray-900">Relatório de Análise de Campo</h1>
                     <p className="text-gray-600 mb-4">
-                        {selectedMes} de {selectedAno} • Filtro: {
+                        {selectedMes} de {anoCalendario} • Ano de serviço {selectedAno} (setembro de {Number(selectedAno) - 1} a agosto de {selectedAno}) • Filtro: {
                             tipoPioneiro === 'todos' ? 'Todos os Publicadores' :
                                 tipoPioneiro === 'regular' ? 'Pioneiros Regulares' :
                                     tipoPioneiro === 'auxiliar' ? 'Pioneiros Auxiliares' :

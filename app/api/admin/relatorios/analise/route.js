@@ -23,6 +23,12 @@ export async function GET(request) {
 
   const client = await pool.connect();
   try {
+    const yearsResult = await client.query(`
+        SELECT DISTINCT ano_servico
+        FROM relatorios_mensais
+        WHERE ano_servico IS NOT NULL
+        ORDER BY ano_servico DESC
+    `);
     // Base WHERE clause - INCLUIR FILTRO DE GRUPOS ATIVOS
     let whereClause = `WHERE r.mes = $1 AND r.ano_servico = $2 AND (g.id IS NULL OR g.ativo = TRUE)`;
     const params = [mes, ano_servico];
@@ -184,6 +190,7 @@ export async function GET(request) {
     const totalEstudos = parseInt(stats.soma_estudos) || 0;
 
     const data = {
+        anos_disponiveis: yearsResult.rows.map(row => Number(row.ano_servico)),
         totals: {
             publicadores_reportaram: totalPubs,
             participantes: totalPart,
