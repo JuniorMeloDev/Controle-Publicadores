@@ -6,6 +6,7 @@ import { isAllowed } from '@/app/lib/access-control';
 import { registerAuditLog } from '@/app/lib/audit-log';
 import { lockAssignmentMeeting } from '@/app/lib/meeting-calendar-service';
 import { getPartTitles } from '@/app/lib/life-ministry-parts';
+import { getSpecialParticipants } from '@/app/lib/special-participants';
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
@@ -75,12 +76,13 @@ export async function POST(request) {
     const pubRes = await client.query('SELECT id, nome_completo FROM publicadores');
     const publicadorMap = new Map(pubRes.rows.map(p => [p.nome_completo, p.id]));
     const participantesExternos = [];
+    const specialNames = new Set((await getSpecialParticipants(client)).map(p => p.nome_completo).filter(Boolean));
     for (const [partId, nome] of Object.entries(assignments)) {
       if (!nome || publicadorMap.has(nome)) continue;
       const titulo = partTitles[partId];
       const parteEstudante = (/^tesouro_\d+$/.test(partId) && normalizeStr(titulo).includes('leitura da biblia')) ||
         (/^ministerio_\d+(?:_[12])?$/.test(partId) && !normalizeStr(titulo).includes('consideracao'));
-      if (!titulo || !parteEstudante || typeof nome !== 'string' || !nome.trim()) {
+      if (!titulo || (!parteEstudante && !specialNames.has(nome)) || typeof nome !== 'string' || !nome.trim()) {
         await client.query('ROLLBACK');
         return NextResponse.json({ message: 'Participantes sem cadastro são permitidos apenas em partes de estudantes.' }, { status: 400 });
       }

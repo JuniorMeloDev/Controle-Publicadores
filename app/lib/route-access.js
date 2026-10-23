@@ -54,6 +54,7 @@ export function canAccessRoute(access, pathname, method = 'GET') {
   if (route === 'logs') return isAllowed(permissions, 'logs_visualizar', 'actions');
   if (route === 'global-search') return isAllowed(permissions, 'publicadores');
   if (method === 'GET' || method === 'HEAD') {
+    if (route === 'pessoas-especiais') return ['designacoes', 'configuracoes'].some(page => isAllowed(permissions, page));
     if (route === 'get-publicadores') return ['publicadores', 'designacoes', 'reunioes', 'relatorios', 'dashboard', 'configuracoes'].some(page => isAllowed(permissions, page));
     if (route === 'get-reunioes') return ['reunioes', 'designacoes', 'relatorios'].some(page => isAllowed(permissions, page));
     return Object.entries(readGroups).some(([page, prefixes]) => prefixes.some(prefix => matches(route, prefix)) && isAllowed(permissions, page));

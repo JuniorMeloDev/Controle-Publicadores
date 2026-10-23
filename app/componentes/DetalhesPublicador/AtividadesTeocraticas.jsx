@@ -39,11 +39,12 @@ export default function AtividadesTeocraticas({
       return acc;
     }, {});
 
-    const years = Object.keys(grouped).map(Number).sort((a, b) => b - a);
     const currentYear = getCurrentServiceYear();
-    if (years.length === 0 || !years.includes(currentYear)) {
-      years.unshift(currentYear);
-    }
+    const years = [...new Set([
+      currentYear,
+      currentYear - 1,
+      ...Object.keys(grouped).map(Number)
+    ])].sort((a, b) => b - a);
     return { reportsByYear: grouped, availableYears: years };
   }, [relatoriosInicial]);
 

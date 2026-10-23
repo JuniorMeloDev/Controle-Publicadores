@@ -15,7 +15,7 @@ const schedule = {
     ministry: [{ title: 'Iniciando conversas (3 min)' }], living: []
 };
 
-function savingRoute() {
+function savingRoute(specialParticipants = []) {
     const calls = [];
     const client = { query: async (sql, params) => {
         calls.push({ sql, params });
@@ -25,7 +25,8 @@ function savingRoute() {
     const route = loadRoute('../../app/api/admin/salvar-designacoes/route.js', {
         Pool: class { connect() { return client; } },
         getUserIdFromRequest: () => 990001, getUserPermissions: async () => ({}),
-        isAllowed: () => true, registerAuditLog: async () => {}, getPartTitles
+        isAllowed: () => true, registerAuditLog: async () => {}, getPartTitles,
+        getSpecialParticipants: async () => specialParticipants
     });
     return { ...route, calls };
 }
@@ -53,6 +54,18 @@ test('participants without records cannot be silently assigned as chairman', asy
     assert.equal(route.calls.some(c => c.sql.includes('INSERT INTO reunioes_dados')), false);
 });
 
+test('configured special participants can take meeting parts without publisher records', async () => {
+    const route = savingRoute([{ papel: 'superintendente', nome_completo: guest }]);
+    const result = await route.POST({ json: async () => ({
+        scheduleData: schedule, meetingDate: '2030-01-09', assignments: { presidente: guest }
+    }) });
+    assert.equal(result.status, 201);
+    const program = JSON.parse(route.calls.find(c => c.sql.includes('INSERT INTO reunioes_dados')).params[1]);
+    assert.equal(program.participantes_externos[0].nome_completo, guest);
+    assert.equal(program.participantes_externos[0].parte_id, 'presidente');
+    assert.equal(route.calls.some(c => /INSERT INTO (publicadores|designacoes_reuniao)/.test(c.sql)), false);
+});
+
 test('clearing an external student also clears the stored guest entry', async () => {
     const route = savingRoute();
     const result = await route.POST({ json: async () => ({
@@ -77,4 +90,22 @@ test('restoring an external student keeps student and assistant in the correct s
     ], { ...schedule, participantes_externos: [{ parte_id: 'ministerio_0_1', nome_completo: guest, nome_parte: title }] });
     assert.equal(result.ministerio_0_1, guest);
     assert.equal(result.ministerio_0_2, publisher);
+});
+
+test('special participants return to renamed Living parts and prayers after reload', () => {
+    const source = readFileSync(new URL('../app/components/designacoes/LifeMinistryTab.jsx', import.meta.url), 'utf8');
+    const truncate = source.slice(source.indexOf('function truncatePartTitle('), source.indexOf('function getShortName('));
+    const mapping = source.slice(source.indexOf('const mapSavedToAssignments ='), source.indexOf('const generateWhatsAppText ='));
+    const context = vm.createContext({});
+    vm.runInContext(truncate + mapping + '\nglobalThis.map = mapSavedToAssignments;', context);
+    const title = 'Tenha a mais alta consideração por eles em amor';
+    const savedSchedule = { ...schedule, living: [{ title }], participantes_externos: [
+        { parte_id: 'vida_0', nome_completo: guest, nome_parte: title },
+        { parte_id: 'oracao_final', nome_completo: guest, nome_parte: 'Oração Final' }
+    ] };
+    for (const rows of [[], savedSchedule.participantes_externos]) {
+        const result = context.map(rows, savedSchedule);
+        assert.equal(result.vida_0, guest);
+        assert.equal(result.oracao_final, guest);
+    }
 });

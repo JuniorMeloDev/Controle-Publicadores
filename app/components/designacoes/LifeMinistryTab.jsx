@@ -60,7 +60,7 @@ function formatFullDateBR(dateStr) {
 
 const mapSavedToAssignments = (savedRows, schedule) => {
   const newAssignments = {};
-  if (!savedRows || savedRows.length === 0) return newAssignments;
+  if (!savedRows) savedRows = [];
   const externalParticipants = schedule.participantes_externos || [];
   const externalByPart = new Map(externalParticipants.map(p => [p.parte_id, p.nome_completo]));
   const rowsByPart = {};
@@ -101,6 +101,9 @@ const mapSavedToAssignments = (savedRows, schedule) => {
       newAssignments[`vida_${idx}`] = popAssignment(truncatePartTitle(part.title));
     }
   });
+  // Special participants can take any part, including renamed Living parts.
+  // Their stable slot is stored in the programme, independently of its title.
+  for (const [partId, name] of externalByPart) newAssignments[partId] = name;
   return newAssignments;
 };
 
@@ -196,6 +199,7 @@ export function LifeMinistryTab() {
   const canImport = isAllowed(permissions, 'designacoes_importar', 'actions');
   const canEmail = isAllowed(permissions, 'designacoes_email', 'actions');
   const [publicadores, setPublicadores] = useState([]);
+  const [pessoasEspeciais, setPessoasEspeciais] = useState([]);
   const [savedMeetingsList, setSavedMeetingsList] = useState([]);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [exportingMeeting, setExportingMeeting] = useState(null);
@@ -232,10 +236,11 @@ export function LifeMinistryTab() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [pubRes, meetingsRes, historyRes] = await Promise.all([
+        const [pubRes, meetingsRes, historyRes, specialRes] = await Promise.all([
           fetch('/api/admin/get-publicadores'),
           fetch('/api/admin/get-reunioes'),
-          fetch('/api/admin/get-historico-designacoes')
+          fetch('/api/admin/get-historico-designacoes'),
+          fetch('/api/admin/pessoas-especiais')
         ]);
 
         if (!pubRes.ok) throw new Error('Falha ao buscar publicadores');
@@ -246,6 +251,8 @@ export function LifeMinistryTab() {
           nome_curto: p.nome_chamado ? p.nome_chamado : getShortName(p.nome_completo)
         }));
         setPublicadores(publicadoresComNomeCurto);
+        if (!specialRes.ok) throw new Error('Falha ao carregar pessoas especiais');
+        setPessoasEspeciais(await specialRes.json());
 
         if (meetingsRes.ok) {
           setSavedMeetingsList(await meetingsRes.json());
@@ -1321,7 +1328,9 @@ export function LifeMinistryTab() {
         schedule={schedules[currentIndex]}
         assignments={assignmentsList[currentIndex]}
         weekDescription={weekDescriptions[currentIndex]}
+        observacaoEvento={savedMeetingsList.find(m => m.dataSQL === meetingDates[currentIndex])?.observacao_evento}
         publicadores={publicadores}
+        pessoasEspeciais={pessoasEspeciais}
         historyData={historyData}
         onSave={handleSaveCurrent}
         isSaving={isSaving}
@@ -1405,6 +1414,8 @@ export function LifeMinistryTab() {
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-gray-900 group-hover:text-purple-700">{item.label}</h3>
                         <p className="text-xs text-gray-500">{formatFullDateBR(item.date)}</p>
+                        {item.meeting.evento_nome && <p className="text-xs font-medium text-orange-700 mt-1">{item.meeting.evento_nome}</p>}
+                        {item.meeting.observacao_evento && <p className="text-xs text-orange-700">{item.meeting.observacao_evento}</p>}
                         <p className={`text-xs mt-1 ${item.meeting.cancelado ? 'text-red-600' : 'text-purple-600'}`}>
                           {item.meeting.cancelado || !stats ? item.subLabel : `${stats.filled} de ${stats.total} partes preenchidas · ${stats.percentage}%`}
                         </p>

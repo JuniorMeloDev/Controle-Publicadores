@@ -29,7 +29,7 @@ export function parseWeeklyProgram(html, date) {
     const heading = clean(article.find('h1').first().text());
     const monday = calendarWeekStart(date);
     const sunday = addCalendarDays(monday, 6);
-    const range = heading.match(/^(\d{1,2})(?:\s+de\s+([\p{L}]+))?\s*[-–—]\s*(\d{1,2})\s+de\s+([\p{L}]+)/iu);
+    const range = heading.replace(/(\d)\.?[\u00ba\u00b0]/g, '$1').match(/^(\d{1,2})(?:\s+de\s+([\p{L}]+))?\s*[-–—]\s*(\d{1,2})\s+de\s+([\p{L}]+)/iu);
     const months = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
     if (!range || Number(range[1]) !== Number(monday.slice(8)) || Number(range[3]) !== Number(sunday.slice(8)) ||
         norm(range[4]) !== months[Number(sunday.slice(5, 7)) - 1] ||

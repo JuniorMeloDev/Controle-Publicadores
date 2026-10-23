@@ -4,6 +4,14 @@ import { loadModule, loadRoute } from './helpers/load-source.mjs';
 
 const calendar = await loadModule('../../app/lib/meeting-calendar.js');
 const { generationRange, resolveProgramMeeting, meetingCancellation } = calendar;
+
+test('active Tuesday visit meetings retain the event and changed-day notice', () => {
+    const state = meetingCancellation({ tipo: 'Meio de Semana', data: '2026-10-27' },
+        [{ tipo: 'Visita do Superintendente', data: '2026-10-27', nome: 'Visita de teste' }], {});
+    assert.equal(state.cancelado, false);
+    assert.equal(state.evento_nome, 'Visita de teste');
+    assert.match(state.observacao_evento, /transferida para terça-feira/);
+});
 const config = { ano: 2030, dia_meio_semana: 'Quarta-feira', dia_fim_semana: 'Domingo' };
 const meetings = [
     { id: 910001, data: '2030-01-09', tipo: 'Meio de Semana' },

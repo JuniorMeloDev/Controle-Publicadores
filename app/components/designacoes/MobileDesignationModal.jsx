@@ -13,7 +13,9 @@ const footerButtonClass = 'h-10 min-w-0 w-full px-3 rounded-md text-sm font-medi
 const SearchableSelect = ({ value, options, onChange, placeholder }) => {
    const [isOpen, setIsOpen] = useState(false);
    const [searchTerm, setSearchTerm] = useState('');
+   const [activeIndex, setActiveIndex] = useState(0);
    const wrapperRef = useRef(null);
+   const triggerRef = useRef(null);
 
    // Close when clicking outside
    useEffect(() => {
@@ -43,9 +45,27 @@ const SearchableSelect = ({ value, options, onChange, placeholder }) => {
    };
 
    return (
-      <div className="relative w-full" ref={wrapperRef}>
-         <div
+      <div className="relative w-full" ref={wrapperRef} onBlur={(event) => {
+         if (!event.currentTarget.contains(event.relatedTarget)) {
+            setIsOpen(false);
+            setSearchTerm('');
+         }
+      }}>
+         <button
+            type="button"
+            ref={triggerRef}
+            aria-label={placeholder || 'Selecionar publicador'}
+            aria-expanded={isOpen}
+            aria-haspopup="listbox"
             className="w-full text-sm p-2 border border-gray-300 rounded-md bg-white text-gray-900 focus-within:border-purple-500 focus-within:ring-1 focus-within:ring-purple-500 cursor-pointer flex justify-between items-center"
+            onKeyDown={(event) => {
+               if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || (event.key.length === 1 && event.key !== ' ' && !event.ctrlKey && !event.metaKey && !event.altKey)) {
+                  event.preventDefault();
+                  setSearchTerm(event.key.length === 1 ? event.key : '');
+                  setActiveIndex(0);
+                  setIsOpen(true);
+               }
+            }}
             onClick={() => {
                setIsOpen(!isOpen);
                if (!isOpen && displayValue) setSearchTerm('');
@@ -53,7 +73,7 @@ const SearchableSelect = ({ value, options, onChange, placeholder }) => {
          >
             <span className={!value ? "text-gray-400" : ""}>{value ? displayValue : (placeholder || "Selecione...")}</span>
             <ChevronDown size={14} className="text-gray-400" />
-         </div>
+         </button>
 
          {isOpen && (
             <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
@@ -66,13 +86,35 @@ const SearchableSelect = ({ value, options, onChange, placeholder }) => {
                         placeholder="Buscar..."
                         autoFocus
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={(e) => { setSearchTerm(e.target.value); setActiveIndex(0); }}
+                        onKeyDown={(event) => {
+                           if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                              event.preventDefault();
+                              setActiveIndex(index => Math.max(0, Math.min((filteredOptions?.length || 1) - 1, index + (event.key === 'ArrowDown' ? 1 : -1))));
+                           } else if (event.key === 'Enter') {
+                              event.preventDefault();
+                              if (filteredOptions?.[activeIndex]) handleSelect(filteredOptions[activeIndex].value);
+                              triggerRef.current?.focus();
+                           } else if (event.key === 'Tab') {
+                              // Keep the input mounted until native Tab navigation moves focus.
+                              if (!event.shiftKey && searchTerm.trim() && filteredOptions?.[activeIndex]) {
+                                 onChange(filteredOptions[activeIndex].value);
+                              }
+                           } else if (event.key === 'Escape') {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setIsOpen(false);
+                              setSearchTerm('');
+                              triggerRef.current?.focus();
+                           }
+                        }}
                      />
                   </div>
                </div>
                <div className="py-1">
                   <div
                      className={`px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer ${value === "" ? 'bg-purple-50 text-purple-700 font-medium' : 'text-gray-500'}`}
+                     onMouseDown={(event) => event.preventDefault()}
                      onClick={() => handleSelect('')}
                   >
                      Selecione...
@@ -80,9 +122,11 @@ const SearchableSelect = ({ value, options, onChange, placeholder }) => {
                   {filteredOptions?.length === 0 && (
                      <div className="px-3 py-2 text-xs text-gray-400 text-center">Nenhum encontrado</div>
                   )}
-                  {filteredOptions?.map(opt => (
+                  {filteredOptions?.map((opt, index) => (
                      <div
                         key={opt.value}
+                        style={index === activeIndex ? { backgroundColor: '#f3e8ff' } : undefined}
+                        onMouseDown={(event) => event.preventDefault()}
                         className={`px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer flex justify-between items-center ${value === opt.value ? 'bg-purple-50 text-purple-700 font-medium' : 'text-gray-900'}`}
                         onClick={() => handleSelect(opt.value)}
                      >
@@ -127,7 +171,7 @@ const normalizeText = (text) => {
       .replace(/[\u0300-\u036f]/g, '');
 };
 
-export function MobileDesignationModal({ isOpen, onClose, schedule: savedSchedule, assignments: savedAssignments, weekDescription, publicadores, historyData = [], onSave, isSaving, onPrint, onOpenEmail, onShareWhatsApp }) {
+export function MobileDesignationModal({ isOpen, onClose, schedule: savedSchedule, assignments: savedAssignments, weekDescription, observacaoEvento, publicadores, pessoasEspeciais = [], historyData = [], onSave, isSaving, onPrint, onOpenEmail, onShareWhatsApp }) {
    const [schedule, setSchedule] = useState(() => structuredClone(savedSchedule));
    const [assignments, setAssignments] = useState(() => ({ ...savedAssignments }));
    const onAssignmentChange = (partId, name) => setAssignments(prev => updateDraftAssignments(prev, partId, name));
@@ -146,10 +190,13 @@ export function MobileDesignationModal({ isOpen, onClose, schedule: savedSchedul
    if (!schedule || !assignments) return null;
 
    // Prepare Options for Select
-   const pubOptions = publicadores?.map(p => ({
+   const pubOptions = [...(publicadores || []).map(p => ({
       value: p.nome_completo,
       label: p.nome_curto || p.nome_completo
-   })) || [];
+   })), ...pessoasEspeciais.filter(p => p.nome_completo).map(p => ({
+      value: p.nome_completo,
+      label: `${p.nome_completo} (${p.papel === 'superintendente' ? 'Superintendente' : 'Esposa do superintendente'})`
+   }))];
 
    // -- SMART AUTO FILL LOGIC (RODÍZIO EQUILIBRADO + HISTÓRICO) --
    const handleAutoFill = () => {
@@ -354,7 +401,12 @@ export function MobileDesignationModal({ isOpen, onClose, schedule: savedSchedul
 
    return (
       <Dialog open={isOpen} onOpenChange={open => { if (!open && !isSaving) onClose(); }}>
-         <DialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] z-50 w-[calc(100%-2rem)] max-w-xl max-h-[90dvh] p-0 gap-0 overflow-hidden rounded-xl bg-white flex flex-col border shadow-lg outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:rounded-xl">
+         <DialogContent onEscapeKeyDown={(event) => {
+            if (historyModalOpen) {
+               event.preventDefault();
+               setHistoryModalOpen(false);
+            }
+         }} className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] z-50 w-[calc(100%-2rem)] max-w-xl max-h-[90dvh] p-0 gap-0 overflow-hidden rounded-xl bg-white flex flex-col border shadow-lg outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:rounded-xl">
 
             {/* --- HISTORY MODAL (NESTED ABSOLUTE OVERLAY) --- */}
             {historyModalOpen && selectedPubHistory && (
@@ -398,6 +450,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule: savedSchedul
                <DialogDescription className="text-sm text-gray-500 font-medium">
                   {weekDescription}
                </DialogDescription>
+               {observacaoEvento && <p className="text-xs text-orange-700 mt-2">{observacaoEvento}</p>}
             </DialogHeader>
 
             <div className="flex-1 min-h-0 p-4 overflow-y-auto">

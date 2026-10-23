@@ -51,7 +51,7 @@ function parseRTFMeeting(rtf) {
   // Extrair data da semana e leitura da Bíblia do cabeçalho
   for (const line of lines.slice(0, 15)) {
     const cleaned = cleanLine(line);
-    const match = cleaned.match(/(\d{1,2}(?:\s+de\s+[a-zá-úãõ]+)?\s*(?:a|-)\s*\d{1,2}\s+de\s+[a-zá-úãõ]+(?:\s+de\s+\d{4})?)\s*\(([^)]+)\)/i);
+    const match = cleaned.replace(/(\d)\.?[\u00ba\u00b0]/g, '$1').match(/(\d{1,2}(?:\s+de\s+[a-zá-úãõ]+)?\s*(?:a|[-\u2013\u2014])\s*\d{1,2}\s+de\s+[a-zá-úãõ]+(?:\s+de\s+\d{4})?)\s*\(([^)]+)\)/i);
     if (match) {
       weekDate = match[1].trim().toUpperCase();
       bibleReading = cleanLine(match[2]).trim().toUpperCase();

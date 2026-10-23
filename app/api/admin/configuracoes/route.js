@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
 import { isAllowed } from '@/app/lib/access-control';
 import { registerAuditLog } from '@/app/lib/audit-log';
+import { getSpecialParticipants, ensureSpecialParticipants } from '@/app/lib/special-participants';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,7 +54,8 @@ export async function GET(request) {
 
     return NextResponse.json({
         config: configRes.rows[0] || { dia_meio_semana: '', dia_fim_semana: '' },
-        events: eventsRes.rows
+        events: eventsRes.rows,
+        pessoas_especiais: await getSpecialParticipants(client)
     });
 
   } catch (err) {
@@ -79,6 +81,22 @@ export async function POST(request) {
         const { action } = body; // 'save_weekdays' or 'add_event' or 'delete_event'
 
         await ensureTables(client);
+
+        if (action === 'save_special_participants') {
+            const entries = ['superintendente', 'esposa'].map(papel => [papel, body[papel]]);
+            if (entries.some(([, nome]) => typeof nome !== 'string' || nome.trim().length > 255)) {
+                return NextResponse.json({ message: 'Informe nomes de até 255 caracteres.' }, { status: 400 });
+            }
+            await ensureSpecialParticipants(client);
+            await client.query('BEGIN');
+            for (const [papel, nome] of entries) {
+                await client.query(`INSERT INTO pessoas_especiais (papel, nome_completo) VALUES ($1, $2)
+                    ON CONFLICT (papel) DO UPDATE SET nome_completo = EXCLUDED.nome_completo`, [papel, nome.trim()]);
+            }
+            await registerAuditLog(client, { userId, action: 'pessoas_especiais_salvas', entity: 'configuracoes' });
+            await client.query('COMMIT');
+            return NextResponse.json({ message: 'Pessoas especiais salvas.' });
+        }
 
         if (action === 'save_weekdays') {
             const { ano, dia_meio_semana, dia_fim_semana } = body;
@@ -133,6 +151,7 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Ação inválida' }, { status: 400 });
 
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Erro ao salvar configurações:', err);
         return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
     } finally {

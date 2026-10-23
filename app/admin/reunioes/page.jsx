@@ -455,6 +455,7 @@ export default function ReunioesPage() {
                                                     : 'text-gray-900 border-transparent hover:border-purple-500'
                                                 }`}>
                                                 {meeting.data_formatada}
+                                                {meeting.observacao_evento && <p className="mt-1 text-xs font-normal text-orange-700">{meeting.evento_nome}<br />{meeting.observacao_evento}</p>}
                                             </td>
                                             <td className={`px-6 py-3 capitalize ${meeting.cancelado ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
                                                 {new Date(meeting.data).toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'UTC' })}
@@ -557,6 +558,7 @@ export default function ReunioesPage() {
                                                 <div className="min-w-0">
                                                     <div className={`text-base font-semibold ${meeting.cancelado ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                                                         {meeting.data_formatada}
+                                                        {meeting.observacao_evento && <p className="mt-1 text-xs font-normal text-orange-700">{meeting.evento_nome}<br />{meeting.observacao_evento}</p>}
                                                     </div>
                                                     <div className={`text-sm capitalize ${meeting.cancelado ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
                                                         {getWeekdayLabel(meeting)}

@@ -16,6 +16,7 @@ import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
 import { useDesignationPeriod } from './DesignationPeriodContext';
 import { getCleaningResponsibles, changeCleaningGroup } from '@/app/lib/cleaning-responsibles';
+import { cleaningDefaultTasks } from '@/app/lib/cleaning-defaults';
 import { designationToolbarClass, designationActionClass, designationListHeaderClass, DesignationPeriodFilters } from './DesignationLayout';
 
 export function CleaningTab() {
@@ -29,6 +30,12 @@ export function CleaningTab() {
   const [availableGroups, setAvailableGroups] = useState([]);
   const [groupLeaders, setGroupLeaders] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
+  const [taskDefaults, setTaskDefaults] = useState({ meio_semana: '', fim_semana: '' });
+  const [defaultsLoading, setDefaultsLoading] = useState(true);
+  const [defaultsOpen, setDefaultsOpen] = useState(false);
+  const [defaultsDraft, setDefaultsDraft] = useState({ meio_semana: '', fim_semana: '' });
+  const [defaultsSaving, setDefaultsSaving] = useState(false);
+  const [defaultsError, setDefaultsError] = useState('');
   
   // Filters
   const getCurrentMonthDates = () => {
@@ -53,7 +60,32 @@ export function CleaningTab() {
 
   useEffect(() => {
     fetchGroups();
+    fetch('/api/admin/limpeza/tarefas-padrao').then(async response => {
+      if (!response.ok) throw new Error('Não foi possível carregar tarefas padrão.');
+      setTaskDefaults(await response.json());
+    }).catch(error => setError(error.message)).finally(() => setDefaultsLoading(false));
   }, []); 
+
+  const defaultTasksForDate = value => cleaningDefaultTasks(value, items, taskDefaults);
+  const changeDate = value => {
+    if (!editId && (!tasks || tasks === defaultTasksForDate(date))) setTasks(defaultTasksForDate(value));
+    setDate(value);
+  };
+  const saveDefaults = async event => {
+    event.preventDefault();
+    setDefaultsSaving(true);
+    setDefaultsError('');
+    try {
+      const response = await fetch('/api/admin/limpeza/tarefas-padrao', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(defaultsDraft)
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Erro ao salvar tarefas padrão.');
+      setTaskDefaults(result);
+      setDefaultsOpen(false);
+    } catch (error) { setDefaultsError(error.message); }
+    finally { setDefaultsSaving(false); }
+  };
 
   const fetchGroups = async () => {
       try {
@@ -137,11 +169,11 @@ export function CleaningTab() {
   };
 
   const openEditModal = (item) => {
-      if (!canEdit || groupsLoading) return;
+      if (!canEdit || groupsLoading || defaultsLoading) return;
       setEditId(item.id);
       setMeetingId(item.reuniao_id);
       setDate(new Date(item.data).toISOString().split('T')[0]);
-      setTasks(item.tarefas || '');
+      setTasks(item.tarefas || (!item.id ? defaultTasksForDate(item.data.slice(0, 10)) : ''));
       setGroup(item.grupo || '');
       setResponsibles(item.responsaveis?.trim() ? item.responsaveis : defaultsForGroup(item.grupo));
       setIsModalOpen(true);
@@ -181,7 +213,8 @@ export function CleaningTab() {
           <h2 className="text-lg font-bold text-gray-900">Limpeza Semanal</h2>
           <p className="text-sm text-gray-500 mt-1">Organize os grupos e as tarefas de cada reunião.</p>
         </div>
-        <Button onClick={openNewModal} disabled={!canEdit || groupsLoading} className={`${designationActionClass} bg-purple-600 hover:bg-purple-700 text-white`}>
+        <Button variant="outline" disabled={!canEdit || defaultsLoading} onClick={() => { setDefaultsDraft({ ...taskDefaults }); setDefaultsError(''); setDefaultsOpen(true); }} className={designationActionClass}>Tarefas padrão</Button>
+        <Button onClick={openNewModal} disabled={!canEdit || groupsLoading || defaultsLoading} className={`${designationActionClass} bg-purple-600 hover:bg-purple-700 text-white`}>
           <Plus className="w-4 h-4" /> Nova designação
         </Button>
       </div>
@@ -278,7 +311,7 @@ export function CleaningTab() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Data da Reunião (ou Semana)</Label>
-                    <Input className="text-gray-900 font-medium" type="date" disabled={Boolean(meetingId)} value={date} onChange={e => setDate(e.target.value)} required />
+                    <Input className="text-gray-900 font-medium" type="date" disabled={Boolean(meetingId)} value={date} onChange={e => changeDate(e.target.value)} required />
                   </div>
                    <div className="space-y-2">
                     <Label>Grupo Designado</Label>
@@ -304,6 +337,8 @@ export function CleaningTab() {
                         onChange={e => setTasks(e.target.value)}
                         required
                     />
+                    <p className="text-xs text-gray-500">As tarefas padrão podem ser editadas e complementadas nesta designação.</p>
+                    {date && defaultTasksForDate(date) && <Button type="button" variant="outline" onClick={() => setTasks(current => current.trim() ? `${current}\n${defaultTasksForDate(date)}` : defaultTasksForDate(date))}>Acrescentar tarefas padrão</Button>}
                 </div>
 
                 <div className="space-y-2">
@@ -326,6 +361,17 @@ export function CleaningTab() {
                     </Button>
                 </DialogFooter>
             </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={defaultsOpen} onOpenChange={open => { if (!defaultsSaving) setDefaultsOpen(open); }}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-2xl max-h-[90dvh] overflow-y-auto bg-white text-gray-900">
+          <DialogHeader><DialogTitle>Tarefas padrão da limpeza</DialogTitle><DialogDescription>Salve os modelos para novas designações. As designações existentes mantêm suas tarefas.</DialogDescription></DialogHeader>
+          <form onSubmit={saveDefaults} className="space-y-4">
+            <div className="space-y-2"><Label htmlFor="cleaning-midweek-defaults">Meio de semana</Label><Textarea id="cleaning-midweek-defaults" rows={5} maxLength={20000} disabled={defaultsSaving} value={defaultsDraft.meio_semana} onChange={e => setDefaultsDraft(current => ({ ...current, meio_semana: e.target.value }))} /></div>
+            <div className="space-y-2"><Label htmlFor="cleaning-weekend-defaults">Fim de semana</Label><Textarea id="cleaning-weekend-defaults" rows={5} maxLength={20000} disabled={defaultsSaving} value={defaultsDraft.fim_semana} onChange={e => setDefaultsDraft(current => ({ ...current, fim_semana: e.target.value }))} /></div>
+            {defaultsError && <p role="alert" className="text-sm text-red-700">{defaultsError}</p>}
+            <DialogFooter><Button type="button" variant="outline" disabled={defaultsSaving} onClick={() => setDefaultsOpen(false)}>Cancelar</Button><Button type="submit" disabled={defaultsSaving || !canEdit}>{defaultsSaving ? 'Salvando...' : 'Salvar tarefas padrão'}</Button></DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

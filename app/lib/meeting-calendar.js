@@ -74,14 +74,17 @@ export function meetingCancellation(meeting, events, config) {
             }
         }
     }
-    return { cancelado: Boolean(conflict), motivo_cancelamento: reason, evento_nome: conflict?.nome || '' };
+    const visit = events.find(e => e.tipo === 'Visita do Superintendente' && dateOnly(e.data) >= start && dateOnly(e.data) <= end);
+    const visitMeeting = visit && meeting.tipo === 'Meio de Semana' && !conflict;
+    return { cancelado: Boolean(conflict), motivo_cancelamento: reason, evento_nome: conflict?.nome || visit?.nome || '',
+        ...(visitMeeting ? { observacao_evento: 'Semana da visita do superintendente. Reunião de meio de semana transferida para terça-feira.' } : {}) };
 }
 
 // The RTF heading describes a week, not the congregation's meeting day.
 export function resolveProgramMeeting(weekText, year, meetings) {
     const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-    const text = String(weekText).toLowerCase();
-    const match = text.match(/(\d{1,2})(?:\s+de\s+([a-zç]+))?\s*(?:a|-)\s*\d{1,2}\s+de\s+([a-zç]+)/);
+    const text = String(weekText).toLowerCase().replace(/(\d)\.?[\u00ba\u00b0]/g, '$1');
+    const match = text.match(/(\d{1,2})(?:\s+de\s+([a-zç]+))?\s*(?:a|[-\u2013\u2014])\s*\d{1,2}\s+de\s+([a-zç]+)/);
     if (!match) throw new Error('Não foi possível identificar a semana do arquivo.');
     const monthIndex = months.indexOf(match[2] || match[3]);
     const explicitYear = text.match(/\b(\d{4})\b/);

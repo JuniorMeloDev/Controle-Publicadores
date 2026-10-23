@@ -49,6 +49,8 @@ export default function ConfiguracoesPage() {
     const [year, setYear] = useState(new Date().getFullYear());
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [pessoasEspeciais, setPessoasEspeciais] = useState({ superintendente: '', esposa: '' });
+    const [savingSpecial, setSavingSpecial] = useState(false);
     const [toast, setToast] = useState({ message: '', type: '' });
 
     // Meeting Days State
@@ -132,12 +134,28 @@ export default function ConfiguracoesPage() {
                 setMidweekDay(data.config.dia_meio_semana || '');
                 setWeekendDay(data.config.dia_fim_semana || '');
                 setEvents(data.events || []);
+                setPessoasEspeciais({ superintendente: '', esposa: '', ...Object.fromEntries((data.pessoas_especiais || []).map(p => [p.papel, p.nome_completo])) });
             }
         } catch (error) {
             console.error(error);
         } finally {
             setLoading(false);
         }
+    };
+
+    const saveSpecialParticipants = async () => {
+        setSavingSpecial(true);
+        try {
+            const response = await fetch('/api/admin/configuracoes', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'save_special_participants', ...pessoasEspeciais })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || 'Erro ao salvar pessoas especiais.');
+            setToast({ message: result.message, type: 'success' });
+        } catch (error) {
+            setToast({ message: error.message, type: 'error' });
+        } finally { setSavingSpecial(false); }
     };
 
     const fetchGrupos = async () => {
@@ -533,6 +551,19 @@ export default function ConfiguracoesPage() {
                 ) : (
                     <SettingsTabs>
                         <SettingsPanel value="reunioes" className="grid grid-cols-1 gap-4">
+                            <Card className="bg-white border-gray-200">
+                                <CardHeader>
+                                    <CardTitle>Pessoas especiais — visita do superintendente</CardTitle>
+                                    <CardDescription>Cadastre os nomes para selecioná-los nas partes de Vida e Ministério. Eles não entram como publicadores. Este cadastro vale para todos os anos.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="grid sm:grid-cols-2 gap-4">
+                                        <div className="space-y-2"><Label htmlFor="special-overseer">Nome do superintendente</Label><Input id="special-overseer" maxLength={255} value={pessoasEspeciais.superintendente} disabled={!canEditConfig || loading || savingSpecial} onChange={e => setPessoasEspeciais(p => ({ ...p, superintendente: e.target.value }))} /></div>
+                                        <div className="space-y-2"><Label htmlFor="special-wife">Nome da esposa</Label><Input id="special-wife" maxLength={255} value={pessoasEspeciais.esposa} disabled={!canEditConfig || loading || savingSpecial} onChange={e => setPessoasEspeciais(p => ({ ...p, esposa: e.target.value }))} /></div>
+                                    </div>
+                                    <Button onClick={saveSpecialParticipants} disabled={!canEditConfig || loading || savingSpecial}>{savingSpecial ? 'Salvando...' : 'Salvar pessoas especiais'}</Button>
+                                </CardContent>
+                            </Card>
                             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                                 <p className="text-sm text-gray-600">Calendário das reuniões e datas especiais do ano selecionado.</p>
                                 <div className="flex w-full sm:w-auto items-center justify-between gap-3">

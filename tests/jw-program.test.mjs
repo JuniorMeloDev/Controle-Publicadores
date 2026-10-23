@@ -42,6 +42,7 @@ test('parser fails closed for missing durations, sections, songs or wrong weeks'
 });
 
 test('parser validates week ranges that cross month and year boundaries', () => {
+    assert.equal(parseWeeklyProgram(html.replace('7-13 DE JANEIRO', '26 DE OUTUBRO–1.º DE NOVEMBRO'), '2026-10-27').weekDate, '26 DE OUTUBRO–1.º DE NOVEMBRO DE 2026');
     assert.equal(parseWeeklyProgram(html.replace('7-13 DE JANEIRO', '28 DE DEZEMBRO–3 DE JANEIRO'), '2026-12-30').weekDate, '28 DE DEZEMBRO–3 DE JANEIRO DE 2027');
     assert.throws(() => parseWeeklyProgram(html.replace('7-13 DE JANEIRO', '28 DE NOVEMBRO–3 DE JANEIRO'), '2026-12-30'));
 });
