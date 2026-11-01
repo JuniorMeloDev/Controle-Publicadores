@@ -87,6 +87,7 @@ function RelatorioForm() {
 
     if (!publicadorId) {
       fetch('/api/minha-conta', { cache: 'no-store' }).then(async response => {
+        if (response.status === 401) return;
         const result = await response.json();
         if (!response.ok) throw new Error(result.message);
         const info = result.info;

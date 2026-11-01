@@ -116,16 +116,38 @@ test('assignment directories disclose names and eligibility, without personal da
   assert.equal(result.body[0].email, undefined);
 });
 
-test('legacy report endpoint rejects anonymous requests before accessing data', async () => {
-  for (const file of ['enviar-relatorio-mensal']) {
-    let connects = 0;
-    const { POST } = loadRoute(`../../app/api/${file}/route.js`, {
-      getUserIdFromRequest: () => null,
-      Pool: class { connect() { connects++; } },
-    });
-    assert.equal((await POST({})).status, 401);
-    assert.equal(connects, 0);
-  }
+test('monthly report can be submitted anonymously after matching name and birth date', async () => {
+  const queries = [];
+  const { POST } = loadRoute('../../app/api/enviar-relatorio-mensal/route.js', {
+    Pool: class {
+      async connect() {
+        return {
+          async query(sql, values) {
+            queries.push({ sql, values });
+            if (sql.includes('FROM publicadores')) {
+              return { rows: [{ id: 42, nome_completo: 'João da Silva', nome_chamado: 'João' }] };
+            }
+            if (sql.includes('FROM relatorios_mensais')) return { rows: [] };
+            return { rows: [], rowCount: 1 };
+          },
+          release() {},
+        };
+      }
+    },
+  });
+  const result = await POST({
+    json: async () => ({
+      nome_completo: 'João da Silva',
+      data_nascimento: '01/01/2000',
+      mes: 'Janeiro',
+      ano_servico: 2027,
+      participou_ministerio: true,
+    }),
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.message, 'Relatório enviado com sucesso!');
+  assert.deepEqual(Array.from(queries[0].values), ['2000-01-01', '01/01/2000']);
+  assert.ok(queries.some(({ sql }) => sql.includes('INSERT INTO relatorios_mensais')));
 });
 
 test('request guard checks database grants, request origin and protects account email changes', async () => {

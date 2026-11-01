@@ -11,7 +11,6 @@ const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
   const protectedExtra = ['/api/recuperar-designacoes', '/api/enviar-relatorio-mensal/manual'].includes(pathname);
-  const ownPages = pathname === '/relatorio-mensal';
   const personalPage = ['/admin/dashboard', '/admin/meus-dados', '/admin/minhas-designacoes', '/admin/meu-s21', '/admin/configuracoes/preferencias'].includes(pathname);
   const tokenCookie = request.cookies.get('auth_token');
 
@@ -50,7 +49,7 @@ export async function middleware(request) {
 
   // --- MUDANÇA AQUI ---
   // Se a rota começar com /admin OU /api/admin...
-  if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin') || protectedExtra || ownPages) {
+  if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin') || protectedExtra) {
     if (!hasVerifiedToken) {
       // Se for uma API, retorna erro JSON. Se for uma página, redireciona.
       if (pathname.startsWith('/api/')) {
@@ -83,7 +82,7 @@ export const config = {
     '/admin/:path*',
     '/api/admin/:path*',
     '/api/recuperar-designacoes',
-    '/api/enviar-relatorio-mensal/manual'
-    , '/relatorio-mensal', '/atualizacao-cadastral'
+    '/api/enviar-relatorio-mensal/manual',
+    '/atualizacao-cadastral'
   ],
 };

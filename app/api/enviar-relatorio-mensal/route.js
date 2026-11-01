@@ -2,7 +2,6 @@
 
 import { Pool } from '@neondatabase/serverless'; 
 import { NextResponse } from 'next/server';
-import { getUserIdFromRequest } from '@/app/lib/server-access';
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
@@ -23,8 +22,6 @@ function normalizeString(str) {
 }
 
 export async function POST(req) {
-  const userId = getUserIdFromRequest(req);
-  if (!userId) return NextResponse.json({ message: 'Faça login para enviar seu relatório.' }, { status: 401 });
   const body = await req.json();
   const {
     nome_completo: nomeSujeito,
@@ -34,8 +31,10 @@ export async function POST(req) {
     ...dadosDoRelatorio 
   } = body;
 
-  if (typeof nomeSujeito !== 'string' || typeof data_nascimento !== 'string') return NextResponse.json({ message: 'Dados inválidos.' }, { status: 400 });
+  if (typeof nomeSujeito !== 'string' || !nomeSujeito.trim() || typeof data_nascimento !== 'string') return NextResponse.json({ message: 'Dados inválidos.' }, { status: 400 });
   const nomeCompletoNormalizado = normalizeString(nomeSujeito.trim()).toLowerCase(); 
+  const termosDigitados = nomeCompletoNormalizado.split(/\s+/).filter(w => w.length > 1);
+  if (termosDigitados.length === 0) return NextResponse.json({ message: 'Dados inválidos.' }, { status: 400 });
   const isoDataNascimento = dmyToISO(data_nascimento); 
   const dmyDataNascimento = data_nascimento;           
 
@@ -52,12 +51,10 @@ export async function POST(req) {
     const candidatesRes = await client.query(
       `SELECT id, nome_completo, nome_chamado 
        FROM publicadores 
-       WHERE id = $3 AND (data_nascimento::text = $1 OR data_nascimento::text = $2)`,
-      [isoDataNascimento, dmyDataNascimento, userId]
+       WHERE data_nascimento::text = $1 OR data_nascimento::text = $2`,
+      [isoDataNascimento, dmyDataNascimento]
     );
-
     let publicadorEncontrado = null;
-    const termosDigitados = nomeCompletoNormalizado.split(/\s+/).filter(w => w.length > 1);
 
     if (candidatesRes.rows.length > 0) {
         const matches = candidatesRes.rows.filter(p => {
