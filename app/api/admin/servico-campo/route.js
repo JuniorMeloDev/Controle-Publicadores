@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic';
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 
 function failure(error) {
+  if (error.code === '42703') return NextResponse.json({ message: 'Atualize o banco com npm run migrate:field-service para usar o planejamento de campo.' }, { status: 503 });
   if (error.code === '42P01') return NextResponse.json({ message: 'O Serviço de Campo precisa da migração do banco de dados.' }, { status: 503 });
   if (error.code === '23505') return NextResponse.json({ message: 'Já existe um cadastro igual ou uma designação aberta para este território.' }, { status: 409 });
   if (error.code === '23503') return NextResponse.json({ message: 'Uma seleção não está mais disponível. Atualize a página.' }, { status: 409 });

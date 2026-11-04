@@ -58,7 +58,11 @@ export function validateFieldRecord(entity, input) {
     }
     return { id, nome: text(input.nome, 120, true), endereco: text(input.endereco), mapa_url, grupos: ids(input.grupos), observacoes: text(input.observacoes), ativo: active(input.ativo) };
   }
-  if (entity === 'territorios') return { id, numero: fieldId(input.numero), descricao: text(input.descricao), mapa_url: fieldMapUrl(input.mapa_url), referencias: text(input.referencias), fim_semana: input.fim_semana === true, ativo: active(input.ativo) };
+  if (entity === 'territorios') {
+    const periodo = input.periodo || (input.fim_semana === true ? 'fim_semana' : 'ambos');
+    if (!['semana', 'fim_semana', 'ambos'].includes(periodo)) throw new Error('Período de território inválido.');
+    return { id, numero: fieldId(input.numero), descricao: text(input.descricao), mapa_url: fieldMapUrl(input.mapa_url), referencias: text(input.referencias), periodo, fim_semana: periodo === 'fim_semana', ativo: active(input.ativo) };
+  }
   if (entity === 'saidas') {
     const data = fieldDate(input.data);
     const horario = text(input.horario, 40, true);

@@ -4,6 +4,7 @@ import pg from 'pg';
 import { readFile } from 'node:fs/promises';
 import { saveFieldMap } from '../app/lib/field-map.js';
 import { mutateFieldService, readFieldService } from '../app/lib/field-service-server.js';
+import { generateFieldSchedule } from '../app/lib/field-planner.js';
 
 nextEnv.loadEnvConfig(process.cwd());
 const pool = new pg.Pool({ connectionString: process.env.POSTGRES_URL });
@@ -59,6 +60,50 @@ try {
   assert.ok(withMaps.mapas.some(item => item.chave === 'geral'));
   assert.ok(withMaps.mapas.every(item => !Object.hasOwn(item, 'conteudo')));
   assert.deepEqual((await client.query('SELECT conteudo FROM campo_mapas WHERE territorio_id = $1', [territory.id])).rows[0].conteudo, map.buffer);
+  const batchTerritories = [];
+  for (let index = 1; index <= 6; index++) {
+    batchTerritories.push((await mutateFieldService(client, { entity: 'territorios', action: 'save', record: { numero: number + index, periodo: 'ambos' } })).id);
+  }
+  const batchOuting = await mutateFieldService(client, { entity: 'saidas', action: 'save', registrar_entrega: true, record: {
+    data: '2198-11-03', horario: '04:13', modalidade: 'territorio', territorios: batchTerritories.slice(0, 4), dirigente_publicador_id: publisher.id
+  } });
+  const concluded = await mutateFieldService(client, { entity: 'saidas', action: 'result', id: batchOuting.id, data: '2198-11-03', resultados: batchTerritories.slice(0, 4).map(territorio_id => ({ territorio_id, resultado: 'concluido' })) });
+  assert.equal(concluded.resultados, 4);
+  assert.equal((await client.query('SELECT COUNT(*)::int AS total FROM campo_designacoes WHERE territorio_id = ANY($1::int[]) AND data_conclusao = $2', [batchTerritories, '2198-11-03'])).rows[0].total, 4);
+  await assert.rejects(mutateFieldService(client, { entity: 'saidas', action: 'result', id: batchOuting.id, data: '2198-11-03', resultados: [{ territorio_id: batchTerritories[0], resultado: 'concluido' }] }), /já tem resultado/);
+  await assert.rejects(mutateFieldService(client, { entity: 'saidas', action: 'save', record: { id: batchOuting.id, data: '2198-11-04', horario: '04:13', modalidade: 'territorio', territorios: batchTerritories.slice(0, 4), dirigente_publicador_id: publisher.id } }), /já tem resultados/);
+  const mixed = await mutateFieldService(client, { entity: 'saidas', action: 'save', record: { data: '2198-11-04', horario: '04:13', modalidade: 'territorio', territorios: batchTerritories.slice(4), dirigente_publicador_id: publisher.id } });
+  await mutateFieldService(client, { entity: 'saidas', action: 'result', id: mixed.id, data: '2198-11-04', resultados: [
+    { territorio_id: batchTerritories[4], resultado: 'parcial', observacoes: 'Falta a quadra 2.' },
+    { territorio_id: batchTerritories[5], resultado: 'nao_trabalhado' }
+  ] });
+  assert.equal((await client.query('SELECT COUNT(*)::int AS total FROM campo_designacoes WHERE territorio_id = $1 AND data_conclusao IS NULL', [batchTerritories[4]])).rows[0].total, 1);
+  assert.equal((await client.query('SELECT COUNT(*)::int AS total FROM campo_designacoes WHERE territorio_id = $1', [batchTerritories[5]])).rows[0].total, 0);
+  const historic = { territorio_id: batchTerritories[0], responsavel_nome: 'Responsável antigo', data_designacao: '2198-09-01', data_conclusao: '2198-09-30' };
+  assert.equal((await mutateFieldService(client, { entity: 'designacoes', action: 'import', records: [historic] })).importados, 1);
+  assert.equal((await mutateFieldService(client, { entity: 'designacoes', action: 'import', records: [historic] })).ignorados, 1);
+  const state = await readFieldService(client);
+  const generated = generateFieldSchedule({ ...state, territorios: state.territorios.filter(t => batchTerritories.includes(t.id)) }, {
+    inicio: '2198-12-01', fim: '2198-12-01', intervalo: 14, regras: [{ dia: new Date('2198-12-01T12:00:00Z').getUTCDay(), horario: '04:13', quantidade: 4 }]
+  });
+  assert.equal(generated.rows[0].territorios.length, 4);
+  const saved = await mutateFieldService(client, { entity: 'saidas', action: 'batch', records: generated.rows });
+  assert.equal(saved.ids.length, 1);
+  // A later conflict must roll back earlier inserts in the same batch.
+  await client.query('SAVEPOINT batch_atomicity');
+  await assert.rejects(mutateFieldService(client, { entity: 'saidas', action: 'batch', intervalo: 1, records: [
+    { ...generated.rows[0], data: '2198-12-10' },
+    { ...generated.rows[0], data: '2198-12-10', territorios: [batchTerritories[5]] }
+  ] }), /Já existe uma saída/);
+  await client.query('ROLLBACK TO SAVEPOINT batch_atomicity');
+  assert.equal((await client.query("SELECT COUNT(*)::int AS total FROM campo_saidas WHERE data = '2198-12-10' AND horario = '04:13'")).rows[0].total, 0);
+  await mutateFieldService(client, { entity: 'saidas', action: 'delete', id: batchOuting.id });
+  assert.equal((await client.query('SELECT COUNT(*)::int AS total FROM campo_saida_resultados WHERE id = ANY($1::int[]) AND saida_id IS NULL', [concluded.ids])).rows[0].total, 4);
+  // New migration is repeatable, including old weekend preferences.
+  const planningMigration = (await readFile(new URL('../scripts/sql/adicionar-planejamento-campo.sql', import.meta.url), 'utf8')).replace(/^BEGIN;\s*/i, '').replace(/COMMIT;\s*$/i, '');
+  await client.query(planningMigration);
+  await client.query(planningMigration);
+  console.log('Planejamento aprovado: quatro conclusões, resultados parciais, importação sem duplicidade, geração em lote e rollback.');
   console.log('Integração aprovada: seleção direta, recorrência, conflitos, histórico e migração dos dirigentes existentes.');
 } catch (error) {
   console.error('Falha na integração:', error.code || error.message);

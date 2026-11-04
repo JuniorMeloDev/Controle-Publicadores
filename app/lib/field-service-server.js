@@ -1,4 +1,5 @@
 import { fieldId, fieldDate, validateFieldRecord, weeklyDates } from './field-service.js';
+import { mutateFieldBatch } from './field-service-batch.js';
 
 const tables = { locais: 'campo_locais', territorios: 'campo_territorios', saidas: 'campo_saidas', designacoes: 'campo_designacoes' };
 export function fieldError(message, status = 400) { return Object.assign(new Error(message), { status }); }
@@ -16,6 +17,7 @@ export async function readFieldService(client) {
   result.designacoes = (await client.query(`SELECT d.*, d.data_designacao::text AS data_designacao, d.data_conclusao::text AS data_conclusao
     FROM campo_designacoes d ORDER BY d.data_designacao DESC, d.id DESC`)).rows;
   result.mapas = (await client.query('SELECT chave, territorio_id, nome, tamanho, atualizado_em FROM campo_mapas ORDER BY chave')).rows;
+  result.resultados = (await client.query('SELECT *, data::text AS data FROM campo_saida_resultados ORDER BY campo_saida_resultados.data DESC, id DESC')).rows;
   return result;
 }
 
@@ -26,6 +28,7 @@ async function reference(client, table, selected, previous, needsActive = true) 
 }
 
 export async function mutateFieldService(client, body) {
+  if (body && ['result', 'batch', 'import'].includes(body.action)) return mutateFieldBatch(client, body, mutateFieldService);
   if (!body || !Object.hasOwn(tables, body.entity)) throw fieldError('Cadastro inválido.');
   const table = tables[body.entity];
   if (!['save', 'delete', 'complete'].includes(body.action)) throw fieldError('Ação inválida.');
@@ -58,9 +61,14 @@ export async function mutateFieldService(client, body) {
   let linkedDeliveries = [];
   let old = {};
   if (record.id) {
-    old = (await client.query(`SELECT * FROM ${table} WHERE id = $1 FOR UPDATE`, [record.id])).rows[0];
+    old = (await client.query(`SELECT *${body.entity === 'saidas' ? ', data::text AS data' : ''} FROM ${table} WHERE id = $1 FOR UPDATE`, [record.id])).rows[0];
     if (!old) throw fieldError('Registro não encontrado.', 404);
     if (body.entity === 'saidas') {
+      const recorded = await client.query('SELECT id FROM campo_saida_resultados WHERE saida_id = $1', [record.id]);
+      if (recorded.rows.length && (record.data !== String(old.data).slice(0, 10) || record.dirigente_publicador_id !== old.dirigente_publicador_id
+        || JSON.stringify([...record.territorios].sort((a, b) => a - b)) !== JSON.stringify([...old.territorios].sort((a, b) => a - b)))) {
+        throw fieldError('Esta saída já tem resultados. Preserve sua data, dirigente e territórios para manter o histórico.', 409);
+      }
       // Exact system-generated source marker also recognizes deliveries already saved.
       linkedDeliveries = (await client.query('SELECT *, data_designacao::text AS data_designacao FROM campo_designacoes WHERE observacoes = $1 FOR UPDATE',
         [`Entrega registrada pela saída ${record.id}.`])).rows;

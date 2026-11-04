@@ -6,6 +6,7 @@ nextEnv.loadEnvConfig(process.cwd());
 const pool = new pg.Pool({ connectionString: process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL });
 try {
   await pool.query(await readFile(new URL('./sql/adicionar-servico-campo.sql', import.meta.url), 'utf8'));
+  await pool.query(await readFile(new URL('./sql/adicionar-planejamento-campo.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/adicionar-limites-territorios.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/adicionar-mapas-editaveis.sql', import.meta.url), 'utf8'));
   console.log('Serviço de Campo: tabelas e índices criados. Dados existentes preservados.');
