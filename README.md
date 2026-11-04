@@ -211,17 +211,135 @@ e ruas. Edite as referências ou substitua o PDF quando houver atualização; o 
 continua vinculado ao mesmo território. Os arquivos devem ser PDFs
 de até 10 MB. **Visualizar mapa** abre o PDF e **Baixar PDF** faz o download;
 enviar outro arquivo substitui o anterior. Cadastro e PDF podem ser salvos juntos.
-Os PDFs são armazenados no PostgreSQL, incluídos no backup e acessíveis somente
-a usuários com acesso a Designações. Upload exige permissão de Serviço de Campo.
-Use **Compartilhar** na agenda para revisar uma mensagem com data, horário, dirigente,
-grupos, local da consideração e territórios, incluindo os links do Google Maps e
-orientações. Nos mapas individuais, o botão compartilha somente o território.
-Você pode editar/copiar a mensagem ou abrir o WhatsApp para escolher o destinatário
-e enviar. O app não envia automaticamente. Os PDFs privados não são transformados
-em links públicos; os links do Google Maps podem ser abertos sem acesso ao sistema.
+Os PDFs são preservados no PostgreSQL como referência para o desenho dos limites,
+incluídos no backup e acessíveis somente a usuários com acesso a Designações.
+Não há conversão de PDF em imagem no servidor.
+
+Na aba **Territórios**, o **Mapa esquemático da congregação** usa o desenho
+original: os 31 números, as cores dos cinco grupos, ruas e referências. Clique no
+número de um território ou use o seletor para abrir seu cartão. Os controles
+permitem ampliar, ajustar à tela e abrir em tela cheia. O esquema geral exige
+login; cada cartão individual pode ser compartilhado por um link público.
+
+Os cartões públicos usam as imagens dos PDFs originais, sem carregar a API do
+Google e sem converter arquivos durante uma requisição. Os links são associados
+a territórios ativos com PDF; não exigem limites geográficos desenhados. O cartão
+mostra somente os dados do território. Desativar o cadastro interrompe o acesso.
+A mensagem do WhatsApp inclui os cartões dos territórios selecionados, além de
+data, horário, dirigente, grupos, consideração e orientações.
+
+### Teste do cartão editável
+
+O protótipo está ativado no cadastro original do Território 1. Abra **Territórios
+→ Território 1 → Editar desenho**. O cartão é um SVG gerado de dados JSON salvos
+no PostgreSQL, sem PNG ou PDF como base de sua edição.
+
+É possível editar o número, escolher qualquer grupo cadastrado, mudar a cor do
+grupo, adicionar e nomear ruas, posicionar referências com ícones e ajustar a forma.
+Clique em uma rua para arrastar suas pontas ou editar seu nome. Arraste os ícones
+para mover referências. **Adicionar ponto** permite detalhar a forma ou a rua;
+botão direito em um ponto permite removê-lo. **Desfazer** recupera até 30 etapas
+do rascunho. **Cancelar edição** descarta alterações; **Salvar desenho** atualiza
+o cartão público no mesmo link.
+
+A forma inicial foi baseada no limite geográfico já salvo. O esquema permite
+organizar a apresentação; mover seus pontos não altera os limites geográficos.
+O editor geográfico continua disponível separadamente. As ruas iniciais são uma
+referência visual a conferir, não uma rota ou levantamento geográfico automático.
+
+Grupo, cor, número, ruas e referências são dados editáveis. Não há limite fixo de
+31 territórios ou cinco grupos no protótipo. O grupo vem da tabela `grupos`; sua
+cor é compartilhada pelos cartões associados. A identificação interna e o link
+permanecem estáveis ao renumerar. O protótipo é habilitado por registro, não por
+uma regra que dependa de seu número continuar sendo 1.
+
+Para habilitar um teste em outro banco, após a migração, use os números e IDs reais:
+
+```bash
+npm run pilot:territory -- --numero=1 --grupo=5
+npm run verify:editable-territory
+```
+
+O comando preserva desenhos existentes e exige um limite geográfico inicial. Os
+demais territórios continuam usando seus cartões de referência durante o teste.
+O esquema geral original ainda é uma referência estática; a composição geral
+editável será uma evolução após a avaliação deste protótipo.
+
+### Ruas das laterais consultadas no Google
+
+No editor do protótipo, abra **Ruas das laterais · Google**. Selecione um trecho
+do limite geográfico e clique em **Consultar rua deste trecho**. O mapa real
+marca o trecho em laranja. O seletor **Lateral no esquema** escolhe onde a rua
+será colocada; a lateral correspondente fica destacada no desenho.
+
+A consulta usa o ponto médio das coordenadas do limite salvo e busca nomes de
+ruas pelo Geocoding do Google. Não utiliza nomes do PDF para preencher as laterais.
+O resultado é uma identificação de rua próxima, não a geometria completa da rua:
+confira no mapa antes de clicar em **Usar nesta lateral**. A rua é adicionada ao
+rascunho, por fora da forma, e só é publicada com **Salvar desenho**.
+
+Uma consulta Geocoding é feita por trecho solicitado; repetir o mesmo ponto na
+mesma edição reutiliza o resultado da sessão. O mapa real exibido consome Dynamic
+Maps separadamente. Não há consulta automática ao abrir o cartão público.
+
+A Geocoding API precisa estar ativada **no mesmo projeto da chave do aplicativo**.
+Nas restrições de API da chave, permita **Maps JavaScript API** e **Geocoding API**,
+mantendo as restrições de sites. Ativar a API em outro projeto não autoriza a chave.
+Configure as cotas no Google Cloud conforme o uso desejado; o aplicativo trata
+recusas de autorização, ausência de resultados e esgotamento da cota.
+
+A rua confirmada mantém o identificador do resultado e uma referência do limite
+consultado. Se o limite mudar, o editor sinaliza a necessidade de conferir as ruas
+novamente. Alterar manualmente o nome remove a identificação da consulta Google.
+Consulte a [documentação de geocodificação](https://developers.google.com/maps/documentation/javascript/geocoding)
+e as [regras de uso dos dados](https://developers.google.com/maps/documentation/geocoding/policies).
+
+### Imagens dos cartões antigos no banco
+
+As imagens de referência ficam em `campo_mapas.esquema_conteudo`, junto do hash do
+PDF, dimensões e pontos clicáveis. **Não há PNGs de mapas no código ou no deploy.**
+As rotas leem o PostgreSQL com autorização ou pelo token individual. O backup já
+inclui a tabela com os PDFs e suas imagens. A verificação do hash impede exibir
+uma imagem desatualizada depois de substituir um PDF.
+
+Para preparar novamente um cartão antigo, a conversão é executada fora do servidor
+web, usando uma pasta temporária do sistema operacional e gravando o resultado
+no banco. Não produz arquivos na pasta do projeto:
+
+```bash
+python -m pip install pymupdf
+npm run migrate:field-service
+npm run prepare:schematics
+```
+
+O comando requer Python com PyMuPDF e acesso ao PostgreSQL em `.env.local`.
+O ambiente de produção não precisa de Python. A edição do protótipo vetorial não
+usa esse comando. Se o PDF geral for substituído, os pontos antigos não são
+reaproveitados automaticamente; as seleções continuam disponíveis pelo seletor
+até recalibrar os pontos de referência no banco.
+
+### Google Maps opcional
+
+O editor anterior continua em **Editar limites geográficos no Google Maps
+(opcional)**, fechado por padrão. Os limites já desenhados foram preservados.
+Abrir os esquemas e cartões não carrega a API do Google. O botão externo **Abrir
+no Google Maps** usa o link cadastrado ou a localização geográfica já salva.
+
+Se quiser usar o editor geográfico, ative a **Maps JavaScript API** no Google Cloud,
+restrinja a chave aos seus sites e à API habilitada, e configure:
+
+```dotenv
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=sua_chave_restrita_aos_sites
+```
+
+A API do Google tem regras próprias de uso e cobrança. Reinicie o desenvolvimento
+ou faça novo build após alterar a variável. Consulte a
+[configuração oficial](https://developers.google.com/maps/documentation/javascript/get-api-key)
+e o [uso e faturamento](https://developers.google.com/maps/documentation/javascript/usage-and-billing).
+O mapa esquemático funciona sem essa chave.
+
 Use **Designar** para registrar a entrega ao publicador e **Registrar conclusão**
-para devolver o território. O histórico é consultado por ano de serviço (setembro
-a agosto). Locais e territórios são desativados para preservar seus
+para devolver o território. O histórico é consultado por ano e mês da designação. Locais e territórios são desativados para preservar seus
 vínculos históricos. As planilhas de referência não são importadas automaticamente.
 
 Para instalar as tabelas em outro ambiente e verificar o banco:
@@ -229,9 +347,13 @@ Para instalar as tabelas em outro ambiente e verificar o banco:
 ```bash
 npm run migrate:field-service
 npm run verify:field-service
+npm run verify:territories
+npm run verify:editable-territory
 ```
 
-A migração é idempotente e converte as saídas com antigos dirigentes para o vínculo
+A migração idempotente adiciona os limites geográficos, revisões e links dos
+territórios, preservando PDFs e cadastros. Execute-a após atualizar a aplicação.
+Ela também converte as saídas com antigos dirigentes para o vínculo
 direto ao publicador, preservando os registros anteriores. A verificação grava registros de teste dentro de uma
 transação e reverte todos eles no final. Requer `.env.local` com PostgreSQL.
 Edição exige a permissão **Gerenciar Serviço de Campo e Territórios** na gestão de

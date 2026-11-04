@@ -1,0 +1,21 @@
+﻿import assert from 'node:assert/strict';
+import env from '@next/env';import pg from 'pg';
+import {readEditableTerritory,saveEditableTerritory} from '../app/lib/editable-territory-server.js';
+import {findSharedSchematic} from '../app/lib/territory-schematic-server.js';
+env.loadEnvConfig(process.cwd());const pool=new pg.Pool({connectionString:process.env.POSTGRES_URL});const client=await pool.connect();
+const layout={version:1,outline:[[100,100],[800,100],[800,600],[100,600]],roads:[],landmarks:[{id:'reference',name:'Referência de teste',position:[300,300],kind:'reference'}]};
+try{await client.query('BEGIN');
+  await client.query('CREATE TEMP TABLE grupos (LIKE public.grupos INCLUDING DEFAULTS) ON COMMIT DROP');
+  await client.query('CREATE TEMP TABLE campo_territorios (LIKE public.campo_territorios INCLUDING DEFAULTS) ON COMMIT DROP');
+  await client.query('CREATE TEMP TABLE campo_mapas (LIKE public.campo_mapas INCLUDING DEFAULTS) ON COMMIT DROP');
+  await client.query(`INSERT INTO grupos(id,nome_grupo,ativo,cor_mapa) SELECT n,'Grupo teste '||n,TRUE,'#0284c7' FROM generate_series(1,7) n`);
+  const token='b'.repeat(43);
+  await client.query(`INSERT INTO campo_territorios(id,numero,mapa_prototipo,mapa_layout,mapa_share_token) VALUES (101,40,TRUE,$1::jsonb,$2)`,[JSON.stringify(layout),token]);
+  let current=await readEditableTerritory(client,101);assert.equal(current.groups.length,7);
+  const body={territorio:101,numero:77,grupo_id:7,cor:'#00aa00',grupo_revisao:0,revisao:0,layout};
+  await saveEditableTerritory(client,body);
+  const shared=await findSharedSchematic(client,token);assert.equal(shared.numero,77);assert.equal(shared.grupo_nome,'Grupo teste 7');assert.equal(shared.grupo_cor,'#00aa00');assert.deepEqual(shared.mapa_layout,layout);
+  await assert.rejects(saveEditableTerritory(client,body),e=>e.status===409);
+  current=await readEditableTerritory(client,101);assert.equal(current.territory.id,101);assert.equal(current.territory.mapa_layout_revisao,1);
+  console.log('Integração aprovada: número 77, grupo 7, SVG sem PDF, revisão e link estável por ID.');
+}finally{await client.query('ROLLBACK');client.release();await pool.end();console.log('Tabelas temporárias descartadas; cadastros originais preservados.');}

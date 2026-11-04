@@ -1,0 +1,61 @@
+'use client';
+import { useEffect,useRef,useState } from 'react';
+import { Plus,Save,Undo2,Pencil,Trash2,Search } from 'lucide-react';
+import { EditableTerritoryCanvas,EditableTerritoryView } from './EditableTerritoryCanvas';
+import { GoogleBoundaryStreets } from './GoogleBoundaryStreets';
+import { boundaryFingerprint,addGoogleBoundaryStreet } from '@/app/lib/editable-territory';
+
+const control='w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900';
+const button='inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40';
+export function EditableTerritoryEditor({territoryId,canEdit,onSaved,onEditingChange}) {
+  const [data,setData]=useState(null),[layout,setLayout]=useState(null),[editing,setEditing]=useState(false),[selected,setSelected]=useState(null),[tool,setTool]=useState('');
+  const [number,setNumber]=useState(''),[groupId,setGroupId]=useState(''),[color,setColor]=useState('#64748b');
+  const [error,setError]=useState(''),[feedback,setFeedback]=useState(''),[busy,setBusy]=useState(false),[history,setHistory]=useState([]);
+  const saving=useRef(false);
+  const [showStreetLookup,setShowStreetLookup]=useState(false),[lookupSide,setLookupSide]=useState(0);
+  function install(result){setData(result);setLayout(result.territory.mapa_layout);setNumber(String(result.territory.numero));setGroupId(String(result.territory.mapa_grupo_id||''));setColor(result.territory.grupo_cor||'#64748b');setHistory([]);setSelected(null);setTool('');setShowStreetLookup(false);}
+  useEffect(()=>{const controller=new AbortController();fetch(`/api/admin/servico-campo/desenho?territorio=${territoryId}`,{signal:controller.signal,cache:'no-store'}).then(async response=>{const result=await response.json();if(!response.ok)throw new Error(result.message);install(result);}).catch(err=>{if(err.name!=='AbortError')setError(err.message);});return()=>controller.abort();},[territoryId]);
+  useEffect(()=>{onEditingChange?.(editing);if(!editing)return;const warn=e=>{e.preventDefault();e.returnValue='';};window.addEventListener('beforeunload',warn);return()=>{window.removeEventListener('beforeunload',warn);onEditingChange?.(false);};},[editing,onEditingChange]);
+  const checkpoint=()=>setHistory(old=>[...old.slice(-29),structuredClone(layout)]);
+  function change(next){setLayout(next);setFeedback('');}
+  function action(next){checkpoint();change(next);}
+  function pick(item){setSelected(item);setTool('');}
+  const item=selected?.type==='road'?layout?.roads.find(r=>r.id===selected.id):selected?.type==='landmark'?layout?.landmarks.find(m=>m.id===selected.id):null;
+  function name(value){
+    const key=selected.type==='road'?'roads':'landmarks';
+    action({...layout,[key]:layout[key].map(p=>{
+      if(p.id!==item.id)return p;
+      const next={...p,name:value};
+      if(selected.type==='road'){delete next.googlePlaceId;delete next.boundaryFingerprint;}
+      return next;
+    })});
+  }
+  function addGoogleStreet(street,side){
+    const result=addGoogleBoundaryStreet(layout,street,side,boundaryFingerprint(data.territory.limites));
+    action(result.layout);setSelected({type:'road',id:result.selectedId});setTool('');setFeedback('Rua adicionada ao rascunho. Confira a posição e salve o desenho.');
+  }
+  function remove(){if(!item)return;action({...layout,[selected.type==='road'?'roads':'landmarks']:layout[selected.type==='road'?'roads':'landmarks'].filter(p=>p.id!==item.id)});setSelected(null);}
+  function addPoint(){const points=selected?.type==='road'?item.points:layout.outline;const a=points[0],b=points[1],next=[a,[(a[0]+b[0])/2,(a[1]+b[1])/2],...points.slice(1)];action(selected?.type==='road'?{...layout,roads:layout.roads.map(r=>r.id===item.id?{...r,points:next}:r)}:{...layout,outline:next});}
+  async function save(){if(saving.current)return;saving.current=true;setBusy(true);setError('');
+    try{const group=data.groups.find(g=>g.id===Number(groupId));const response=await fetch('/api/admin/servico-campo/desenho',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({territorio:territoryId,numero:number,grupo_id:groupId,cor:color,grupo_revisao:group?.cor_mapa_revisao||0,revisao:data.territory.mapa_layout_revisao,layout})});const result=await response.json();if(!response.ok)throw new Error(result.message);
+      // Exit the saved draft before reloading, so a retry cannot overwrite its revision.
+      setEditing(false);setData(old=>({...old,territory:{...old.territory,mapa_layout:layout,mapa_layout_revisao:result.revisao,numero:Number(number),mapa_grupo_id:Number(groupId)||null,grupo_cor:color}}));
+      const reloaded=await fetch(`/api/admin/servico-campo/desenho?territorio=${territoryId}`,{cache:'no-store'});if(reloaded.ok)install(await reloaded.json());setFeedback('Desenho salvo. O cartão público já foi atualizado.');await onSaved();
+    }catch(err){setError(err.message||'Não foi possível salvar o desenho.');}finally{saving.current=false;setBusy(false);}
+  }
+  if(!layout)return <p role={error?'alert':'status'} className="text-sm text-slate-600">{error||'Carregando desenho editável…'}</p>;
+  return <section className="space-y-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-bold text-slate-900">Cartão editável · teste</h3><p className="mt-1 text-xs text-slate-500">Ruas e referências são elementos do desenho, sem depender de PDF.</p></div>{canEdit&&!editing&&<button type="button" className={button} onClick={()=>{setEditing(true);setError('');setFeedback('');}}><Pencil size={14} />Editar desenho</button>}</div>
+    {editing&&<div className="flex flex-wrap gap-2"><button type="button" disabled={busy} className={button} onClick={()=>{setTool('outline');setSelected({type:'outline'});}}>Ajustar forma</button><button type="button" disabled={busy} className={button} onClick={()=>{setTool('road');setSelected(null);}}><Plus size={14} />Adicionar rua</button><button type="button" disabled={busy} className={button} onClick={()=>{setTool('reference');setSelected(null);}}><Plus size={14} />Adicionar referência</button><button type="button" disabled={busy||!history.length} className={button} onClick={()=>{setLayout(history.at(-1));setHistory(old=>old.slice(0,-1));setSelected(null);}}><Undo2 size={14} />Desfazer</button><button type="button" disabled={busy||!data.territory.limites} className={button} onClick={()=>{setShowStreetLookup(value=>!value);setLookupSide(0);setTool('');}}><Search size={14} />Ruas das laterais · Google</button></div>}
+    {editing ? <EditableTerritoryCanvas layout={layout} color={color} number={number} editing={editing&&!busy} tool={tool} selected={selected} onSelect={pick} onChange={change} onCheckpoint={checkpoint} highlightSide={showStreetLookup?lookupSide:null} /> : <EditableTerritoryView layout={layout} color={color} number={number} />}
+    {editing&&showStreetLookup&&<GoogleBoundaryStreets boundary={data.territory.limites} outline={layout.outline} onAdd={addGoogleStreet} onTargetSideChange={setLookupSide} disabled={busy} />}
+    {editing&&layout.roads.some(r=>r.googlePlaceId&&r.boundaryFingerprint!==boundaryFingerprint(data.territory.limites))&&<p className="text-xs text-orange-800">O limite geográfico mudou desde a consulta de algumas ruas. Confira e consulte novamente os trechos alterados.</p>}
+    {editing&&<fieldset disabled={busy} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2"><label className="grid gap-1 text-xs font-medium text-slate-600">Número do território<input type="number" min="1" max="2147483647" className={control} value={number} onChange={e=>setNumber(e.target.value)} /></label><label className="grid gap-1 text-xs font-medium text-slate-600">Grupo responsável<select className={control} value={groupId} onChange={e=>{setGroupId(e.target.value);setColor(data.groups.find(g=>g.id===Number(e.target.value))?.cor_mapa||'#64748b');}}><option value="">Sem grupo</option>{data.groups.filter(g=>g.ativo||g.id===data.territory.mapa_grupo_id).map(g=><option value={g.id} key={g.id}>{g.nome}{!g.ativo?' · Inativo':''}</option>)}</select></label>{groupId&&<label className="grid gap-1 text-xs font-medium text-slate-600">Cor do grupo<input type="color" className="h-10 w-full cursor-pointer rounded-lg border border-slate-300 bg-white p-1" value={color} onChange={e=>setColor(e.target.value)} /><span className="text-[11px] font-normal">A cor vale para os cartões vinculados a este grupo.</span></label>}
+      {item&&<label className="grid gap-1 text-xs font-medium text-slate-600">{selected.type==='road'?'Nome da rua':'Nome da referência'}<input className={control} maxLength={100} value={item.name} onChange={e=>name(e.target.value)} /></label>}
+      {selected?.type==='landmark'&&item&&<label className="grid gap-1 text-xs font-medium text-slate-600">Ícone da referência<select className={control} value={item.kind} onChange={e=>action({...layout,landmarks:layout.landmarks.map(p=>p.id===item.id?{...p,kind:e.target.value}:p)})}><option value="reference">Referência</option><option value="school">Escola</option><option value="shop">Comércio</option><option value="square">Praça</option></select></label>}
+      <div className="flex flex-wrap items-end gap-2">{(selected?.type==='outline'||selected?.type==='road'&&item)&&<button type="button" className={button} onClick={addPoint}>Adicionar ponto à {selected.type==='road'?'rua':'forma'}</button>}{item&&<button type="button" className={button} onClick={remove}><Trash2 size={14} />Remover {selected.type==='road'?'rua':'referência'}</button>}</div>
+      <p className="text-xs leading-relaxed text-slate-500 sm:col-span-2">{tool==='road'?'Clique no desenho para inserir uma rua; depois arraste suas pontas.':tool==='reference'?'Clique no desenho para posicionar a referência.':'Clique em uma rua ou referência para editar. Arraste os pontos para reposicionar.'} A forma do esquema organiza o cartão; os limites geográficos salvos permanecem no mapa.</p>
+    </fieldset>}
+    {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}{feedback&&<p role="status" className="text-sm text-green-700">{feedback}</p>}
+    {editing&&<div className="flex flex-wrap gap-2"><button type="button" disabled={busy} className={`${button} !bg-slate-900 !text-white`} onClick={save}><Save size={14} />{busy?'Salvando…':'Salvar desenho'}</button><button type="button" disabled={busy} className={button} onClick={()=>{install(data);setEditing(false);setError('');}}>Cancelar edição</button></div>}
+  </section>;
+}

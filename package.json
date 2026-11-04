@@ -11,7 +11,11 @@
     "migrate:calendar": "node scripts/migrate-meeting-calendar.mjs",
     "migrate:field-service": "node scripts/migrate-field-service.mjs",
     "verify:field-service": "node tests/field-service.integration.mjs",
-    "verify:calendar": "node tests/meeting-calendar.integration.mjs"
+    "verify:calendar": "node tests/meeting-calendar.integration.mjs",
+    "verify:territories": "node tests/territory-boundaries.integration.mjs",
+    "prepare:schematics": "node scripts/prepare-territory-schematics.mjs",
+    "pilot:territory": "node scripts/start-editable-territory.mjs",
+    "verify:editable-territory": "node tests/editable-territory.integration.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
@@ -22,6 +26,11 @@
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@react-pdf/renderer": "^4.3.1",
+    "@turf/area": "^7.4.0",
+    "@turf/boolean-within": "^7.4.0",
+    "@turf/helpers": "^7.4.0",
+    "@turf/intersect": "^7.4.0",
+    "@turf/kinks": "^7.4.0",
     "bcryptjs": "^3.0.3",
     "chart.js": "^4.5.1",
     "cheerio": "^1.1.2",

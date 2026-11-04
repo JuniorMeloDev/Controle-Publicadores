@@ -45,3 +45,6 @@ next-env.d.ts
 .env*.local
 
 .playwright-mcp/
+
+# Map reference images belong in PostgreSQL, not in the repository
+/assets/territory-schematics/
