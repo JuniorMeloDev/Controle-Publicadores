@@ -13,6 +13,16 @@ Em **Designações → Serviço de Campo**:
 - **Territórios → Editar → Quando usar este território:** escolha durante a semana, fim de semana ou ambos. A antiga preferência por fim de semana é migrada para uso no fim de semana.
 - **Agenda → Gerar programação:** configure período, dias, horários, locais, grupos e quantidade de territórios. Confira a prévia, selecione dirigentes ou mantenha “A definir” e salve o lote. As regras dos territórios também podem ser ajustadas nessa tela.
 
+## Conferência das demarcações dos territórios
+
+Em **Territórios → Editar limites geográficos no Google Maps**, selecione um território marcado **A validar** e clique em **Conferir demarcação sugerida**. Um modal apresenta o mapa ampliado com o contorno azul e as ruas internas e ao redor e o PDF original lado a lado, ou empilhados em telas menores. Compare os dois, marque **Conferi o contorno no mapa e as divisas do cartão PDF** e clique em **Validar e salvar limites**. Para corrigir o desenho, use **Voltar para ajustar pontos**, arraste os vértices e clique em **Validar limites** para reabrir a comparação. Alterar um ponto exige marcar a conferência novamente. Fechar o modal não salva; cancelar a edição descarta o rascunho. Desenhos manuais também passam pela comparação antes de salvar; o limite geral mantém seu fluxo de edição.
+
+Há rascunhos para os territórios 2 a 31, preparados a partir dos cartões PDF, da geometria das ruas e dos limites geral e do território 1 já cadastrados. O território 1 é preservado. Os cartões usam nomes que podem diferir das bases atuais: por exemplo, José Nunes da Cunha e Presidente Kennedy exigem conferir também a posição das quadras. O território 23 tem um prolongamento estimado no trecho sul da divisa com o 22, explicitamente sinalizado no modal. No 28, a divisa com Inocop segue o limite geral cadastrado.
+
+A interpretação dos cartões 19 e 20 apresenta uma faixa em comum entre Presidente Kennedy e Maria Digna, ao sul da Travessa Candelária. As duas sugestões preservam essa pendência, sem escolher a qual território a faixa pertence. O modal oferece um link para o outro PDF e bloqueia a confirmação enquanto houver sobreposição com a outra sugestão. O servidor aplica o mesmo bloqueio, mesmo antes de qualquer um dos dois ser publicado. Após resolver e ajustar a divisa, é possível validar normalmente.
+
+As prévias não são publicadas nem gravadas automaticamente. O salvamento usa a validação de área, sobreposição, revisão e auditoria existentes. A sugestão deixa de aparecer após salvar, substituir seu PDF de origem ou alterar a divisa de referência do território 1. Cada cartão tem seu próprio hash de origem em `app/lib/territory-boundary-proposal-data.js`; os rascunhos devem ser revisados caso os PDFs ou as divisas mudem.
+
 ## Sugestões automáticas
 
 O gerador prioriza territórios nunca concluídos ou com conclusões mais antigas. Exclui territórios inativos ou com entrega pendente e considera saídas já planejadas no intervalo mínimo entre usos. O intervalo padrão é de 14 dias. Faltas de territórios são sinalizadas; remova as saídas vazias ou ajuste as regras antes de salvar.

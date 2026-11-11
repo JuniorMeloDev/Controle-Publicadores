@@ -6,6 +6,7 @@ import { isAllowed } from '@/app/lib/access-control';
 import { registerAuditLog } from '@/app/lib/audit-log';
 import { getAlertSettings } from '@/app/lib/alert-service';
 import { validateAlertSettings } from '@/app/lib/alerts';
+import { getAbsenceRecipients } from '@/app/lib/meeting-absence-service';
 
 export const dynamic = 'force-dynamic';
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
@@ -25,11 +26,15 @@ async function handle(request, save) {
         if (save) {
             try { settings = validateAlertSettings(await request.json()); }
             catch (error) { return NextResponse.json({ message: error.message }, { status: 400 }); }
-            if (settings.emailEnabled && (!readiness.email || !readiness.cron)) {
+            if ((settings.emailEnabled || settings.absenceEmailEnabled) && (!readiness.email || !readiness.cron)) {
                 return NextResponse.json({ message: 'Configure EMAIL_USER, EMAIL_PASS e CRON_SECRET no servidor antes de ativar os e-mails.' }, { status: 400 });
             }
-            if (settings.emailEnabled && !isAllowed(permissions, 'designacoes_email', 'actions')) {
+            if ((settings.emailEnabled || settings.absenceEmailEnabled || settings.absenceRecipientIds.length) && !isAllowed(permissions, 'designacoes_email', 'actions')) {
                 return NextResponse.json({ message: 'Sem permissão para ativar o envio de e-mails.' }, { status: 403 });
+            }
+            const eligible = new Set((await getAbsenceRecipients(client)).map(p => Number(p.id)));
+            if (settings.absenceRecipientIds.some(id => !eligible.has(id))) {
+                return NextResponse.json({ message: 'Selecione destinatários ativos com e-mail válido cadastrado.' }, { status: 400 });
             }
             await client.query('BEGIN'); transaction = true;
             await client.query(`INSERT INTO alertas_configuracao (id, dados) VALUES (1, $1::jsonb)
@@ -41,7 +46,8 @@ async function handle(request, save) {
             COUNT(*) FILTER (WHERE status = 'enviado')::int AS enviados,
             COUNT(*) FILTER (WHERE status = 'falhou' AND data_designacao >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date)::int AS falhas,
             MAX(enviado_em) AS ultimo_envio FROM alertas_email_envios`);
-        return NextResponse.json({ settings, readiness, delivery: rows[0] }, { headers: { 'Cache-Control': 'no-store' } });
+        const recipients = isAllowed(permissions, 'designacoes_email', 'actions') ? await getAbsenceRecipients(client) : [];
+        return NextResponse.json({ settings, readiness, delivery: rows[0], recipients }, { headers: { 'Cache-Control': 'no-store' } });
     } catch (error) {
         if (transaction) await client.query('ROLLBACK');
         console.error('Falha ao configurar alertas:', error.message);

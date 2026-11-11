@@ -1,13 +1,19 @@
 import { randomBytes } from 'node:crypto';
 import { fieldId } from './field-service.js';
 import { validateBoundary, checkBoundaryPlacement } from './territory-boundaries.js';
+import { territoryBoundaryProposal } from './territory-boundary-proposals.js';
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 export async function readTerritoryBoundaries(client) {
   const geral = (await client.query('SELECT limites, revisao FROM campo_mapa_geral WHERE id = 1')).rows[0];
-  const territorios = (await client.query(`SELECT id, numero, descricao, limites, mapa_revisao, mapa_share_token, ativo
-    FROM campo_territorios ORDER BY numero`)).rows;
-  return { geral, territorios };
+  const territorios = (await client.query(`SELECT t.id, t.numero, t.descricao, t.limites, t.mapa_revisao, t.mapa_share_token, t.ativo,
+    md5(m.conteudo) AS pdf_hash
+    FROM campo_territorios t LEFT JOIN campo_mapas m ON m.territorio_id = t.id ORDER BY t.numero`)).rows;
+  return { geral, territorios: territorios.map(territory => {
+    const sugestao = territoryBoundaryProposal(territory, territorios);
+    const { pdf_hash, ...details } = territory;
+    return { ...details, sugestao };
+  }) };
 }
 
 export async function saveTerritoryBoundary(client, body) {
@@ -25,7 +31,14 @@ export async function saveTerritoryBoundary(client, body) {
   try {
     if (id === null) {
       for (const territory of territorios.filter(t => t.limites)) checkBoundaryPlacement(territory.limites, boundary);
-    } else checkBoundaryPlacement(boundary, geral?.limites, territorios.filter(t => t.id !== id && t.limites));
+    } else {
+      checkBoundaryPlacement(boundary, geral?.limites, territorios.filter(t => t.id !== id && t.limites));
+      const peer = territorios.find(t => t.numero === selected.sugestao?.conflito_com);
+      if (peer?.sugestao) {
+        try { checkBoundaryPlacement(boundary, geral?.limites, [{ numero: peer.numero, limites: peer.sugestao.limites }]); }
+        catch { throw new Error(`Confira e ajuste a faixa comum dos cartões 19 e 20 antes de validar. O contorno ainda sobrepõe a sugestão do território ${peer.numero}.`); }
+      }
+    }
   } catch (e) { throw fail(e.message); }
   if (id === null) await client.query('UPDATE campo_mapa_geral SET limites = $1::jsonb, revisao = revisao + 1 WHERE id = 1', [JSON.stringify(boundary)]);
   else await client.query(`UPDATE campo_territorios SET limites = $2::jsonb, mapa_revisao = mapa_revisao + 1,

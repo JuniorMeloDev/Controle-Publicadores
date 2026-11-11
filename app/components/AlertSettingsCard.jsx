@@ -42,7 +42,7 @@ export function AlertSettingsCard() {
     const number = (key, label, max = 30, disabled = !canEdit) => <label className="flex justify-between items-center gap-3 text-sm text-gray-600"><span className="min-w-0">{label}</span><input type="number" required min="1" max={max} className="border rounded-md px-2 py-2 w-20 shrink-0 text-gray-900" value={data.settings[key]} disabled={disabled || saving} onChange={e => change(key, e.target.value === '' ? '' : Number(e.target.value))} /></label>;
 
     return <Card id="alertas-gerais" className="min-w-0 border-gray-200 bg-white shadow-sm text-gray-900 scroll-mt-24">
-        <CardHeader className="p-4 border-b border-gray-100 bg-gray-50/50"><CardTitle className="text-base font-bold leading-snug flex gap-2 items-center text-gray-900"><Bell className="w-5 h-5 shrink-0 text-purple-600" />Regras da congregação</CardTitle><CardDescription className="text-gray-600">Estas regras se aplicam à congregação. Cada pessoa vê apenas seus próprios alertas.</CardDescription></CardHeader>
+        <CardHeader className="p-4 border-b border-gray-100 bg-gray-50/50"><CardTitle className="text-base font-bold leading-snug flex gap-2 items-center text-gray-900"><Bell className="w-5 h-5 shrink-0 text-purple-600" />Regras da congregação</CardTitle><CardDescription className="text-gray-600">Configure os alertas pessoais e os destinatários dos relatórios por e-mail.</CardDescription></CardHeader>
         <CardContent className="p-4">
             {error && <p role="alert" className="text-sm text-red-600 mb-3">{error}</p>}
             {!data ? !error && <p className="text-gray-500">Carregando configurações...</p> : <form onSubmit={save} className="space-y-5">
@@ -68,6 +68,25 @@ export function AlertSettingsCard() {
                         {(!data.readiness.email || !data.readiness.cron) && <p className="text-sm text-amber-700 rounded-md bg-amber-50 p-3">O servidor ainda precisa ser configurado para habilitar os lembretes automáticos. {data.readiness.email ? '' : 'Envio de e-mail pendente. '}{data.readiness.cron ? '' : 'Agendador pendente.'}</p>}
                         <p className="text-xs text-gray-500">Envios confirmados: {data.delivery?.enviados || 0}. Falhas pendentes: {data.delivery?.falhas || 0}.</p>
                         {data.delivery?.ultimo_envio && <p className="text-xs text-gray-500">Último envio: {new Date(data.delivery.ultimo_envio).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p>}
+                        <div className="border-t border-gray-200 pt-4 space-y-3">
+                            <p className="font-medium text-gray-900">Ausentes na reunião do dia anterior</p>
+                            {checkbox('absenceEmailEnabled', 'Enviar lista de ausentes no dia seguinte à reunião', !canEmail || !data.readiness.email || !data.readiness.cron)}
+                            <p className="text-xs text-gray-500">Envio às 10h (Brasília), somente para as pessoas selecionadas abaixo. Esta regra é independente dos lembretes de designações.</p>
+                            <fieldset disabled={!canEmail || saving} className="space-y-2">
+                                <legend className="text-sm font-medium mb-2">Quem deve receber?</legend>
+                                <div className="max-h-56 overflow-y-auto space-y-2 rounded-md border border-gray-200 p-3">
+                                    {(data.recipients || []).map(person => <label key={person.id} className="flex items-start gap-2 text-sm text-gray-800">
+                                        <input type="checkbox" className="accent-purple-600 mt-0.5 h-4 w-4 shrink-0" checked={(data.settings.absenceRecipientIds || []).includes(Number(person.id))}
+                                            onChange={event => change('absenceRecipientIds', event.target.checked
+                                                ? [...(data.settings.absenceRecipientIds || []), Number(person.id)]
+                                                : data.settings.absenceRecipientIds.filter(id => id !== Number(person.id)))} />
+                                        <span className="min-w-0 break-words">{person.nome_completo}<span className="block text-xs text-gray-500">{person.email}</span></span>
+                                    </label>)}
+                                    {!data.recipients?.length && <p className="text-xs text-gray-500">Nenhum destinatário disponível. É necessário e-mail válido cadastrado e permissão para configurar o envio.</p>}
+                                </div>
+                            </fieldset>
+                            <p className="text-xs text-gray-500">Salve a assistência da reunião antes do envio. Presencial e Zoom contam como presença. Reuniões canceladas ou sem assistência salva não geram e-mail. A lista inclui os publicadores dos grupos ativos e os sem grupo.</p>
+                        </div>
                     </div>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">

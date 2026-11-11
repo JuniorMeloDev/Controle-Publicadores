@@ -17,9 +17,10 @@ export function loadGoogleMaps(key) {
 }
 const points = geometry => geometry?.coordinates?.[0]?.slice(0, -1).map(([lng, lat]) => ({ lat, lng })) || [];
 
-export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', initialGeometry = null, onChange, onSelect, center = null, pointCount = 0, onPointCountChange, appearance = 'default', viewRevision = 0, focusBoundary = null, boundaryFocusSide = null }) {
+export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', initialGeometry = null, onChange, onSelect, center = null, pointCount = 0, onPointCountChange, appearance = 'default', viewRevision = 0, focusBoundary = null, boundaryFocusSide = null, heightClassName = 'h-[460px] min-h-80' }) {
   const element = useRef(null);
   const instance = useRef(null);
+  const fitView = useRef(null);
   const handlers = useRef({ onChange, onSelect, onPointCountChange });
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
@@ -32,7 +33,7 @@ export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', 
     window.gm_authFailure = () => { if (!disposed) setError('O Google Maps recusou a chave. Confira a API habilitada, o faturamento e os sites permitidos no Google Cloud.'); };
     loadGoogleMaps(key).then(maps => {
       if (disposed) return;
-      instance.current = new maps.Map(element.current, { center: center || { lat: -8.2, lng: -34.93 }, zoom: 14, streetViewControl: false, mapTypeControl: true, fullscreenControl: true, gestureHandling: 'cooperative' });
+      instance.current = new maps.Map(element.current, { center: center || { lat: -8.2, lng: -34.93 }, zoom: 14, streetViewControl: false, mapTypeControl: true, fullscreenControl: true, zoomControl: true, cameraControl: false, scaleControl: true, gestureHandling: 'cooperative' });
       setReady(true);
     }).catch(err => { if (!disposed) setError(err.message); });
     return () => { disposed = true; window.gm_authFailure = authFailure; if (instance.current) { window.google.maps.event.clearInstanceListeners(instance.current); instance.current = null; } };
@@ -46,9 +47,10 @@ export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', 
     const layers = [];
     const listeners = [];
     const bounds = new maps.LatLngBounds();
-    const card = appearance === 'territory-card';
+    const review = appearance === 'territory-review';
+    const card = appearance === 'territory-card' || review;
     // Keep the surrounding streets available while changing the congregation border.
-    const focusPath = mode && selected === 'geral' ? [] : points(focusBoundary);
+    const focusPath = review || (mode && selected === 'geral') ? [] : points(focusBoundary);
     if (focusPath.length >= 3) {
       const latitudes = focusPath.map(p => p.lat);
       const longitudes = focusPath.map(p => p.lng);
@@ -64,17 +66,40 @@ export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', 
       ], strokeOpacity: 0, fillColor: '#f1f5f9', fillOpacity: 1, clickable: true, zIndex: -1 }));
     }
     map.setOptions({ disableDoubleClickZoom: Boolean(mode), clickableIcons: !mode, draggableCursor: mode === 'draw' ? 'crosshair' : null,
-      styles: card ? [{ featureType: 'poi.business', elementType: 'labels.text.fill', stylers: [{ color: '#64748b' }] }, { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#334155' }] }] : null });
+      ...(review ? { isFractionalZoomEnabled: true } : {}),
+      styles: review ? [
+        { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+        { featureType: 'transit', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+        { featureType: 'road', elementType: 'labels.text', stylers: [{ visibility: 'on' }] },
+        { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#111827' }] },
+        { featureType: 'road', elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }, { weight: 4 }] }
+      ] : card ? [{ featureType: 'poi.business', elementType: 'labels.text.fill', stylers: [{ color: '#64748b' }] }, { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#334155' }] }] : null });
     const selectedArea = areas.find(a => a.id === selected);
     for (const item of areas) {
       if (!item.limites || (mode && item.id === selected)) continue;
       const path = points(item.limites);
-      const layer = new maps.Polygon({ map, paths: path, strokeColor: item.id === 'geral' ? '#475569' : card ? '#0369a1' : '#9333ea', strokeWeight: item.id === selected ? 4 : 2, fillColor: card ? '#0ea5e9' : '#9333ea', fillOpacity: item.id === 'geral' ? 0.03 : item.id === selected ? card ? 0.12 : 0.25 : 0.1, zIndex: item.id === 'geral' ? 0 : 1, clickable: !mode && item.id !== 'geral' });
+      const layer = new maps.Polygon({ map, paths: path, strokeColor: item.id === 'geral' ? '#475569' : card ? '#0369a1' : '#9333ea', strokeWeight: review ? 2 : item.id === selected ? 4 : 2, fillColor: card ? '#0ea5e9' : '#9333ea', fillOpacity: review ? 0 : item.id === 'geral' ? 0.03 : item.id === selected ? card ? 0.12 : 0.25 : 0.1, zIndex: item.id === 'geral' ? 0 : 1, clickable: !review && !mode && item.id !== 'geral' });
       layers.push(layer);
       listeners.push(layer.addListener('click', () => handlers.current.onSelect?.(item.id)));
       if (!selectedArea?.limites || item.id === selected) path.forEach(p => bounds.extend(p));
     }
-    if (!bounds.isEmpty()) map.fitBounds(bounds, 36);
+    const editingPath = mode === 'edit' ? points(initialGeometry) : [];
+    let viewBounds = bounds;
+    if (editingPath.length) {
+      const editingBounds = new maps.LatLngBounds();
+      editingPath.forEach(point => editingBounds.extend(point));
+      viewBounds = editingBounds;
+    }
+    const fit = () => { if (!viewBounds.isEmpty()) map.fitBounds(viewBounds, review ? 24 : editingPath.length ? 48 : 36); };
+    fitView.current = fit;
+    fit();
+    // Refit after the modal has its final dimensions, including fullscreen changes.
+    let fitFrame;
+    const resizeObserver = review ? new ResizeObserver(() => {
+      cancelAnimationFrame(fitFrame);
+      fitFrame = requestAnimationFrame(fit);
+    }) : null;
+    resizeObserver?.observe(element.current);
     if(Number.isInteger(boundaryFocusSide)&&selectedArea?.limites){
       const path=points(selectedArea.limites);
       if(path[boundaryFocusSide])layers.push(new maps.Polyline({map,path:[path[boundaryFocusSide],path[(boundaryFocusSide+1)%path.length]],strokeColor:'#ea580c',strokeWeight:7,zIndex:20,clickable:false}));
@@ -94,8 +119,8 @@ export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', 
       if (mode === 'draw') listeners.push(draft.addListener('click', event => { if (event.vertex === undefined && event.edge === undefined) draftPath.push(event.latLng); }));
       listeners.push(draft.addListener('rightclick', event => { if (event.vertex !== undefined && draftPath.getLength() > 3) draftPath.removeAt(event.vertex); }));
     }
-    return () => { listeners.forEach(listener => listener.remove()); layers.forEach(layer => layer.setMap(null)); };
+    return () => { resizeObserver?.disconnect(); cancelAnimationFrame(fitFrame); fitView.current = null; listeners.forEach(listener => listener.remove()); layers.forEach(layer => layer.setMap(null)); };
   }, [ready, areas, selected, mode, initialGeometry, appearance, viewRevision, focusBoundary, boundaryFocusSide]);
   if (!key) return <div className="rounded-xl border border-dashed border-purple-300 bg-purple-50 p-6 text-sm text-gray-700"><p className="font-semibold text-gray-900">Configure o Google Maps para desenhar os limites</p><p className="mt-2">Ative a Maps JavaScript API no Google Cloud e configure a chave do site. Os PDFs continuam disponíveis como referência.</p><a className="mt-3 inline-block text-purple-700 underline" href="https://developers.google.com/maps/documentation/javascript/get-api-key?hl=pt-br" target="_blank" rel="noopener noreferrer">Como configurar a chave</a></div>;
-  return <div className="space-y-2">{error && <p role="alert" className="text-sm text-red-700">{error}</p>}<div ref={element} aria-label="Mapa dos limites dos territórios" className="h-[460px] min-h-80 w-full rounded-xl border border-gray-200" />{mode && <p className="text-sm text-gray-500">{pointCount} pontos no contorno</p>}{!ready && !error && <p role="status" className="text-sm text-gray-500">Carregando Google Maps…</p>}</div>;
+  return <div className="space-y-2">{error && <p role="alert" className="text-sm text-red-700">{error}</p>}<div ref={element} aria-label="Mapa dos limites dos territórios" className={`${heightClassName} w-full rounded-xl border border-gray-200`} />{appearance === 'territory-review' && <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600"><p>Confira as ruas dentro e ao redor do contorno azul. Use + para ampliar.</p><button type="button" disabled={!ready} className="font-medium text-purple-700 underline disabled:opacity-50" onClick={() => fitView.current?.()}>Enquadrar território</button></div>}{mode && <p className="text-sm text-gray-500">{pointCount} pontos no contorno</p>}{!ready && !error && <p role="status" className="text-sm text-gray-500">Carregando Google Maps…</p>}</div>;
 }

@@ -2,6 +2,7 @@ import { authorizeRequest } from '@/app/lib/request-authorization';
 
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { ensureAbsenceTables } from '@/app/lib/meeting-absence-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,12 +86,15 @@ export async function POST(request, { params }) {
   
   // modalidade = 'Presencial', 'Zoom', or null (Absent)
 
-  if (!id || !Array.isArray(assistanceData)) {
+  if (!id || !Array.isArray(assistanceData) || assistanceData.some(item =>
+      !item || !Number.isSafeInteger(item.publicador_id) || item.publicador_id <= 0 ||
+      ![null, 'Presencial', 'Zoom'].includes(item.modalidade))) {
       return NextResponse.json({ message: 'Dados inválidos.' }, { status: 400 });
   }
 
   const client = await pool.connect();
   try {
+    await ensureAbsenceTables(client);
     await client.query('BEGIN');
 
     // Strategy: Delete all for this meeting and re-insert checks.
@@ -107,6 +111,8 @@ export async function POST(request, { params }) {
         }
     }
 
+    await client.query(`INSERT INTO assistencia_registros_salvos (reuniao_id) VALUES ($1)
+        ON CONFLICT (reuniao_id) DO UPDATE SET salvo_em = NOW()`, [id]);
     await client.query('COMMIT');
     return NextResponse.json({ message: 'Assistência salva com sucesso!' }, { status: 200 });
   } catch (err) {

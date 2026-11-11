@@ -216,6 +216,7 @@ test('settings require explicit permission and SMTP/cron setup before enabling e
         Pool: class { connect() { return { query: async () => { writes++; return { rows: [] }; }, release() {} }; } },
         getUserIdFromRequest: () => 990001, getUserPermissions: async () => ({}), isAllowed: () => permitted,
         getAlertSettings: async () => defaults, validateAlertSettings: alerts.validateAlertSettings,
+        getAbsenceRecipients: async () => [],
     });
     assert.equal((await fixture(false).POST({ json: async () => defaults })).status, 403);
     assert.equal((await fixture(true).POST({ json: async () => ({ ...defaults, emailEnabled: true }) })).status, 400);
@@ -231,6 +232,7 @@ test('settings save is audited atomically and email activation needs its own per
         process: { env }, getUserIdFromRequest: () => 990001, getUserPermissions: async () => ({}),
         isAllowed: (_permissions, key) => key !== 'designacoes_email' || emailPermission,
         getAlertSettings: async () => defaults, validateAlertSettings: alerts.validateAlertSettings,
+        getAbsenceRecipients: async () => [],
         registerAuditLog: async (_client, details) => { assert.equal(details.userId, 990001); if (auditFails) throw new Error('Simulated audit outage'); },
     });
     assert.equal((await fixture(false).POST({ json: async () => ({ ...defaults, emailEnabled: true }) })).status, 403);
@@ -252,6 +254,7 @@ test('cron builds personalized messages using a simulated mail transport only', 
         getAlertSettings: async () => ({ ...defaults, emailEnabled: true }),
         todayInBrazil: () => today, getActiveAssignments: async () => assignments,
         buildEmailReminders, reminderMessage,
+        deliverAbsenceEmails: async () => ({ sent: 0, failed: 0, skipped: 0 }),
         getEmailLogoAttachment: async () => ({ filename: 'logo.png', content: Buffer.from('fixture'), cid: 'congregacao-logo' }),
         emailSender: address => ({ name: 'Praia dos Corais | Controle de Publicadores', address }),
         nodemailer: { createTransport: () => ({ sendMail: async mail => { outgoing.push(mail); return { accepted: [mail.to], rejected: [] }; } }) },

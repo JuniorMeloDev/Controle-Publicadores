@@ -11,17 +11,23 @@ export const DEFAULT_ALERT_SETTINGS = Object.freeze({
     emailDays: 2,
     emailOnDay: true,
     emailCleaning: false,
+    absenceEmailEnabled: false,
+    absenceRecipientIds: [],
 });
 
 export function validateAlertSettings(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Configuração inválida.');
     const settings = { ...DEFAULT_ALERT_SETTINGS, ...value };
-    for (const key of ['assignmentsEnabled', 'cleaningEnabled', 'reportsEnabled', 'emailEnabled', 'emailOnDay', 'emailCleaning']) {
+    for (const key of ['assignmentsEnabled', 'cleaningEnabled', 'reportsEnabled', 'emailEnabled', 'emailOnDay', 'emailCleaning', 'absenceEmailEnabled']) {
         if (typeof settings[key] !== 'boolean') throw new Error('Opção de alerta inválida.');
     }
     for (const [key, min, max] of [['assignmentDays', 1, 30], ['cleaningDays', 1, 30], ['reportDueDay', 1, 28], ['emailDays', 1, 30]]) {
         if (!Number.isInteger(settings[key]) || settings[key] < min || settings[key] > max) throw new Error('Prazo de alerta inválido.');
     }
+    if (!Array.isArray(settings.absenceRecipientIds) || settings.absenceRecipientIds.length > 500 ||
+        settings.absenceRecipientIds.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new Error('Destinatários inválidos.');
+    settings.absenceRecipientIds = [...new Set(settings.absenceRecipientIds)];
+    if (settings.absenceEmailEnabled && !settings.absenceRecipientIds.length) throw new Error('Selecione pelo menos uma pessoa para receber a lista de ausentes.');
     return Object.fromEntries(Object.keys(DEFAULT_ALERT_SETTINGS).map(key => [key, settings[key]]));
 }
 

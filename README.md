@@ -51,6 +51,32 @@ são associados quando o nome corresponde ao cadastro.
 
 ## Alertas e lembretes automáticos
 
+### E-mail de ausentes após a reunião
+
+Em **Configurações → Alertas e lembretes → Ausentes na reunião do dia anterior**,
+ative a regra, selecione as pessoas que receberão a lista e salve os alertas.
+A opção começa desativada e funciona independentemente dos lembretes de designações.
+Configurar os destinatários exige `configuracoes_editar` e `designacoes_email`.
+Só aparecem pessoas de grupos ativos (ou sem grupo) com e-mail válido cadastrado.
+
+O agendador existente (`/api/cron/lembretes`, 13h UTC / 10h de Brasília) verifica
+as reuniões do dia anterior. Por exemplo, a reunião de quarta gera o e-mail na quinta.
+É necessário **salvar a assistência da reunião antes das 10h do dia seguinte**;
+reuniões sem assistência salva após esta atualização não geram relatórios.
+Presencial e Zoom contam como presença. A lista de ausentes inclui publicadores
+dos grupos ativos e os sem grupo, seguindo a tela de assistência.
+Reuniões canceladas e conflitos com eventos do calendário são ignorados.
+Quando todos estiverem presentes, o e-mail informa que não há ausentes.
+
+As tabelas de controle são criadas automaticamente ao salvar a assistência ou
+executar a regra. O registro de assistência salva é gravado na mesma transação
+das presenças. Envios confirmados não são repetidos; falhas de SMTP são tentadas
+novamente por até sete dias, respeitando a regra e os destinatários atuais.
+Os e-mails são individuais. São necessárias as variáveis `EMAIL_USER`,
+`EMAIL_PASS` e `CRON_SECRET`, além do agendador ativo na hospedagem.
+
+### Alertas pessoais e lembretes de designações
+
 O sininho mostra apenas alertas da pessoa conectada: próximas designações de todas
 as categorias, limpeza do grupo/responsável e relatório do mês anterior pendente.
 O prazo do relatório usa o mês civil; a consulta respeita o ano de serviço.
