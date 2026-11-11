@@ -2,6 +2,8 @@ import { load } from 'cheerio';
 import { calendarWeekStart, addCalendarDays, isCalendarDate } from './meeting-calendar.js';
 
 const ORIGIN = 'https://wol.jw.org';
+const JW_ORIGIN = 'https://www.jw.org';
+const MONTHS = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const clean = text => text.replace(/\s+/g, ' ').trim();
 const norm = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
@@ -22,18 +24,42 @@ export function programLink(html) {
     return new URL($(links[0]).attr('href'), ORIGIN).href;
 }
 
+function matchesWeek(heading, date) {
+    const monday = calendarWeekStart(date);
+    const sunday = addCalendarDays(monday, 6);
+    const range = heading.replace(/(\d)\.?[\u00ba\u00b0]/g, '$1').match(/^(\d{1,2})(?:\s+de\s+([\p{L}]+))?\s*[-–—]\s*(\d{1,2})\s+de\s+([\p{L}]+)/iu);
+    return Boolean(range && Number(range[1]) === Number(monday.slice(8)) && Number(range[3]) === Number(sunday.slice(8)) &&
+        norm(range[4]) === MONTHS[Number(sunday.slice(5, 7)) - 1] &&
+        (!range[2] || norm(range[2]) === MONTHS[Number(monday.slice(5, 7)) - 1]));
+}
+
+export function workbookAddress(date) {
+    if (!isCalendarDate(date)) throw new Error('Data inválida.');
+    const monday = calendarWeekStart(date);
+    const month = Number(monday.slice(5, 7)) - 1;
+    const firstMonth = month - month % 2;
+    return `${JW_ORIGIN}/pt/biblioteca/jw-apostila-do-mes/${MONTHS[firstMonth]}-${MONTHS[firstMonth + 1]}-${monday.slice(0, 4)}-mwb/`;
+}
+
+export function workbookProgramLink(html, date) {
+    const issue = workbookAddress(date);
+    const $ = load(html);
+    for (const el of $('a[href]').toArray()) {
+        if (!matchesWeek(clean($(el).text()), date)) continue;
+        const url = new URL($(el).attr('href'), issue);
+        if (url.origin !== JW_ORIGIN || !url.href.startsWith(issue) || url.href === issue || url.search || url.hash) continue;
+        return url.href;
+    }
+    throw new Error('A programação desta semana ainda não está disponível no jw.org.');
+}
+
 export function parseWeeklyProgram(html, date) {
     const $ = load(html);
     const article = $('article.pub-mwb');
     article.find('.pageNum, .gen-field, script, style').remove();
     const heading = clean(article.find('h1').first().text());
-    const monday = calendarWeekStart(date);
-    const sunday = addCalendarDays(monday, 6);
-    const range = heading.replace(/(\d)\.?[\u00ba\u00b0]/g, '$1').match(/^(\d{1,2})(?:\s+de\s+([\p{L}]+))?\s*[-–—]\s*(\d{1,2})\s+de\s+([\p{L}]+)/iu);
-    const months = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-    if (!range || Number(range[1]) !== Number(monday.slice(8)) || Number(range[3]) !== Number(sunday.slice(8)) ||
-        norm(range[4]) !== months[Number(sunday.slice(5, 7)) - 1] ||
-        (range[2] && norm(range[2]) !== months[Number(monday.slice(5, 7)) - 1])) {
+    const sunday = addCalendarDays(calendarWeekStart(date), 6);
+    if (!matchesWeek(heading, date)) {
         throw new Error('A página encontrada não corresponde à semana da reunião.');
     }
     const schedule = { weekDate: `${heading} DE ${sunday.slice(0, 4)}`, bibleReading: clean(article.find('header h2').text()),
@@ -50,7 +76,9 @@ export function parseWeeklyProgram(html, date) {
             else if (normalized === 'faca seu melhor no ministerio') section = 'ministry';
             else if (normalized === 'nossa vida crista') section = 'living';
         }
-        if (el.tagName !== 'h3') continue;
+        // jw.org uses paragraphs for songs; WOL also uses h3 headings.
+        // A song mentioned inside a part's explanation is not an announcement.
+        if (el.tagName !== 'h3' && !/^(cantico\s+\d+|comentarios (iniciais|finais))/.test(normalized)) continue;
         const song = text.match(/Cântico\s+\d+/i)?.[0];
         if (normalized.includes('comentarios iniciais')) {
             schedule.initialSong = song || '';
@@ -58,7 +86,11 @@ export function parseWeeklyProgram(html, date) {
         } else if (normalized.includes('comentarios finais')) {
             schedule.finalSong = song || '';
             schedule.finalComments = text.match(/Comentários finais\s*\(\d+\s*min\)/i)?.[0] || '';
-        } else if (song && section === 'living') schedule.middleSong = song;
+        } else if (song && section === 'living') {
+            if (schedule.finalComments) schedule.finalSong = song;
+            else schedule.middleSong = song;
+        }
+        if (el.tagName !== 'h3') continue;
         const part = text.match(/^(\d+)\.\s*(.+)/);
         if (!part || !section) continue;
         const paragraphs = [];
@@ -79,7 +111,9 @@ export function parseWeeklyProgram(html, date) {
 
 async function fetchHtml(url, fetcher) {
     const parsed = new URL(url);
-    if (parsed.origin !== ORIGIN || !parsed.pathname.startsWith('/pt/wol/')) throw new Error('Fonte inválida.');
+    if (!((parsed.origin === ORIGIN && parsed.pathname.startsWith('/pt/wol/')) ||
+        (parsed.origin === JW_ORIGIN && parsed.pathname.startsWith('/pt/biblioteca/jw-apostila-do-mes/'))) ||
+        parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error('Fonte inválida.');
     try {
         const response = await fetcher(url, { signal: AbortSignal.timeout(12000), redirect: 'error',
             headers: { Accept: 'text/html', 'Accept-Language': 'pt-BR' }, cache: 'no-store' });
@@ -94,7 +128,11 @@ async function fetchHtml(url, fetcher) {
 
 export async function fetchWeeklyProgram(date, fetcher = fetch) {
     const { url, monday } = weeklyAddress(date);
-    const sourceUrl = programLink(await fetchHtml(url, fetcher));
+    let sourceUrl;
+    try { sourceUrl = programLink(await fetchHtml(url, fetcher)); }
+    catch {
+        sourceUrl = workbookProgramLink(await fetchHtml(workbookAddress(date), fetcher), date);
+    }
     const schedule = parseWeeklyProgram(await fetchHtml(sourceUrl, fetcher), date);
     return { ...schedule, source: { provider: 'jw.org', url: sourceUrl, weekStart: monday, importedAt: new Date().toISOString() } };
 }

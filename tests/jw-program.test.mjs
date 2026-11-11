@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { weeklyAddress, programLink, parseWeeklyProgram, fetchWeeklyProgram } from '../app/lib/jw-program.js';
+import { weeklyAddress, programLink, parseWeeklyProgram, fetchWeeklyProgram, workbookAddress, workbookProgramLink } from '../app/lib/jw-program.js';
 import { importMeetingProgram } from '../app/lib/jw-program-service.js';
 import { importCreatedPrograms, requestMeetingProgram } from '../app/lib/import-programs-client.js';
 import { loadRoute } from './helpers/load-source.mjs';
@@ -64,6 +64,47 @@ test('retrieval follows only the weekly workbook and records its source', async 
     await assert.rejects(fetchWeeklyProgram(date, async () => ({ ok: false })), /acessar/);
     await assert.rejects(fetchWeeklyProgram(date, async () => { throw new DOMException('timeout', 'TimeoutError'); }), /Tente novamente/);
     await assert.rejects(fetchWeeklyProgram(date, async () => ({ ok: true, text: async () => '<a href="https://example.test/pt/wol/d/r5/lp-t/99">Apostila Vida e Ministério</a>' })), /Fonte inválida/);
+});
+
+test('direct workbook addresses follow the issue containing Monday, including year boundaries', () => {
+    assert.equal(workbookAddress('2027-01-07'), 'https://www.jw.org/pt/biblioteca/jw-apostila-do-mes/janeiro-fevereiro-2027-mwb/');
+    assert.equal(workbookAddress('2027-01-01'), 'https://www.jw.org/pt/biblioteca/jw-apostila-do-mes/novembro-dezembro-2026-mwb/');
+    assert.equal(workbookAddress('2027-03-04'), 'https://www.jw.org/pt/biblioteca/jw-apostila-do-mes/marco-abril-2027-mwb/');
+    assert.throws(() => workbookAddress('2027-02-30'));
+});
+
+test('jw.org paragraph announcements and separate closing song parse without mistaking references for songs', () => {
+    const directHtml = html.replace('<h3>Cântico 1 e oração | Comentários iniciais (1 min)</h3>', '<p>Cântico 1 e oração | Comentários iniciais (1 min)</p>')
+        .replace('<h3>Cântico 2</h3>', '<p>Cântico 2</p>')
+        .replace('<p>(30 min) Capítulo fictício.</p>', '<p>(30 min) Capítulo fictício. Veja o Cântico 99.</p>')
+        .replace('<h3>Comentários finais (3 min) | Cântico 3 e oração</h3>', '<h3>Comentários finais (3 min)</h3><p>Cântico 3 e oração</p>');
+    const result = parseWeeklyProgram(directHtml, date);
+    assert.deepEqual([result.initialSong, result.middleSong, result.finalSong], ['Cântico 1', 'Cântico 2', 'Cântico 3']);
+    assert.deepEqual([result.treasures.length, result.ministry.length, result.living.length], [3, 1, 1]);
+});
+
+test('missing WOL week falls back to the matching week in the published jw.org issue', async () => {
+    const requested = [];
+    const issue = workbookAddress('2027-01-07');
+    const directUrl = `${issue}programacao-4-10/`;
+    const result = await fetchWeeklyProgram('2027-01-07', async url => {
+        requested.push(url);
+        return { ok: true, text: async () => url.includes('wol.jw.org') ? '<p>Sem programação</p>'
+            : url === issue ? `<a href="${issue}outra-semana/">11-17 de janeiro</a><a href="${directUrl}">4-10 de janeiro</a>`
+                : html.replace('7-13 DE JANEIRO', '4-10 DE JANEIRO') };
+    });
+    assert.deepEqual(requested, [weeklyAddress('2027-01-07').url, issue, directUrl]);
+    assert.equal(result.source.url, directUrl);
+    assert.equal(result.source.weekStart, '2027-01-04');
+});
+
+test('direct workbook discovery rejects foreign origins, other issues and unmatched weeks', () => {
+    const issue = workbookAddress(date);
+    for (const markup of [
+        '<a href="https://example.test/page">7-13 de janeiro</a>',
+        '<a href="https://www.jw.org/pt/biblioteca/jw-apostila-do-mes/janeiro-fevereiro-2029-mwb/page/">7-13 de janeiro</a>',
+        `<a href="${issue}page/">14-20 de janeiro</a>`,
+    ]) assert.throws(() => workbookProgramLink(markup, date), /disponível/);
 });
 
 function fixture({ saved = false, race = false, assigned = false, cancelled = false, moved = false, networkFailure = false } = {}) {

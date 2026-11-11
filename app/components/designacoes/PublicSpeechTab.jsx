@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateForFile } from '@/app/lib/date-format';
 import { useState, useEffect, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
 import { DesignationRowActions } from './DesignationRowActions';
@@ -36,7 +37,7 @@ const formatDate = (dateStr) => {
 
 const formatFullDateBR = (dateStr) => {
     if (!dateStr) return '';
-    const str = new Date(`${dateStr}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: '2-digit' });
+    const str = new Date(`${dateStr}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit' });
     return str.charAt(0).toUpperCase() + str.slice(1);
 };
 
@@ -543,7 +544,7 @@ export function PublicSpeechTab() {
                                             <ChevronRight size={20} className="shrink-0 text-gray-400 group-hover:text-purple-500" />
                                         </button>
                                         {talk.id && !talk.cancelado && <div className="pr-4"><DesignationRowActions
-                                            label={`Discurso de ${formatDate(talk.data)}`} message={publicSpeechMessage(talk)} filename={`discurso-${talk.data}`}
+                                            label={`Discurso de ${formatDate(talk.data)}`} message={publicSpeechMessage(talk)} filename={`discurso-${formatDateForFile(talk.data)}`}
                                             canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')} onDelete={canEdit ? () => setPendingDelete(talk) : undefined} /></div>}
                                     </div>
                                 <Card className="md:hidden hover:shadow-md transition-all group border-gray-200">
@@ -557,7 +558,7 @@ export function PublicSpeechTab() {
                                             </div>
                                             <div className="flex gap-1">
                                                 <button disabled={!canEdit || talk.cancelado} onClick={() => handleEdit(talk)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Editar"><Edit size={16} /></button>
-                                                {talk.id && !talk.cancelado && <DesignationRowActions label={`Discurso de ${formatDate(talk.data)}`} message={publicSpeechMessage(talk)} filename={`discurso-${talk.data}`} canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')} onDelete={canEdit ? () => setPendingDelete(talk) : undefined} />}
+                                                {talk.id && !talk.cancelado && <DesignationRowActions label={`Discurso de ${formatDate(talk.data)}`} message={publicSpeechMessage(talk)} filename={`discurso-${formatDateForFile(talk.data)}`} canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')} onDelete={canEdit ? () => setPendingDelete(talk) : undefined} />}
                                             </div>
                                         </div>
                                         <CardDescription className="flex items-center gap-1.5 mt-2 text-gray-500 font-medium bg-gray-50 py-1 px-2 rounded w-fit">

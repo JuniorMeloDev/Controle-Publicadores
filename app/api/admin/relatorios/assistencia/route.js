@@ -1,6 +1,8 @@
 import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { ensureVisitorColumns, meetingVisitors } from '@/app/lib/meeting-visitors';
+import { ABSENCE_ELIGIBLE_GROUP_SQL } from '@/app/lib/attendance-report';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,8 +20,10 @@ export async function GET(request) {
 
   const client = await pool.connect();
   try {
+    await ensureVisitorColumns(client);
     // 1. Get Total Active Publishers (Current)
-    const totalPubRes = await client.query('SELECT COUNT(*) FROM publicadores');
+    const totalPubRes = await client.query(`SELECT COUNT(*) FROM publicadores p
+        LEFT JOIN grupos g ON g.id = p.grupo_id WHERE ${ABSENCE_ELIGIBLE_GROUP_SQL}`);
     const totalPublishers = parseInt(totalPubRes.rows[0].count);
 
     // 2. Build Query
@@ -27,11 +31,17 @@ export async function GET(request) {
       SELECT 
         r.data,
         r.visitantes,
+        r.visitantes_presencial,
+        r.visitantes_zoom,
         COUNT(CASE WHEN a.modalidade = 'Presencial' THEN 1 END)::int as presencial,
         COUNT(CASE WHEN a.modalidade = 'Zoom' THEN 1 END)::int as zoom,
-        COUNT(a.id)::int as total_presente
+        COUNT(a.id)::int as total_presente,
+        COUNT(DISTINCT p.id) FILTER (WHERE a.modalidade IN ('Presencial', 'Zoom')
+            AND ${ABSENCE_ELIGIBLE_GROUP_SQL})::int as presentes_para_faltas
       FROM reunioes_registro r
       LEFT JOIN assistencia_detalhe a ON r.id = a.reuniao_id
+      LEFT JOIN publicadores p ON p.id = a.publicador_id
+      LEFT JOIN grupos g ON g.id = p.grupo_id
     `;
     
     const params = [];
@@ -59,17 +69,18 @@ export async function GET(request) {
     // 3. Format Data
     const history = res.rows.map(row => {
         const total_presente = parseInt(row.total_presente);
-        const visitantes = parseInt(row.visitantes || 0);
-        // Faltantes calculation logic might need review if visitors are counted separately or integrated. 
-        // Usually Faltantes = Total Pubs - (Presencial + Zoom). Visitors are extra.
-        const faltantes = Math.max(0, totalPublishers - total_presente);
+        const visitors = meetingVisitors(row);
+        const visitantes = visitors.visitantes;
+        // Excluded groups affect neither side of the absence calculation.
+        // Keep their historical attendance in the other attendance totals.
+        const faltantes = Math.max(0, totalPublishers - Number(row.presentes_para_faltas));
         
         return {
             date: new Date(row.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }),
             fullDate: row.data,
             presencial: parseInt(row.presencial),
             zoom: parseInt(row.zoom),
-            visitantes: visitantes,
+            ...visitors,
             faltantes: faltantes,
             total_publishers: totalPublishers,
             total_geral: total_presente + visitantes
@@ -81,6 +92,8 @@ export async function GET(request) {
         presencial: Math.round(history.reduce((acc, curr) => acc + curr.presencial, 0) / (history.length || 1)),
         zoom: Math.round(history.reduce((acc, curr) => acc + curr.zoom, 0) / (history.length || 1)),
         visitantes: Math.round(history.reduce((acc, curr) => acc + curr.visitantes, 0) / (history.length || 1)),
+        visitantes_presencial: Math.round(history.reduce((acc, curr) => acc + curr.visitantes_presencial, 0) / (history.length || 1)),
+        visitantes_zoom: Math.round(history.reduce((acc, curr) => acc + curr.visitantes_zoom, 0) / (history.length || 1)),
         faltantes: Math.round(history.reduce((acc, curr) => acc + curr.faltantes, 0) / (history.length || 1)),
     };
 

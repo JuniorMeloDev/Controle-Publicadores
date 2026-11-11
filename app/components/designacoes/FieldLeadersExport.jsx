@@ -19,7 +19,7 @@ export function FieldLeadersExport({ data, initialYear, initialMonth, disabled }
     saving.current = true; setBusy(true); setError('');
     try {
       const { jsPDF } = await import('jspdf');
-      writeFieldLeadersPdf(new jsPDF({ orientation: 'landscape', format: 'a4' }), data, year, month).save(`Dirigentes_Servico_Campo_${report.prefix}.pdf`);
+      writeFieldLeadersPdf(new jsPDF({ orientation: 'landscape', format: 'a4' }), data, year, month).save(`Dirigentes_Servico_Campo_${String(month).padStart(2, '0')}-${year}.pdf`);
       setOpen(false);
     } catch { setError('Não foi possível exportar a tabela de dirigentes. Tente novamente.'); }
     finally { saving.current = false; setBusy(false); }

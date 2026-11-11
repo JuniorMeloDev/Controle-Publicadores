@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { loadModule, loadRoute } from './helpers/load-source.mjs';
 
 const responses = await loadModule('../../app/lib/assignment-response.js');
+const dateFormat = await loadModule('../../app/lib/date-format.js');
 const assignment = { id: 'vida-123', publicador_id: 7, data_reuniao: '2030-01-10', nome_parte: 'Leitura', nome_completo: 'Pessoa fictícia', descricao_semana: 'Semana', reuniao_id: 8 };
 const version = responses.assignmentVersion(assignment);
 
@@ -101,7 +102,7 @@ test('invitation preview does not record an answer or start a transaction', asyn
 function emailModule(dependencies) {
   const source = readFileSync(new URL('../app/lib/assignment-response-email.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
   const context = vm.createContext({ URL, process: { env: { APP_URL: 'https://example.test', EMAIL_USER: 'sender@example.test', EMAIL_PASS: 'fictional' } },
-    ...responses, ensureResponseTables: async () => {}, todayInBrazil: () => '2030-01-07', getActiveAssignments: async () => [assignment],
+    ...responses, ...dateFormat, ensureResponseTables: async () => {}, todayInBrazil: () => '2030-01-07', getActiveAssignments: async () => [assignment],
     escapeEmailHtml: value => String(value).replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('&token', '&amp;token'),
     emailSender: address => address, ...dependencies });
   vm.runInContext(source + '\nglobalThis.api = { confirmationEmailContent, deliverRefusalEmails };', context);
@@ -115,6 +116,8 @@ test('confirmation email buttons preserve the chosen answer and include plain-te
   assert.match(content.html, /resposta=nao/);
   assert.ok(!content.html.includes('<script>'));
   assert.match(content.text, /#token=fixture&resposta=nao/);
+  assert.match(content.text, /10\/01\/2030/);
+  assert.ok(!content.text.includes('2030-01-10'));
   assert.ok(!content.text.includes('continua válida'));
 });
 

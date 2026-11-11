@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateBR, formatDateForFile } from '@/app/lib/date-format';
 import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { Button } from '@/app/components/ui/button';
@@ -82,7 +83,7 @@ export default function PrivilegiosMecanicosReport() {
     // Dynamic Columns based on Types
     const wsData = reportData.meetings.map(m => {
         const row = {
-            Data: new Date(m.data).toLocaleDateString('pt-BR'),
+            Data: formatDateBR(m.data),
             Dia: new Date(m.data).toLocaleDateString('pt-BR', { weekday: 'long' })
         };
         
@@ -97,7 +98,7 @@ export default function PrivilegiosMecanicosReport() {
     const ws = XLSX.utils.json_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Privilégios");
-    XLSX.writeFile(wb, `Privilegios_Mecanicos_${startDate}.xlsx`);
+    XLSX.writeFile(wb, `Privilegios_Mecanicos_${formatDateForFile(startDate)}.xlsx`);
   };
 
   // Chunking for Print Layout
@@ -304,7 +305,7 @@ export default function PrivilegiosMecanicosReport() {
                                             <th className={`border-r border-black print:border-2 ${cellPadding} min-w-[120px] bg-white uppercase text-blue-800 sticky left-0 print:static z-10 text-sm`}>Privilégio</th>
                                             {chunk.map(item => (
                                                 <th key={item.id} className={`border-l border-black print:border-2 ${cellPadding} min-w-[100px]`}>
-                                                    {new Date(item.data).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC'})}
+                                                    {new Date(item.data).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC'})}
                                                 </th>
                                             ))}
                                             {Array.from({length: chunkSize - chunk.length}).map((_, i) => <th key={i} className={`border-l border-black print:border-2 ${cellPadding} min-w-[100px]`}></th>)}

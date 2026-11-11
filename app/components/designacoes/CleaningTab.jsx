@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateForFile } from '@/app/lib/date-format';
 import { useState, useEffect, useCallback } from 'react';
 import { DesignationRowActions } from './DesignationRowActions';
 import { cleaningMessage } from '@/app/lib/designation-share';
@@ -246,11 +247,11 @@ export function CleaningTab() {
           <div className="p-4 space-y-3 md:p-0 md:space-y-0 md:divide-y md:divide-gray-100">
             {items.map(item => {
               const meetingDate = new Date(`${item.data.slice(0, 10)}T12:00:00Z`);
-              const dateLabel = meetingDate.toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+              const dateLabel = meetingDate.toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
               const status = item.cancelado ? `Cancelada: ${item.motivo_cancelamento || 'Reunião cancelada'}` : !item.grupo || !item.tarefas ? 'Designações pendentes' : 'Designação completa';
               const statusClass = `text-xs ${item.cancelado ? 'text-red-600' : 'text-purple-600'}`;
               const deleteButton = item.id && !item.cancelado && <DesignationRowActions label={`Limpeza de ${dateLabel}`}
-                message={cleaningMessage(item)} filename={`limpeza-${item.data.slice(0, 10)}`}
+                message={cleaningMessage(item)} filename={`limpeza-${formatDateForFile(item.data)}`}
                 canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')}
                 onDelete={canEdit ? () => setPendingDelete(item) : undefined} />;
               return <div key={item.id || `reuniao-${item.reuniao_id}`}>

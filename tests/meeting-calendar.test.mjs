@@ -3,6 +3,7 @@ import test from 'node:test';
 import { loadModule, loadRoute } from './helpers/load-source.mjs';
 
 const calendar = await loadModule('../../app/lib/meeting-calendar.js');
+const dates = await loadModule('../../app/lib/date-format.js');
 const { generationRange, resolveProgramMeeting, meetingCancellation } = calendar;
 
 test('active Tuesday visit meetings retain the event and changed-day notice', () => {
@@ -73,7 +74,7 @@ function generatorFixture({ counts = [1, 0], failSecond = false, allow = true } 
         return { rows: [] };
     }, release() {} };
     return { calls, ...loadRoute('../../app/api/admin/reunioes/gerar/route.js', {
-        Pool: class { connect() { return client; } }, ...permissionDependencies, ...calendar,
+        Pool: class { connect() { return client; } }, ...permissionDependencies, ...calendar, ...dates,
         findVisitInWeek: () => undefined, getVisitTuesday: () => '', isAllowed: () => allow
     }) };
 }

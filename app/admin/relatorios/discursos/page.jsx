@@ -1,6 +1,7 @@
 
 'use client';
 
+import { formatDateBR, formatDateForFile } from '@/app/lib/date-format';
 import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { Button } from '@/app/components/ui/button';
@@ -74,7 +75,7 @@ export default function PublicSpeechesReport() {
     
     // Flatten data for Excel
     const wsData = speeches.map(s => ({
-        Data: new Date(s.data).toLocaleDateString('pt-BR'),
+        Data: formatDateBR(s.data),
         Orador: s.orador || '-',
         Congregacao: s.congregacao || '-', 
         Tema: s.tema || '-',
@@ -84,7 +85,7 @@ export default function PublicSpeechesReport() {
     const ws = XLSX.utils.json_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Discursos");
-    XLSX.writeFile(wb, `Discursos_${startDate}.xlsx`);
+    XLSX.writeFile(wb, `Discursos_${formatDateForFile(startDate)}.xlsx`);
   };
 
   const handleExportPDF = () => {
@@ -111,7 +112,7 @@ export default function PublicSpeechesReport() {
     // Filters Info (optional)
     if(startDate) {
         doc.setFontSize(9);
-        doc.text(`Período: ${new Date(startDate).toLocaleDateString('pt-BR')} ${endDate ? 'a ' + new Date(endDate).toLocaleDateString('pt-BR') : 'em diante'}`, margin, y);
+        doc.text(`Período: ${formatDateBR(startDate)} ${endDate ? 'a ' + formatDateBR(endDate) : 'em diante'}`, margin, y);
         y += 10;
     }
 
@@ -149,7 +150,7 @@ export default function PublicSpeechesReport() {
             doc.setFont('helvetica', 'normal');
         }
 
-        const dataDate = new Date(s.data).toLocaleDateString('pt-BR');
+        const dataDate = formatDateBR(s.data);
         const dataTema = s.tema ? doc.splitTextToSize(s.tema, colWidths[1] - 2) : '-';
         const dataCant = s.cantico ? String(s.cantico) : '-';
         const dataOrador = s.orador ? doc.splitTextToSize(s.orador, colWidths[3] - 2) : '-';
@@ -178,7 +179,7 @@ export default function PublicSpeechesReport() {
         doc.line(margin, y - 2, 195, y - 2); 
     });
 
-    const filename = `Discursos_${startDate || 'Geral'}.pdf`;
+    const filename = `Discursos_${startDate ? formatDateForFile(startDate) : 'Geral'}.pdf`;
     doc.save(filename);
   };
 
@@ -315,7 +316,7 @@ export default function PublicSpeechesReport() {
                                 {speeches.map((s, i) => (
                                     <tr key={s.id} className={`${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} print:bg-white border-b border-gray-100 print:border-black`}>
                                         <td className="p-3 font-medium text-gray-900 print:border print:border-black whitespace-nowrap">
-                                            {new Date(s.data).toLocaleDateString('pt-BR')}
+                                            {formatDateBR(s.data)}
                                         </td>
                                         <td className="p-3 print:border print:border-black font-medium">
                                             {s.tema || '-'}

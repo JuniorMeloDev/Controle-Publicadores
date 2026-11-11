@@ -5,6 +5,7 @@ import { findVisitInWeek, getVisitTuesday } from '@/app/lib/meeting-visits';
 import { dateOnly, generationRange, isCalendarDate, meetingCancellation } from '@/app/lib/meeting-calendar';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
 import { isAllowed } from '@/app/lib/access-control';
+import { formatDateBR } from '@/app/lib/date-format';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,7 +92,7 @@ export async function POST(request) {
                 const data = visit ? getVisitTuesday(visit.data) : m.data;
                 const meetingConfig = configs.get(data.slice(0, 4));
                 if (!meetingConfig) throw new Error(`Configure os dias de reunião de ${data.slice(0, 4)} antes de gerar.`);
-                if (meetingCancellation({ ...m, data }, events, meetingConfig).cancelado) throw new Error(`A reunião de ${data} conflita com um evento especial. Gere a prévia novamente.`);
+                if (meetingCancellation({ ...m, data }, events, meetingConfig).cancelado) throw new Error(`A reunião de ${formatDateBR(data)} conflita com um evento especial. Gere a prévia novamente.`);
                 const result = await client.query(`INSERT INTO reunioes_registro (data, tipo)
                     VALUES ($1, $2) ON CONFLICT (data) DO NOTHING RETURNING id`, [data, m.tipo]);
                 if (result.rowCount) {
@@ -129,7 +130,7 @@ export async function POST(request) {
             if (visit && dateStr === getVisitTuesday(visit.data)) type = 'Meio de Semana';
             if (type) {
                 const state = meetingCancellation({ data: dateStr, tipo: type }, events, config);
-                if (state.cancelado) warnings.push(`${dateStr}: ${state.motivo_cancelamento}`);
+                if (state.cancelado) warnings.push(`${formatDateBR(dateStr)}: ${state.motivo_cancelamento}`);
                 else proposedMeetings.push({ data: dateStr, tipo: type, weekday,
                     reason: visit && type === 'Meio de Semana' ? 'Reuni\u00e3o de visita na ter\u00e7a-feira' : 'Agenda Regular' });
             }

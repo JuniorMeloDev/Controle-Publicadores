@@ -1,6 +1,7 @@
 import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { ensureVisitorColumns, meetingVisitors, validateMeetingVisitors } from '@/app/lib/meeting-visitors';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,7 @@ export async function GET(request, { params }) {
     const { id } = await params;
     const client = await pool.connect();
     try {
+        await ensureVisitorColumns(client);
         const res = await client.query('SELECT * FROM reunioes_registro WHERE id = $1', [id]);
         if (res.rows.length === 0) {
             return NextResponse.json({ message: 'Reunião não encontrada' }, { status: 404 });
@@ -89,6 +91,7 @@ export async function GET(request, { params }) {
 
         return NextResponse.json({
             ...meeting,
+            ...meetingVisitors(meeting),
             data: dateStr,
             designacoes: {
                 privilegios,
@@ -109,10 +112,16 @@ export async function PUT(request, { params }) {
   const denied = await authorizeRequest(request, 'PUT');
   if (denied) return denied;
     const { id } = await params;
-    const { visitantes } = await request.json();
+    let visitors;
+    try { visitors = validateMeetingVisitors(await request.json()); }
+    catch (error) { return NextResponse.json({ message: error.message }, { status: 400 }); }
     const client = await pool.connect();
     try {
-        await client.query('UPDATE reunioes_registro SET visitantes = $1 WHERE id = $2', [visitantes, id]);
+        await ensureVisitorColumns(client);
+        const result = await client.query(`UPDATE reunioes_registro SET visitantes = $1,
+            visitantes_presencial = $2, visitantes_zoom = $3 WHERE id = $4 RETURNING id`,
+            [visitors.visitantes, visitors.visitantes_presencial, visitors.visitantes_zoom, id]);
+        if (!result.rows.length) return NextResponse.json({ message: 'Reunião não encontrada.' }, { status: 404 });
         return NextResponse.json({ message: 'Reunião atualizada com sucesso' });
     } catch (error) {
         console.error('Error updating meeting:', error);

@@ -1,3 +1,4 @@
+import { formatDateBR } from '@/app/lib/date-format';
 import React from 'react';
 
 // Constantes de layout para impressão
@@ -11,15 +12,7 @@ const MONTHS = [
     "Março", "Abril", "Maio", "Junho", "Julho", "Agosto"
 ];
 
-const formatDate = (dateString) => {
-    if (!dateString) return "";
-    if (typeof dateString === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
-        return dateString;
-    }
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "";
-    return date.toLocaleDateString('pt-BR');
-};
+const formatDate = value => formatDateBR(value, '');
 
 const CheckboxItem = ({ label, checked }) => (
     <div className="flex items-center gap-1.5">

@@ -1,3 +1,4 @@
+import { formatDateForFile } from '@/app/lib/date-format';
 import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
@@ -75,7 +76,7 @@ export async function GET(request) {
     }
 
     const agora = new Date();
-    const dataFormatada = agora.toISOString().split('T')[0];
+    const dataFormatada = formatDateForFile(agora);
     const horaFormatada = agora.toTimeString().split(' ')[0].replace(/:/g, '');
     const filename = `backup_congregacao_${dataFormatada}_${horaFormatada}.json`;
 

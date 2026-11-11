@@ -290,7 +290,7 @@ export default function LifeMinistryExportPage() {
                                     <div>
                                         <h3 className="font-medium text-gray-900">{m.label || m.descricao}</h3>
                                         <p className="text-sm text-gray-500 capitalize">
-                                            {m.dataSQL ? new Date(m.dataSQL + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : m.dataSQL}
+                                            {m.dataSQL ? new Date(m.dataSQL + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }) : m.dataSQL}
                                         </p>
                                         {!canExportMeeting(m) && <p className="text-xs text-gray-500 mt-1">{m.cancelado ? 'Reunião cancelada' : 'Programação pendente: importe-a em Designações antes de exportar.'}</p>}
                                     </div>

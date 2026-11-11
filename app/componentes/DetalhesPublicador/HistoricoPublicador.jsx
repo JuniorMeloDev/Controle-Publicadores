@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateBR } from '@/app/lib/date-format';
 import { useState, useEffect } from 'react';
 import { formatEmergencyContacts } from '@/app/lib/emergency-contacts';
 import { Loader2, Edit2, Calendar, User, ArrowRight, Shield, Star } from 'lucide-react';
@@ -8,21 +9,7 @@ import { Loader2, Edit2, Calendar, User, ArrowRight, Shield, Star } from 'lucide
  * Formata uma string de data (ISO ou SQL) para o formato dd/mm/aaaa
  * Retorna null se a data for inválida ou vazia.
  */
-function formatarData(dataString) {
-  if (!dataString) return null; // Retorna null para campos vazios
-  try {
-    const data = new Date(dataString);
-    // Adiciona o fuso horário para corrigir a data (comum em datas 'YYYY-MM-DD')
-    const dataAjustada = new Date(data.valueOf() + data.getTimezoneOffset() * 60000);
-    return dataAjustada.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  } catch (e) {
-    return dataString; // Retorna a string original se falhar
-  }
-}
+function formatarData(value) { return formatDateBR(value, null); }
 
 // --- 1. NOVO DICIONÁRIO DE TRADUÇÃO ---
 const NOME_CAMPOS = {

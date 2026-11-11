@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateForFile } from '@/app/lib/date-format';
 import { StatusToast } from '@/app/components/ui/status-toast';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -164,7 +165,7 @@ export function MechanicalPrivilegesTab() {
                                 </button>
                                 {filled > 0 && <div className="px-4 pb-3 sm:pb-0"><DesignationRowActions
                                     label={`Semana de ${formatMechanicalDate(week.start)}`}
-                                    message={mechanicalWeekMessage(week, types, assignments, publishers, isMechanicalTypeApplicable)} buildPdf={doc => writeMechanicalPdf(doc, { week, types, assignments, publishers })} filename={`privilegios-${week.start}`}
+                                    message={mechanicalWeekMessage(week, types, assignments, publishers, isMechanicalTypeApplicable)} buildPdf={doc => writeMechanicalPdf(doc, { week, types, assignments, publishers })} filename={`privilegios-${formatDateForFile(week.start)}`}
                                     canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')}
                                     onDelete={canEdit ? () => setPendingDelete(week) : undefined} /></div>}
                                 </div>
@@ -185,7 +186,7 @@ export function MechanicalPrivilegesTab() {
                                                 label={`${meeting.tipo} de ${formatMechanicalDate(meeting.data)}`}
                                                 message={mechanicalWeekMessage(scope, types, assignments, publishers, isMechanicalTypeApplicable)}
                                                 buildPdf={doc => writeMechanicalPdf(doc, { week: scope, types, assignments, publishers })}
-                                                filename={`privilegios-${meeting.data}-${meeting.id}`} canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')}
+                                                filename={`privilegios-${formatDateForFile(meeting.data)}-${meeting.id}`} canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')}
                                                 onDelete={canEdit && count > 0 ? () => setPendingDelete(scope) : undefined} /></div>}
                                         </div>;
                                     })}

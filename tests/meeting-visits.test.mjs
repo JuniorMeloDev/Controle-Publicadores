@@ -7,6 +7,8 @@ import vm from 'node:vm';
 const helperSource = readFileSync(new URL('../app/lib/meeting-visits.js', import.meta.url), 'utf8')
     .replace(/export /g, '');
 const calendarSource = readFileSync(new URL('../app/lib/meeting-calendar.js', import.meta.url), 'utf8').replace(/export /g, '');
+const visitorsSource = readFileSync(new URL('../app/lib/meeting-visitors.js', import.meta.url), 'utf8').replace(/export /g, '');
+const datesSource = readFileSync(new URL('../app/lib/date-format.js', import.meta.url), 'utf8').replace(/export /g, '');
 const visit = { data: '2030-01-15T03:00:00Z', ano: 2030, tipo: 'Visita do Superintendente', nome: 'Visita' };
 const config = { dia_meio_semana: 'Quarta-feira', dia_fim_semana: 'Domingo' };
 
@@ -35,7 +37,7 @@ function loadRoute(file, { events = [visit], weekdays = config, meetings = [] } 
             constructor(...args) { super(...(args.length ? args : ['2030-01-02T12:00:00Z'])); }
         }
     });
-    vm.runInContext(helperSource + '\n' + calendarSource + '\n' + source + '\nglobalThis.handlers = { POST, ' +
+    vm.runInContext(helperSource + '\n' + calendarSource + '\n' + visitorsSource + '\n' + datesSource + '\n' + source + '\nglobalThis.handlers = { POST, ' +
         (file.includes('/gerar/') ? '' : 'GET, ') + '};', context);
     return { ...context.handlers, writes };
 }
@@ -43,6 +45,17 @@ function loadRoute(file, { events = [visit], weekdays = config, meetings = [] } 
 function request(body) {
     return { json: async () => body, url: 'http://localhost/api/admin/reunioes?year=2030&month=1' };
 }
+
+test('meeting preview formats cancellation warnings as dd/mm/yyyy while keeping civil dates for creation', async () => {
+    const route = loadRoute('../app/api/admin/reunioes/gerar/route.js', {
+        weekdays: { dia_meio_semana: 'Quinta-feira', dia_fim_semana: 'Domingo' },
+        events: [{ data: '2027-03-22', tipo: 'Celebração', nome: 'Evento fictício', ano: 2027 }],
+    });
+    const result = await route.POST(request({ action: 'preview', period: 'mes_especifico', year: 2027, month: 3 }));
+    assert.ok(result.warnings.some(text => text.startsWith('25/03/2027:')));
+    assert.ok(result.warnings.every(text => !text.includes('2027-03-25')));
+    assert.ok(result.meetings.some(meeting => meeting.data === '2027-03-04'));
+});
 
 test('Tuesday visit is active, Wednesday is canceled, Sunday remains active', async () => {
     const route = loadRoute('../app/api/admin/reunioes/route.js', {

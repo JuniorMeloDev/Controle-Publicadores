@@ -10,9 +10,11 @@ import TabelaDesignacoes from '@/app/componentes/TabelaDesignacoes';
 import { Button } from '@/app/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/app/components/ui/sheet';
 import { ConfirmationDialog } from '@/app/components/ui/confirmation-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/app/components/ui/dialog';
 import { DesignationRowActions } from './DesignationRowActions';
 import { StatusToast } from '@/app/components/ui/status-toast';
 import { useDesignationPeriod } from './DesignationPeriodContext';
+import { getWeekCompletionStats } from '@/app/lib/life-ministry-summary';
 import { requestMeetingProgram } from '@/app/lib/import-programs-client';
 import { fetchLifeMinistryExportDetails, meetingExportKey } from '@/app/lib/life-ministry-export';
 import { buildLifeMinistryWhatsAppMessage, lifeMinistryWhatsAppUrl } from '@/app/lib/life-ministry-whatsapp';
@@ -54,7 +56,7 @@ function getGroupLabel(dataSQL) {
 
 function formatFullDateBR(dateStr) {
   if (!dateStr) return '';
-  const str = new Date(`${dateStr}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: '2-digit' });
+  const str = new Date(`${dateStr}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit' });
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
@@ -110,51 +112,6 @@ const mapSavedToAssignments = (savedRows, schedule) => {
 const generateWhatsAppText = (weekText, schedule, assignments, publishers) =>
   encodeURIComponent(buildLifeMinistryWhatsAppMessage(weekText, schedule, assignments, publishers));
 
-function getWeekCompletionStats(schedule, assignments = {}) {
-  if (!schedule) return { total: 0, filled: 0, percentage: 0 };
-  let total = 0;
-  let filled = 0;
-
-  total += 1; if (assignments.presidente) filled += 1;
-  total += 1; if (assignments.oracao_inicial) filled += 1;
-  total += 1; if (assignments.comentarios_iniciais) filled += 1;
-
-  schedule.treasures?.forEach((_, idx) => {
-    total += 1;
-    if (assignments[`tesouro_${idx}`]) filled += 1;
-  });
-  schedule.ministry?.forEach((part, idx) => {
-    const isDiscurso = part.title?.toLowerCase().includes('discurso');
-    if (isDiscurso) {
-      total += 1;
-      if (assignments[`ministerio_${idx}`] || assignments[`ministerio_${idx}_1`]) filled += 1;
-    } else {
-      total += 2;
-      if (assignments[`ministerio_${idx}_1`] || assignments[`ministerio_${idx}`]) filled += 1;
-      if (assignments[`ministerio_${idx}_2`]) filled += 1;
-    }
-  });
-
-  total += 1; if (assignments.cantico_meio) filled += 1;
-  schedule.living?.forEach((part, idx) => {
-    const isBibleStudy = part.title?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes('estudo biblico');
-    if (isBibleStudy) {
-      total += 2;
-      if (assignments[`vida_${idx}_1`] || assignments[`vida_${idx}`]) filled += 1;
-      if (assignments[`vida_${idx}_2`]) filled += 1;
-    } else {
-      total += 1;
-      if (assignments[`vida_${idx}`] || assignments[`vida_${idx}_1`]) filled += 1;
-    }
-  });
-
-  total += 1; if (assignments.comentarios_finais) filled += 1;
-  total += 1; if (assignments.oracao_final) filled += 1;
-
-  const percentage = total > 0 ? Math.round((filled / total) * 100) : 0;
-  return { total, filled, percentage };
-}
-
 // --- SUB-COMPONENTE: Lista de Histórico ---
 const HistoryList = ({ listaFiltrada, meetingDates, currentIndex, hasData, handleLoadSavedMeeting }) => (
   <div className="space-y-1 p-1">
@@ -203,6 +160,11 @@ export function LifeMinistryTab() {
   const [savedMeetingsList, setSavedMeetingsList] = useState([]);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [exportingMeeting, setExportingMeeting] = useState(null);
+  const [studentSlipMeeting, setStudentSlipMeeting] = useState(null);
+  const [studentSlipDownloads, setStudentSlipDownloads] = useState([]);
+  useEffect(() => () => {
+    studentSlipDownloads.forEach(file => URL.revokeObjectURL(file.url));
+  }, [studentSlipDownloads]);
   const [historyData, setHistoryData] = useState([]); // New state for history
   const [isLoading, setIsLoading] = useState(true);
 
@@ -1206,6 +1168,32 @@ export function LifeMinistryTab() {
     else window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  const handleStudentSlips = async (meeting, mode) => {
+    if (exportingMeeting) return;
+    setExportingMeeting(meeting.dataSQL);
+    setStudentSlipDownloads([]);
+    try {
+      const response = await fetch(`/api/admin/get-meeting-details?date=${encodeURIComponent(meeting.dataSQL)}`, { cache: 'no-store' });
+      const details = await response.json();
+      if (!response.ok) throw new Error(details.message || details.error || 'Não foi possível carregar as designações salvas.');
+      const { getStudentSlips, buildStudentSlipFiles, STUDENT_SLIP_TEMPLATE } = await import('@/app/lib/student-slips-pdf');
+      const cards = getStudentSlips(details.schedule, details.assignments, meeting.dataSQL);
+      if (!cards.length) throw new Error('Não há estudantes designados nesta semana para gerar o S-89.');
+      const template = await fetch(STUDENT_SLIP_TEMPLATE);
+      if (!template.ok) throw new Error('Não foi possível carregar o modelo S-89.');
+      const files = await buildStudentSlipFiles(await template.arrayBuffer(), cards, mode);
+      const downloads = files.map(file => ({ filename: file.filename, url: URL.createObjectURL(new Blob([file.bytes], { type: 'application/pdf' })) }));
+      setStudentSlipDownloads(downloads);
+      for (const file of downloads) {
+        const link = document.createElement('a');
+        link.href = file.url; link.download = file.filename;
+        document.body.appendChild(link); link.click(); link.remove();
+      }
+      setToastData({ message: `${files.length} PDF(s) S-89 gerado(s).`, type: 'success' });
+    } catch (err) { setToastData({ message: err.message, type: 'error' }); }
+    finally { setExportingMeeting(null); }
+  };
+
   const handleExportSavedMeeting = async (meeting, type) => {
     if (exportingMeeting) return;
     const idx = meetingDates.findIndex((date, index) => date === meeting.dataSQL && schedules[index]);
@@ -1259,6 +1247,34 @@ export function LifeMinistryTab() {
   return (
     <div className="w-full min-w-0">
       <StatusToast message={toastData.message} type={toastData.type} onClose={() => setToastData({ message: '', type: '' })} />
+      <Dialog open={Boolean(studentSlipMeeting)} onOpenChange={open => {
+        if (!open && !exportingMeeting) { setStudentSlipMeeting(null); setStudentSlipDownloads([]); }
+      }}>
+        <DialogContent className="bg-white text-gray-900 max-h-[85vh] overflow-y-auto w-[calc(100%_-_2rem)] rounded-lg">
+          <DialogHeader>
+            <DialogTitle>Baixar designações S-89</DialogTitle>
+            <DialogDescription>Escolha como baixar os formulários de {studentSlipMeeting ? formatFullDateBR(studentSlipMeeting.dataSQL) : ''}. Serão usadas as designações salvas.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <Button variant="outline" disabled={Boolean(exportingMeeting)} className="h-auto py-3 flex flex-col items-start text-left whitespace-normal border-purple-200"
+              onClick={() => handleStudentSlips(studentSlipMeeting, 'individual')}>
+              <span className="font-semibold">Um PDF por estudante</span>
+              <span className="text-xs font-normal text-gray-600 mt-1">Baixa todos os PDFs separados, identificados pelo nome chamado e número da parte.</span>
+            </Button>
+            <Button variant="outline" disabled={Boolean(exportingMeeting)} className="h-auto py-3 flex flex-col items-start text-left whitespace-normal"
+              onClick={() => handleStudentSlips(studentSlipMeeting, 'combined')}>
+              <span className="font-semibold">Tudo em um único PDF</span>
+              <span className="text-xs font-normal text-gray-600 mt-1">Um arquivo com todas as designações da semana, uma por página.</span>
+            </Button>
+          </div>
+          {exportingMeeting && <p role="status" className="flex gap-2 items-center text-sm text-gray-600"><Loader2 className="w-4 h-4 animate-spin" />Preparando os formulários...</p>}
+          {studentSlipDownloads.length > 0 && <div className="space-y-2">
+            <p className="text-sm text-gray-600">Arquivos gerados. Você também pode baixar cada arquivo pelos links abaixo:</p>
+            {studentSlipDownloads.map(file => <a key={file.filename} href={file.url} download={file.filename}
+              className="block text-sm text-purple-700 underline break-words">{file.filename}</a>)}
+          </div>}
+        </DialogContent>
+      </Dialog>
       {pendingDelete && <ConfirmationDialog destructive title="Excluir designações de Vida e Ministério?" confirmLabel="Excluir"
         description={`As pessoas designadas para ${formatFullDateBR(pendingDelete.dataSQL)} serão removidas. A programação e a reunião continuarão disponíveis para preencher novamente.`}
         onConfirm={() => handleDeleteAssignments(pendingDelete)} onCancel={() => setPendingDelete(null)} />}
@@ -1395,10 +1411,11 @@ export function LifeMinistryTab() {
                   const idx = meetingDates.findIndex((date, index) => date === item.date && schedules[index]);
                   const schedule = idx >= 0 ? schedules[idx] : null;
                   const assignments = idx >= 0 ? assignmentsList[idx] || {} : {};
-                  const stats = schedule ? getWeekCompletionStats(schedule, assignments) : null;
+                  const stats = schedule ? getWeekCompletionStats(schedule, assignments) : item.meeting.preenchimento;
                   const readingIndex = schedule?.treasures?.findIndex(part =>
                     part.title?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('leitura da biblia')) ?? -1;
-                  const bibleReader = readingIndex >= 0 ? assignments[`tesouro_${readingIndex}`] : '';
+                  const bibleReader = schedule ? (readingIndex >= 0 ? assignments[`tesouro_${readingIndex}`] : '') : stats?.leitorBiblia;
+                  const president = schedule ? assignments.presidente : stats?.presidente;
                   return (
                   <div
                     key={item.id}
@@ -1424,7 +1441,7 @@ export function LifeMinistryTab() {
                             aria-label="Preenchimento das designações" aria-valuenow={stats.percentage} aria-valuemin={0} aria-valuemax={100}>
                             <div className={`h-full ${stats.percentage === 100 ? 'bg-emerald-500' : 'bg-purple-600'}`} style={{ width: `${stats.percentage}%` }} />
                           </div>
-                          <p className="text-xs mt-2 text-gray-500">Presidente: {assignments.presidente || 'Pendente'} · Leitor Bíblia: {bibleReader || 'Pendente'}</p>
+                          <p className="text-xs mt-2 text-gray-500">Presidente: {president || 'Pendente'} · Leitor Bíblia: {bibleReader || 'Pendente'}</p>
                         </>}
                       </div>
                       <span className="text-gray-400 group-hover:text-purple-500 shrink-0">
@@ -1434,6 +1451,7 @@ export function LifeMinistryTab() {
                     {(schedule || item.meeting.tem_programacao) && !item.meeting.cancelado && <div className="flex gap-2 px-4 pb-4 sm:pb-0 sm:pl-0">
                       <DesignationRowActions label={item.label} disabled={isSaving || Boolean(exportingMeeting)}
                         onWhatsApp={() => handleExportSavedMeeting(item.meeting, 'whatsapp')}
+                        onStudentSlips={() => { setStudentSlipDownloads([]); setStudentSlipMeeting(item.meeting); }}
                         onPdf={() => handleExportSavedMeeting(item.meeting, 'pdf')}
                         canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')}
                         onDelete={isAllowed(permissions, 'designacoes_salvar', 'actions') ? () => setPendingDelete(item.meeting) : undefined} />

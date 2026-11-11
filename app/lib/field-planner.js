@@ -1,4 +1,5 @@
 import { fieldDate, fieldId, validateFieldRecord } from './field-service.js';
+import { formatDateBR } from './date-format.js';
 
 export const TERRITORY_PERIODS = { semana: 'Durante a semana', fim_semana: 'Fim de semana', ambos: 'Ambos' };
 export const FIELD_RESULTS = { concluido: 'Concluído', parcial: 'Parcial', nao_trabalhado: 'Não trabalhado' };
@@ -29,7 +30,7 @@ export function generateFieldSchedule(snapshot, config) {
     const date = cursor.toISOString().slice(0, 10), weekend = [0, 6].includes(cursor.getUTCDay());
     for (const rule of rules.filter(r => r.dia === cursor.getUTCDay())) {
       if (planned.some(s => s.data === date && s.horario === rule.horario && (!s.grupos.length || !rule.grupos.length || rule.grupos.some(g => s.grupos.includes(g))))) {
-        warnings.push(`${date} ${rule.horario}: já existe uma saída para esses grupos.`); continue;
+        warnings.push(`${formatDateBR(date)} ${rule.horario}: já existe uma saída para esses grupos.`); continue;
       }
       const usage = id => planned.filter(s => s.territorios.includes(id)).map(s => s.data);
       const candidates = territories.filter(t => {
@@ -43,7 +44,7 @@ export function generateFieldSchedule(snapshot, config) {
       });
       const record = { data: date, horario: rule.horario, modalidade: 'territorio', local_id: rule.local_id,
         grupos: rule.grupos, territorios: candidates.slice(0, rule.quantidade).map(t => t.id), dirigente_publicador_id: null, observacoes: '' };
-      if (record.territorios.length < rule.quantidade) warnings.push(`${date} ${rule.horario}: ${record.territorios.length} de ${rule.quantidade} territórios disponíveis.`);
+      if (record.territorios.length < rule.quantidade) warnings.push(`${formatDateBR(date)} ${rule.horario}: ${record.territorios.length} de ${rule.quantidade} territórios disponíveis.`);
       rows.push(record); planned.push(record);
       if (rows.length > 200) throw new Error('Gere no máximo 200 saídas por vez.');
     }

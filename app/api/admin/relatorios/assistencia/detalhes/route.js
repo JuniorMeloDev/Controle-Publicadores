@@ -1,6 +1,7 @@
 import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+import { ABSENCE_ELIGIBLE_GROUP_SQL } from '@/app/lib/attendance-report';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,8 +62,10 @@ export async function GET(request) {
           p.nome_completo,
           COUNT(r.id) as presence_count
         FROM publicadores p
-        LEFT JOIN assistencia_detalhe a ON p.id = a.publicador_id
+        LEFT JOIN grupos g ON g.id = p.grupo_id
+        LEFT JOIN assistencia_detalhe a ON p.id = a.publicador_id AND a.modalidade IN ('Presencial', 'Zoom')
         LEFT JOIN reunioes_registro r ON a.reuniao_id = r.id AND r.data >= $1 AND r.data <= $2 AND r.data <= CURRENT_DATE
+        WHERE ${ABSENCE_ELIGIBLE_GROUP_SQL}
         GROUP BY p.id, p.nome_completo
       `, [startDate, endDate]);
 

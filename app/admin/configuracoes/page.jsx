@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateBR, formatDateForFile } from '@/app/lib/date-format';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { AlertSettingsCard } from '@/app/components/AlertSettingsCard';
 import { PersonalAlertSettingsCard } from '@/app/components/PersonalAlertSettingsCard';
@@ -104,7 +105,7 @@ export default function ConfiguracoesPage() {
             const a = document.createElement('a');
             a.style.display = 'none';
             a.href = url;
-            const dataStr = new Date().toISOString().split('T')[0];
+            const dataStr = formatDateForFile();
             a.download = `backup_congregacao_${dataStr}.json`;
             document.body.appendChild(a);
             a.click();
@@ -414,7 +415,7 @@ export default function ConfiguracoesPage() {
                 setResultData({
                     success: true,
                     message: 'Reunião criada com sucesso!',
-                    details: [`Reunião do tipo "${genCustomType}" criada para ${new Date(genCustomDate).toLocaleDateString('pt-BR')}.`, ...(imported ? [imported.message, ...imported.details] : [])]
+                    details: [`Reunião do tipo "${genCustomType}" criada para ${formatDateBR(genCustomDate)}.`, ...(imported ? [imported.message, ...imported.details] : [])]
                 });
                 setResultOpen(true);
             } else {

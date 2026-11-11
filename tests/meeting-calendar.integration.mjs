@@ -11,6 +11,8 @@ import { importMeetingProgram } from '../app/lib/jw-program-service.js';
 nextEnv.loadEnvConfig(process.cwd());
 const calendar = await loadModule('../../app/lib/meeting-calendar.js');
 const visits = await loadModule('../../app/lib/meeting-visits.js');
+const dates = await loadModule('../../app/lib/date-format.js');
+const summary = await loadModule('../../app/lib/life-ministry-summary.js');
 const { getPartTitles } = await loadModule('../../app/lib/life-ministry-parts.js');
 // Session-local TEMP tables require a direct connection, not a transaction pooler.
 const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL?.replace('-pooler.', '.');
@@ -22,7 +24,7 @@ const serviceSource = (await readFile(new URL('../app/lib/meeting-calendar-servi
 const serviceContext = vm.createContext({ ...calendar });
 vm.runInContext(serviceSource + '\nglobalThis.service = { getCalendarContext, withCalendarState, lockAssignmentMeeting };', serviceContext);
 const dependencies = {
-    Pool: class { connect() { return client; } }, ...calendar, ...visits, ...serviceContext.service,
+    Pool: class { connect() { return client; } }, ...calendar, ...visits, ...dates, ...summary, ...serviceContext.service,
     getUserIdFromRequest: () => 990001, getUserPermissions: async () => ({}), isAllowed: () => true,
     registerAuditLog: async () => {}, getPartTitles
 };

@@ -48,3 +48,7 @@ next-env.d.ts
 
 # Map reference images belong in PostgreSQL, not in the repository
 /assets/territory-schematics/
+
+# Generated PDF previews
+/tmp/pdfs/
+/output/pdf/

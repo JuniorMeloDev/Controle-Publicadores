@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateForFile } from '@/app/lib/date-format';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/app/components/ui/card";
@@ -177,7 +178,8 @@ export default function AssistenciaPage() {
         const commonDatasets = [
             { label: 'Presencial', data: data.map(d => d.presencial), color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.2)' },
             { label: 'Zoom', data: data.map(d => d.zoom), color: '#A855F7', bg: 'rgba(168, 85, 247, 0.2)' },
-            { label: 'Visitantes', data: data.map(d => d.visitantes), color: '#10B981', bg: 'rgba(16, 185, 129, 0.2)' },
+            { label: 'Visitantes presenciais', data: data.map(d => d.visitantes_presencial ?? d.visitantes ?? 0), color: '#10B981', bg: 'rgba(16, 185, 129, 0.2)' },
+            { label: 'Visitantes Zoom', data: data.map(d => d.visitantes_zoom ?? 0), color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.2)' },
             { label: 'Faltantes', data: data.map(d => d.faltantes), color: '#EF4444', bg: 'rgba(239, 68, 68, 0.2)' }
         ];
 
@@ -324,6 +326,8 @@ export default function AssistenciaPage() {
                 { title: "Média Presencial", value: stats.presencial, color: [59, 130, 246] },
                 { title: "Média Zoom", value: stats.zoom, color: [168, 85, 247] },
                 { title: "Média Visitantes", value: stats.visitantes, color: [34, 197, 94] },
+                { title: "Vis. presenciais", value: stats.visitantes_presencial || 0, color: [34, 197, 94] },
+                { title: "Vis. Zoom", value: stats.visitantes_zoom || 0, color: [245, 158, 11] },
                 { title: "Média Faltantes", value: stats.faltantes, color: [239, 68, 68] }
             ];
 
@@ -474,7 +478,8 @@ export default function AssistenciaPage() {
                     { title: "Data", width: 30 },
                     { title: "Presencial", width: 25 },
                     { title: "Zoom", width: 25 },
-                    { title: "Visitantes", width: 25 },
+                    { title: "Vis. pres.", width: 20 },
+                    { title: "Vis. Zoom", width: 20 },
                     { title: "Faltantes", width: 25 },
                     { title: "Total Geral", width: 30 }
                 ];
@@ -516,8 +521,10 @@ export default function AssistenciaPage() {
                     currentX += 25;
 
                     // Visitantes
-                    pdf.text(m.visitantes.toString(), currentX + 2, yPos + 5);
-                    currentX += 25;
+                    pdf.text(String(m.visitantes_presencial ?? m.visitantes ?? 0), currentX + 2, yPos + 5);
+                    currentX += 20;
+                    pdf.text(String(m.visitantes_zoom ?? 0), currentX + 2, yPos + 5);
+                    currentX += 20;
 
                     // Faltantes
                     pdf.text(m.faltantes.toString(), currentX + 2, yPos + 5);
@@ -569,7 +576,7 @@ export default function AssistenciaPage() {
                 addChart(compRef);
             }
 
-            pdf.save(`Relatorio_Assistencia_Detalhado_${new Date().toISOString().split('T')[0]}.pdf`);
+            pdf.save(`Relatorio_Assistencia_Detalhado_${formatDateForFile()}.pdf`);
 
         } catch (error) {
             console.error('PDF Generation Error:', error);
@@ -619,13 +626,15 @@ export default function AssistenciaPage() {
             ["Média Presencial", averages.presencial],
             ["Média Zoom", averages.zoom],
             ["Média Visitantes", averages.visitantes],
+            ["Média Visitantes Presenciais", averages.visitantes_presencial || 0],
+            ["Média Visitantes Zoom", averages.visitantes_zoom || 0],
             ["Média Faltantes", averages.faltantes],
             [""],
             headerRow,
             ...dataRows,
             [""],
             ["RESUMO POR REUNIÃO"],
-            ["Data", "Presencial", "Zoom", "Visitantes", "Faltantes", "Total Geral"]
+            ["Data", "Presencial", "Zoom", "Visitantes Presenciais", "Visitantes Zoom", "Faltantes", "Total Geral"]
         ];
 
         // Add Meeting Summary Table
@@ -638,7 +647,8 @@ export default function AssistenciaPage() {
                 new Date(m.fullDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' }),
                 m.presencial,
                 m.zoom,
-                m.visitantes,
+                m.visitantes_presencial ?? m.visitantes ?? 0,
+                m.visitantes_zoom ?? 0,
                 m.faltantes,
                 (m.presencial + m.zoom + m.visitantes)
             ]);
@@ -647,7 +657,7 @@ export default function AssistenciaPage() {
         const ws = XLSX.utils.aoa_to_sheet(wsData);
         XLSX.utils.book_append_sheet(wb, ws, "Detalhado");
 
-        XLSX.writeFile(wb, `Relatorio_Assistencia_Detalhado_${new Date().toISOString().split('T')[0]}.xlsx`);
+        XLSX.writeFile(wb, `Relatorio_Assistencia_Detalhado_${formatDateForFile()}.xlsx`);
     };
 
     const filterDataByPeriod = (data, period) => {
@@ -678,6 +688,8 @@ export default function AssistenciaPage() {
             presencial: Math.round(dataSet.reduce((acc, curr) => acc + curr.presencial, 0) / count),
             zoom: Math.round(dataSet.reduce((acc, curr) => acc + curr.zoom, 0) / count),
             visitantes: Math.round(dataSet.reduce((acc, curr) => acc + curr.visitantes, 0) / count),
+            visitantes_presencial: Math.round(dataSet.reduce((acc, curr) => acc + (curr.visitantes_presencial ?? curr.visitantes ?? 0), 0) / count),
+            visitantes_zoom: Math.round(dataSet.reduce((acc, curr) => acc + (curr.visitantes_zoom ?? 0), 0) / count),
             faltantes: Math.round(dataSet.reduce((acc, curr) => acc + curr.faltantes, 0) / count),
         };
     };
@@ -832,14 +844,14 @@ export default function AssistenciaPage() {
                     </Card>
                     <Card className="border-l-4 border-l-green-500 shadow-sm opacity-80">
                         <CardHeader className="pb-2"><div className="flex items-center justify-between"><CardTitle className="text-sm font-bold text-gray-700">Média Visitantes</CardTitle><Users className="w-4 h-4 text-green-500" /></div></CardHeader>
-                        <CardContent><div className="text-2xl font-bold text-gray-900">{averages.visitantes}</div><p className="text-xs font-medium text-gray-600">Assistência Externa</p></CardContent>
+                        <CardContent><div className="text-2xl font-bold text-gray-900">{averages.visitantes}</div><p className="text-xs font-medium text-gray-600">Presencial: {averages.visitantes_presencial || 0} · Zoom: {averages.visitantes_zoom || 0}</p></CardContent>
                     </Card>
                     <Card
                         className="border-l-4 border-l-red-500 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
                         onClick={() => handleCardClick('faltantes')}
                     >
                         <CardHeader className="pb-2"><div className="flex items-center justify-between"><CardTitle className="text-sm font-bold text-gray-700">Média Faltantes</CardTitle><UserMinus className="w-4 h-4 text-red-500" /></div></CardHeader>
-                        <CardContent><div className="text-2xl font-bold text-gray-900">{averages.faltantes}</div><p className="text-xs font-medium text-gray-600">Não compareceram</p></CardContent>
+                        <CardContent><div className="text-2xl font-bold text-gray-900">{averages.faltantes}</div><p className="text-xs font-medium text-gray-600">Não compareceram · exceto grupos Inativos e Removidos</p></CardContent>
                     </Card>
                 </div>
 
@@ -849,7 +861,7 @@ export default function AssistenciaPage() {
                             <DialogTitle>Detalhamento: {detailMetric === 'presencial' ? 'Presencial' : detailMetric === 'zoom' ? 'Zoom' : 'Faltantes'}</DialogTitle>
                             <DialogDescription>
                                 {detailMetric === 'faltantes'
-                                    ? 'Ranking de faltas no período selecionado.'
+                                    ? 'Ranking de faltas no período selecionado, excluindo os grupos Inativos e Removidos.'
                                     : 'Ranking de frequência no período selecionado.'}
                             </DialogDescription>
                         </DialogHeader>

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { formatDateBR } from './date-format.js';
 import { createResponseLink, ensureResponseTables, assignmentVersion } from './assignment-response';
 import { escapeEmailHtml, emailSender } from './email-layout';
 import { getActiveAssignments } from './alert-service';
@@ -18,7 +19,7 @@ export async function confirmationEmailContent(client, assignments) {
   let html = '', text = '';
   for (const assignment of assignments) {
     const link = await createResponseLink(client, assignment, origin);
-    const label = `${assignment.nome_parte} — ${String(assignment.data_reuniao instanceof Date ? assignment.data_reuniao.toISOString() : assignment.data_reuniao).slice(0, 10)}`;
+    const label = `${assignment.nome_parte} — ${formatDateBR(assignment.data_reuniao instanceof Date ? assignment.data_reuniao.toISOString().slice(0, 10) : assignment.data_reuniao)}`;
     const separator = link.includes('#') ? '&' : '?';
     html += `<p style="margin-bottom:16px;"><strong>${escapeEmailHtml(label)}</strong><br>Caso não possa cumprir com sua designação, clique no botão abaixo:<br><a href="${escapeEmailHtml(link + separator + 'resposta=nao')}" style="display:inline-block;margin-top:6px;padding:8px 18px;background-color:#dc2626;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;font-size:14px;">Não</a></p>`;
     text += `\n${label}\nCaso não possa cumprir com sua designação, clique no botão abaixo:\nNão: ${link + separator + 'resposta=nao'}\n`;
@@ -41,7 +42,7 @@ export async function deliverRefusalEmails(client) {
   for (const row of rows) {
     try {
       const a = row.dados;
-      const text = `${a.nome_completo || a.nome_chamado || 'Publicador'} não poderá cumprir a designação ${a.nome_parte} em ${String(a.data_reuniao).slice(0, 10)}. É necessário escolher um substituto.`;
+      const text = `${a.nome_completo || a.nome_chamado || 'Publicador'} não poderá cumprir a designação ${a.nome_parte} em ${formatDateBR(a.data_reuniao instanceof Date ? a.data_reuniao.toISOString().slice(0, 10) : a.data_reuniao)}. É necessário escolher um substituto.`;
       const result = await transport.sendMail({ from: emailSender(process.env.EMAIL_USER), to: row.email, subject: 'Designação recusada — substituição necessária', text });
       if (result.rejected?.length) throw new Error('Email rejeitado');
       await client.query('UPDATE designacoes_recusas_avisos SET enviado_em=NOW() WHERE id=$1', [row.id]);

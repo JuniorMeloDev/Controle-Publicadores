@@ -19,7 +19,7 @@ const formatMeetingDate = (dateVal) => {
    if (parts.length !== 3) return '';
    const [y, m, d] = parts;
    const dt = new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
-   return dt.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+   return dt.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
 export default function DetalheReuniaoPage() {
@@ -33,7 +33,8 @@ export default function DetalheReuniaoPage() {
    const [searchTerm, setSearchTerm] = useState('');
    const [filterGroup, setFilterGroup] = useState('');
    const [selectedIds, setSelectedIds] = useState(new Set()); // For bulk selection
-   const [visitantes, setVisitantes] = useState(0); // Visitors count
+   const [visitantesPresencial, setVisitantesPresencial] = useState(0);
+   const [visitantesZoom, setVisitantesZoom] = useState(0);
 
    // Toast State
    const [showToast, setShowToast] = useState(false);
@@ -45,9 +46,9 @@ export default function DetalheReuniaoPage() {
       return {
          presencial: data.filter(p => p.modalidade === 'Presencial').length,
          zoom: data.filter(p => p.modalidade === 'Zoom').length,
-         total: data.filter(p => p.modalidade).length + parseInt(visitantes || 0)
+         total: data.filter(p => p.modalidade).length + Number(visitantesPresencial || 0) + Number(visitantesZoom || 0)
       };
-   }, [data, visitantes]);
+   }, [data, visitantesPresencial, visitantesZoom]);
 
    useEffect(() => {
       async function fetchData() {
@@ -60,7 +61,8 @@ export default function DetalheReuniaoPage() {
                const jsonDetails = await resDetails.json();
                setData(json);
                setMeetingDetails(jsonDetails);
-               setVisitantes(jsonDetails.visitantes || 0);
+               setVisitantesPresencial(jsonDetails.visitantes_presencial ?? jsonDetails.visitantes ?? 0);
+               setVisitantesZoom(jsonDetails.visitantes_zoom ?? 0);
             }
          } catch (err) {
             console.error(err);
@@ -132,6 +134,12 @@ export default function DetalheReuniaoPage() {
    };
 
    const handleSave = async () => {
+      const visitors = { visitantes_presencial: Number(visitantesPresencial), visitantes_zoom: Number(visitantesZoom) };
+      if (Object.values(visitors).some(value => !Number.isSafeInteger(value) || value < 0 || value > 2147483647) ||
+          visitors.visitantes_presencial + visitors.visitantes_zoom > 2147483647) {
+         setToastMessage('Informe números inteiros não negativos para os visitantes.');
+         setToastType('error'); setShowToast(true); return;
+      }
       setSaving(true);
       const payload = data.map(p => ({
          publicador_id: p.publicador_id,
@@ -146,13 +154,14 @@ export default function DetalheReuniaoPage() {
          });
 
          // Also save visitors count
-         await fetch(`/api/admin/reunioes/${params.id}`, {
+         if (!res.ok) throw new Error('Erro ao salvar assistência.');
+         const visitorsRes = await fetch(`/api/admin/reunioes/${params.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ visitantes: parseInt(visitantes) })
+            body: JSON.stringify(visitors)
          });
 
-         if (res.ok) {
+         if (visitorsRes.ok) {
             setToastMessage('Salvo com sucesso!');
             setToastType('success');
             setShowToast(true);
@@ -160,7 +169,7 @@ export default function DetalheReuniaoPage() {
                router.push('/admin/reunioes');
             }, 1000);
          } else {
-            setToastMessage('Erro ao salvar.');
+            setToastMessage('Assistência salva, mas não foi possível salvar os visitantes. Tente novamente.');
             setToastType('error');
             setShowToast(true);
          }
@@ -217,7 +226,7 @@ export default function DetalheReuniaoPage() {
                   </div>
                </div>
 
-               <div className="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto bg-white md:bg-transparent p-3 md:p-0 rounded-lg shadow-sm md:shadow-none border md:border-0 border-gray-200">
+               <div className="flex flex-wrap items-end justify-between md:justify-end gap-3 w-full md:w-auto bg-white md:bg-transparent p-3 md:p-0 rounded-lg shadow-sm md:shadow-none border md:border-0 border-gray-200">
                   <Button
                      type="button"
                      variant="outline"
@@ -234,16 +243,24 @@ export default function DetalheReuniaoPage() {
                      )}
                   </Button>
 
-                  <div className="flex items-center gap-2">
-                     <span className="text-sm font-medium text-gray-700">Visitantes:</span>
+                  <fieldset className="flex gap-3">
+                     <legend className="text-sm font-medium text-gray-700 mb-1">Visitantes</legend>
+                     <label className="text-xs text-gray-600">Presencial
                      <Input
                         type="number"
                         min="0"
-                        value={visitantes}
-                        onChange={(e) => setVisitantes(e.target.value)}
+                        step="1"
+                        value={visitantesPresencial}
+                        onChange={(e) => setVisitantesPresencial(e.target.value)}
                         className="w-20 h-9 text-center text-gray-900 font-bold border-gray-300 focus:border-purple-500 bg-white"
                      />
-                  </div>
+                     </label>
+                     <label className="text-xs text-gray-600">Zoom
+                        <Input type="number" min="0" step="1" value={visitantesZoom}
+                           onChange={(e) => setVisitantesZoom(e.target.value)}
+                           className="w-20 h-9 text-center text-gray-900 font-bold border-gray-300 focus:border-purple-500 bg-white" />
+                     </label>
+                  </fieldset>
                   <Button onClick={handleSave} disabled={saving} className="bg-purple-600 hover:bg-purple-700 min-w-[100px] md:min-w-[120px] shadow-sm">
                      {saving ? <Loader2 className="animate-spin w-4 h-4 md:mr-2" /> : <Save className="w-4 h-4 md:mr-2" />}
                      <span className="hidden md:inline">Salvar</span>

@@ -3,6 +3,7 @@ import { authorizeRequest } from '@/app/lib/request-authorization';
 import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { meetingCancellation } from '@/app/lib/meeting-calendar';
+import { ensureVisitorColumns, meetingVisitors } from '@/app/lib/meeting-visitors';
 import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-access';
 import { isAllowed } from '@/app/lib/access-control';
 import { findVisitInWeek, getVisitTuesday, isSuperintendentVisit } from '@/app/lib/meeting-visits';
@@ -192,7 +193,9 @@ export async function GET(request) {
          query += ` LIMIT ${limit ? parseInt(limit) : 20}`; // Default limit 20
     }
 
+    await ensureVisitorColumns(client);
     const res = await client.query(query, params);
+    res.rows = res.rows.map(row => ({ ...row, ...meetingVisitors(row) }));
     
     // Format dates safely and Check Conflicts
     

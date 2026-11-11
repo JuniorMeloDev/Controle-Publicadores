@@ -2,6 +2,13 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+As datas completas exibidas na interface, nos relatórios e nas mensagens seguem
+`dd/mm/aaaa`. Nomes de arquivos usam `dd-mm-aaaa`, sem barras, inclusive os S-89.
+Use `app/lib/date-format.js` para novas telas e exportações. Datas civis mantêm
+o dia registrado; arquivos gerados na data atual consideram o horário de Brasília.
+Valores de API, filtros, ordenação, campos HTML de data e backup dos dados mantêm
+seus formatos internos para preservar o funcionamento das consultas e restaurações.
+
 First, run the development server:
 
 ```bash
@@ -37,6 +44,18 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## Privilégios mecânicos
 
+Em **Vida e Ministério**, o botão de **designações dos estudantes (S-89)** ao lado
+do WhatsApp abre as opções de download: um PDF editável com todas as designações
+ou um PDF separado por estudante. No modo separado, todos os arquivos são baixados
+com nome chamado, data e número da parte no nome do arquivo; os links individuais
+também ficam disponíveis na janela. No PDF único, cada designação ocupa uma página.
+Inclui leitura da Bíblia e partes de estudantes, com nome chamado (ou nome
+completo quando não cadastrado), ajudante, data da reunião e número com título
+da parte. O local vem marcado como **Salão principal**. Usa as designações salvas;
+salve as alterações da semana antes de gerar. O acesso segue a permissão de PDF.
+O modelo está em `public/templates/S-89_T.pdf`. Para conferir um exemplo fictício,
+execute `node scripts/preview-student-slips.mjs`.
+
 Escolha uma semana na aba Privilégios Mecânicos para abrir o modal das reuniões.
 O botão **Inserir automático** preenche os campos vazios, priorizando publicadores
 sem designação há mais tempo e evitando repetir pessoas na semana. As sugestões
@@ -50,6 +69,14 @@ aparece para os integrantes do grupo; responsáveis informados por nome e orador
 são associados quando o nome corresponde ao cadastro.
 
 ## Alertas e lembretes automáticos
+
+Na tela **Registrar Assistência**, os visitantes são informados separadamente em
+**Presencial** e **Zoom**. O total geral soma publicadores e as duas modalidades
+de visitantes; visitantes não alteram o cálculo de publicadores ausentes.
+A listagem de reuniões, os gráficos e as exportações de assistência exibem a
+separação. Valores antigos sem modalidade ficam como presenciais até serem
+corrigidos ao editar a reunião. As colunas são criadas automaticamente pelas APIs;
+o SQL equivalente está em `scripts/sql/separar-visitantes-modalidade.sql`.
 
 ### E-mail de ausentes após a reunião
 

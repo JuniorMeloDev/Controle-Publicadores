@@ -474,7 +474,7 @@ export default function ReunioesPage() {
                                             </td>
                                             <td className="px-6 py-3 text-center text-gray-600">{meeting.cancelado ? '-' : (meeting.presencial || '-')}</td>
                                             <td className="px-6 py-3 text-center text-gray-600">{meeting.cancelado ? '-' : (meeting.zoom || '-')}</td>
-                                            <td className="px-6 py-3 text-center text-gray-600">{meeting.cancelado ? '-' : (meeting.visitantes || '-')}</td>
+                                            <td className="px-6 py-3 text-center text-gray-600">{meeting.cancelado ? '-' : <><span className="block">Presencial: {meeting.visitantes_presencial ?? meeting.visitantes ?? 0}</span><span className="block">Zoom: {meeting.visitantes_zoom ?? 0}</span></>}</td>
                                             <td className="px-6 py-3 text-center font-bold text-gray-900">{meeting.cancelado ? '-' : (meeting.total || '-')}</td>
                                             <td className="px-6 py-3 text-right">
                                                 {meeting.cancelado ? (
@@ -607,7 +607,7 @@ export default function ReunioesPage() {
                                                         </div>
                                                         <div className="rounded-lg bg-gray-50 p-3">
                                                             <div className="text-[11px] uppercase tracking-wide text-gray-500">Visitantes</div>
-                                                            <div className="mt-1 text-sm font-semibold text-gray-900">{meeting.visitantes || '-'}</div>
+                                                            <div className="mt-1 text-sm font-semibold text-gray-900">Presencial: {meeting.visitantes_presencial ?? meeting.visitantes ?? 0}<br />Zoom: {meeting.visitantes_zoom ?? 0}</div>
                                                         </div>
                                                         <div className="rounded-lg bg-gray-50 p-3">
                                                             <div className="text-[11px] uppercase tracking-wide text-gray-500">Total</div>

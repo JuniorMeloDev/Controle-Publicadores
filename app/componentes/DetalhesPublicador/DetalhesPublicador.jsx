@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateBR } from '@/app/lib/date-format';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2, Printer, X, Lock, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/app/components/ui/dialog';
@@ -552,7 +553,7 @@ export default function DetalhesPublicador({
         // Simplificação: Linha cinza contínua à esquerda
 
         // --- CONTEÚDO ---
-        const dataFormatada = new Date(evento.data_evento).toLocaleDateString('pt-BR');
+        const dataFormatada = formatDateBR(evento.data_evento);
 
         // Bullet
         doc.setFillColor(index === 0 ? 0 : 255); // Primeiro cheio, outros vazios (estilo) ou todos cheios

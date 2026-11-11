@@ -12,7 +12,7 @@ const dateLabel = value => {
   const date = String(value).slice(0, 10);
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
   const relative = date === today ? 'Hoje · ' : date === addCalendarDays(today, 1) ? 'Amanhã · ' : '';
-  return relative + new Date(`${date}T12:00:00Z`).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+  return relative + new Date(`${date}T12:00:00Z`).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
 };
 
 function AttachmentLink({ post }) {

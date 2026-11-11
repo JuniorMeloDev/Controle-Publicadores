@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { formatDateBR } from '@/app/lib/date-format';
 import { useUserSession } from '../UserSessionProvider';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { ClipboardCheck } from 'lucide-react';
@@ -47,7 +48,7 @@ export default function AssignmentConfirmations({ embedded = false }) {
   return <section className={embedded ? 'min-w-0' : 'rounded-xl border border-gray-200 bg-white p-4'}>{!embedded && <h2 className="mb-3 text-lg font-semibold text-gray-900">Confirmações das designações</h2>}
     {error && <p role="alert" className="text-red-700">{error}</p>}
     <label className="text-sm text-gray-700">Resposta <select value={filter} onChange={e => setFilter(e.target.value)} className="mb-3 rounded border border-gray-300 bg-white p-2 text-gray-900 [color-scheme:light] dark:[color-scheme:dark]"><option className="bg-white text-gray-900" value="nao">Recusadas</option><option className="bg-white text-gray-900" value="sim">Confirmadas</option><option className="bg-white text-gray-900" value="sem_resposta">Sem resposta</option><option className="bg-white text-gray-900" value="">Todas</option></select></label>
-    <ul className="max-h-80 space-y-2 overflow-auto">{data.filter(a => !filter || a.resposta === filter).map(a => <li key={a.versao} className="rounded border p-3 text-sm text-gray-800"><strong>{a.nome_completo}</strong> · {a.nome_parte}<p>{String(a.data_reuniao).slice(0, 10)} · {a.categoria}</p><p>{labels[a.resposta]}</p></li>)}</ul>
+    <ul className="max-h-80 space-y-2 overflow-auto">{data.filter(a => !filter || a.resposta === filter).map(a => <li key={a.versao} className="rounded border p-3 text-sm text-gray-800"><strong>{a.nome_completo}</strong> · {a.nome_parte}<p>{formatDateBR(a.data_reuniao)} · {a.categoria}</p><p>{labels[a.resposta]}</p></li>)}</ul>
     {!data.some(a => !filter || a.resposta === filter) && <p className="text-sm text-gray-600">Nenhuma designação neste filtro.</p>}
   </section>;
 }

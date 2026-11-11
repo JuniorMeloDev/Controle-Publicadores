@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateBR } from '@/app/lib/date-format';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
 import { User, BookOpen, Music, Mic, Users, Save, Loader2, Printer, Edit2, Check, X, ChevronDown, Search, Wand2, Sparkles, History, Mail, MessageCircle } from "lucide-react";
 import { useState, useEffect, useRef } from 'react';
@@ -430,7 +431,7 @@ export function MobileDesignationModal({ isOpen, onClose, schedule: savedSchedul
                            .map((h, i) => (
                               <div key={i} className="text-xs flex justify-between items-center bg-gray-50 p-2 rounded border border-gray-100">
                                  <span className="font-medium text-gray-700">{h.nome_parte}</span>
-                                 <span className="text-gray-500">{new Date(h.data_reuniao).toLocaleDateString('pt-BR')}</span>
+                                 <span className="text-gray-500">{formatDateBR(h.data_reuniao)}</span>
                               </div>
                            ))
                      )}

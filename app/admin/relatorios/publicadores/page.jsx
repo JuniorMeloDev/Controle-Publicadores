@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateForFile } from '@/app/lib/date-format';
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
@@ -270,7 +271,7 @@ export default function RelatorioPublicadoresPage() {
     const groupLabel = selectedGrupo === 'todos' 
       ? 'Todos_os_Publicadores' 
       : (grupos.find(g => String(g.id) === String(selectedGrupo))?.nome_grupo || 'Grupo').replace(/\s+/g, '_');
-    const filename = `Relatorio_Publicadores_${groupLabel}_${new Date().toISOString().slice(0, 10)}`;
+    const filename = `Relatorio_Publicadores_${groupLabel}_${formatDateForFile()}`;
 
     const wb = XLSX.utils.book_new();
 
@@ -431,7 +432,7 @@ export default function RelatorioPublicadoresPage() {
     drawPageFooter();
 
     const groupLabel = selectedGrupo === 'todos' ? 'Todos' : (grupos.find(g => String(g.id) === String(selectedGrupo))?.nome_grupo || 'Grupo').replace(/\s+/g, '_');
-    doc.save(`Relatorio_Publicadores_${groupLabel}_${new Date().toISOString().slice(0, 10)}.pdf`);
+    doc.save(`Relatorio_Publicadores_${groupLabel}_${formatDateForFile()}.pdf`);
     setIsExportModalOpen(false);
   };
 
