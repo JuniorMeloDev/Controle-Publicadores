@@ -177,18 +177,17 @@ function GerenciarContent() {
                     </SheetDescription>
                 </SheetHeader>
                 
-                {/* BOTÃO DE FECHAR VISÍVEL PARA USER EXPERIENCE E ACESSIBILIDADE */}
-                {!modoNovo && <SheetClose
-                    className="absolute right-4 top-4 rounded-sm opacity-100 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-neutral-950 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary" 
-                    asChild
-                >
-                    <button onClick={handleCloseDrawer} aria-label="Fechar">
-                         <X className="h-6 w-6 text-black" />
-                    </button>
-                </SheetClose>}
-                {/* FIM DA CORREÇÃO */}
-
-                <div className="h-full w-full bg-white flex flex-col">
+                <div className="h-full min-h-0 w-full bg-white flex flex-col">
+                    {!modoNovo && (
+                        <div className="flex shrink-0 justify-end border-b border-gray-200 bg-gray-50 px-4 py-2">
+                            <SheetClose asChild>
+                                <button type="button" onClick={handleCloseDrawer} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
+                                    Fechar
+                                    <X aria-hidden="true" className="h-5 w-5" />
+                                </button>
+                            </SheetClose>
+                        </div>
+                    )}
                     {modoNovo && (
                         <FormularioCadastro 
                             onSaveSuccess={(data) => handleSaveSuccess({ ...data, keepOpen: false })} 
@@ -197,6 +196,7 @@ function GerenciarContent() {
                     )}
 
                     {selectedPublicadorId && !modoNovo && (
+                        <div className="min-h-0 flex-1">
                         <DetalhesPublicador
                             publicadorId={selectedPublicadorId}
                             onSaveSuccess={handleSaveSuccess}
@@ -205,6 +205,7 @@ function GerenciarContent() {
                             persistedError={!!errorMessage}
                             onMessageDismiss={handleMessageDismiss}
                         />
+                        </div>
                     )}
                 </div>
             </SheetContent>

@@ -1,7 +1,5 @@
 ﻿'use client';
 
-import { StatusToast } from '@/app/components/ui/status-toast';
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PAGE_PERMISSIONS, ACTION_PERMISSIONS, buildAllPermissions, normalizePermissions } from '@/app/lib/access-control';
 import { Button } from '@/app/components/ui/button';
@@ -10,6 +8,7 @@ import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/app/components/ui/tabs';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
+import { createAccessDrafts, summarizeAccessDrafts, setDraftPermission } from '@/app/lib/access-editor';
 
 function GestaoAcessosContent() {
   const { permissions, isLoading: permsLoading } = usePermissions();
@@ -21,8 +20,8 @@ function GestaoAcessosContent() {
   const [searchTerm, setSearchTerm] = useState('');
   const [privilegeFilter, setPrivilegeFilter] = useState('');
   const [assignmentFilter, setAssignmentFilter] = useState('');
-  const [mode, setMode] = useState('add');
-  const [formPerms, setFormPerms] = useState(normalizePermissions(null));
+  const [accessDrafts, setAccessDrafts] = useState({});
+  const { permissions: formPerms, mixed: mixedPerms } = useMemo(() => summarizeAccessDrafts(accessDrafts), [accessDrafts]);
   const [superAdmins, setSuperAdmins] = useState({});
   const [superAdmin, setSuperAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -157,8 +156,7 @@ function GestaoAcessosContent() {
     setSelectedIds(ids);
     setSuccess(''); setError('');
     setSuperAdmin(ids.length === 1 && superAdmins[ids[0]] === true);
-    if (!ids.length) setFormPerms(normalizePermissions(null));
-    else if (mode === 'replace' && ids.length === 1 && selectedIds.length <= 1) setFormPerms(normalizePermissions(acessosMap[ids[0]]));
+    setAccessDrafts(createAccessDrafts(ids, acessosMap));
   };
   const handleSelectUser = id => {
     const key = String(id);
@@ -166,24 +164,16 @@ function GestaoAcessosContent() {
   };
   const handleClearSelection = () => changeSelection([]);
   const selectFiltered = () => changeSelection([...new Set([...selectedIds, ...filteredPublicadores.map(p => String(p.id))])]);
-  const changeMode = next => {
-    setMode(next);
-    setFormPerms(next === 'replace' && selectedIds.length === 1 ? normalizePermissions(acessosMap[selectedIds[0]]) : normalizePermissions(null));
-  };
-
   const handleToggle = (group, key) => {
-    setFormPerms(prev => ({
-      ...prev,
-      [group]: { ...prev[group], [key]: !prev[group]?.[key] }
-    }));
+    setAccessDrafts(prev => setDraftPermission(prev, group, key, !summarizeAccessDrafts(prev).permissions[group][key]));
   };
 
   const handleSelectAll = () => {
-    setFormPerms(buildAllPermissions());
+    setAccessDrafts(Object.fromEntries(selectedIds.map(id => [id, buildAllPermissions()])));
   };
 
   const handleClearAll = () => {
-    setFormPerms(normalizePermissions(null));
+    setAccessDrafts(createAccessDrafts(selectedIds, {}));
   };
 
   const handleSave = async () => {
@@ -197,7 +187,7 @@ function GestaoAcessosContent() {
         try {
           const res = await fetch('/api/admin/gestao-acessos', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ publicadorId: id, permissoes: formPerms, mode, ...(selectedIds.length === 1 ? { superAdmin } : {}) })
+            body: JSON.stringify({ publicadorId: id, permissoes: accessDrafts[id], mode: 'replace', ...(selectedIds.length === 1 ? { superAdmin } : {}) })
           });
           const result = await res.json();
           if (!res.ok) throw new Error(result.message || 'Erro ao salvar.');
@@ -238,7 +228,7 @@ function GestaoAcessosContent() {
 
   return (
       <div className="w-full min-w-0 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="@container min-w-0 bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-9 h-9 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
             <ShieldCheck className="w-5 h-5" />
@@ -248,8 +238,6 @@ function GestaoAcessosContent() {
             <p className="text-sm text-gray-500">Defina quais telas e funções cada publicador pode acessar.</p>
           </div>
         </div>
-
-        <StatusToast message={[error, success].filter(Boolean).join(' ')} type={error ? 'error' : 'success'} onClose={() => { setSuccess(''); setError(''); }} />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <p className="mb-5 text-sm text-gray-600">Todos têm acesso aos próprios dados, designações e S-21. Privilégios congregacionais não liberam funções administrativas automaticamente.</p>
@@ -279,22 +267,55 @@ function GestaoAcessosContent() {
               </section>
               <section className="min-w-0 space-y-4">
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold text-gray-900">2. Defina os acessos · {selectedIds.length} selecionado(s)</h2><span className="text-xs text-purple-700">{accessCount.pages} telas · {accessCount.actions} funções</span></div>
+                  <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold text-gray-900">2. Defina os acessos · {selectedIds.length} selecionado(s)</h2><span className="text-xs text-purple-700">{selectedIds.length > 1 ? 'Permitidos para todos' : 'Permissões marcadas'}: {accessCount.pages} telas · {accessCount.actions} funções</span></div>
                   <div className="mt-3 flex max-h-36 flex-wrap gap-2 overflow-y-auto">{selectedUsers.map(p => <button disabled={isSaving} type="button" key={p.id} onClick={() => handleSelectUser(p.id)} aria-label={`Remover ${p.nome_completo} da seleção`} className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700">{p.nome_chamado || p.nome_completo} ×</button>)}</div>
                   {!selectedIds.length && <p className="mt-3 text-sm text-gray-500">Selecione pessoas individualmente ou use os filtros e &quot;Selecionar resultados&quot;.</p>}
                 </div>
+                {selectedUsers.length > 0 && (
+                  <section className="min-w-0 rounded-xl border border-gray-200 bg-white p-4">
+                    <h3 className="font-semibold text-gray-900">Acessos atuais salvos</h3>
+                    <p className="mt-1 text-xs text-gray-500">Consulte as permissões de cada publicador. As alterações abaixo só entram em vigor ao aplicar os acessos.</p>
+                    <div className="mt-3 max-h-80 space-y-3 overflow-y-auto">
+                      {selectedUsers.map(person => {
+                        const id = String(person.id);
+                        const isSuperAdmin = superAdmins[id] === true;
+                        const current = isSuperAdmin ? buildAllPermissions() : normalizePermissions(acessosMap[id]);
+                        const pages = PAGE_PERMISSIONS.filter(item => current.pages[item.key]);
+                        const actions = ACTION_PERMISSIONS.filter(item => current.actions[item.key]);
+                        return (
+                          <details key={id} className="min-w-0 rounded-lg border border-gray-200 p-3">
+                            <summary className="cursor-pointer text-sm text-gray-900 [overflow-wrap:anywhere]">
+                              <span className="font-medium">{person.nome_completo || person.nome_chamado}</span>
+                              <span className="mt-1 block text-xs text-purple-700">{isSuperAdmin ? 'Super admin · Acesso completo' : `${pages.length} telas · ${actions.length} funções`}</span>
+                            </summary>
+                            <dl className="mt-3 space-y-3 text-sm text-gray-700">
+                              {[['Telas permitidas', pages], ['Funções permitidas', actions]].map(([label, items]) => (
+                                <div key={label}>
+                                  <dt className="text-xs font-semibold text-gray-500">{label}</dt>
+                                  <dd className="mt-1 [overflow-wrap:anywhere]">{items.length ? items.map(item => item.label).join(' · ') : 'Nenhuma permissão administrativa.'}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                            <p className="mt-3 text-xs text-gray-500">Também tem acesso aos próprios dados, designações e S-21.</p>
+                          </details>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
                 <fieldset disabled={isSaving || !selectedIds.length} className="space-y-4 disabled:opacity-60">
-                  <label className="block text-sm font-medium text-gray-700">Como aplicar<select value={mode} onChange={e => changeMode(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900"><option value="add">Adicionar as permissões marcadas</option><option value="remove">Remover as permissões marcadas</option><option value="replace">Substituir todas as permissões</option></select></label>
-                  <p className="text-sm text-gray-500">{mode === 'add' ? 'Mantém os acessos existentes e libera os itens marcados.' : mode === 'remove' ? 'Retira somente os itens marcados e mantém os demais acessos.' : 'Cada selecionado ficará apenas com os itens marcados. Os acessos desmarcados serão removidos.'}</p>
+                  <p className="text-sm text-gray-600">Marque para permitir e desmarque para retirar o acesso. Clique em &quot;Salvar acessos&quot; para confirmar.</p>
+                  {selectedIds.length > 1 && <p className="text-xs text-gray-500">Um traço indica que apenas alguns selecionados têm a permissão. Cada alteração vale para todos os selecionados; as permissões que você não alterar serão preservadas para cada pessoa.</p>}
                   {selectedIds.length === 1 ? <label className="flex items-start gap-3 rounded-lg border border-purple-200 bg-purple-50 p-4 text-sm text-purple-900"><input type="checkbox" checked={superAdmin} onChange={e => setSuperAdmin(e.target.checked)} className="mt-1 accent-purple-600" /><span><strong>Super admin</strong><br />Acesso completo, incluindo gestão de permissões.</span></label> : <p className="text-xs text-gray-500">O perfil super admin é alterado individualmente. A aplicação em lote preserva esse perfil.</p>}
                   <div className="flex flex-wrap justify-end gap-4 text-sm"><button type="button" onClick={handleSelectAll} className="text-purple-700 hover:underline">Marcar todas as permissões</button><button type="button" onClick={handleClearAll} className="text-gray-600 hover:underline">Desmarcar todas</button></div>
                   <div className="grid gap-4 lg:grid-cols-2">
-                    {[['pages', 'Telas', PAGE_PERMISSIONS], ['actions', 'Funções', ACTION_PERMISSIONS]].map(([group, title, items]) => <details key={group} open className="min-w-0 rounded-xl border border-gray-200 bg-white p-4"><summary className="cursor-pointer font-semibold text-gray-900">{title}</summary><div className="mt-3 space-y-1">{items.map(item => <label key={item.key} className="flex cursor-pointer items-start gap-3 rounded-lg p-2 text-sm text-gray-700 hover:bg-gray-50"><input type="checkbox" className="mt-1 accent-purple-600" checked={!!formPerms[group]?.[item.key]} onChange={() => handleToggle(group, item.key)} /><span>{item.label}</span></label>)}</div></details>)}
+                    {[['pages', 'Telas', PAGE_PERMISSIONS], ['actions', 'Funções', ACTION_PERMISSIONS]].map(([group, title, items]) => <details key={group} open className="min-w-0 rounded-xl border border-gray-200 bg-white p-4"><summary className="cursor-pointer font-semibold text-gray-900">{title}</summary><div className="mt-3 space-y-1">{items.map(item => <label key={item.key} className="flex cursor-pointer items-start gap-3 rounded-lg p-2 text-sm text-gray-700 hover:bg-gray-50"><input type="checkbox" className="mt-1 accent-purple-600" checked={!!formPerms[group]?.[item.key]} ref={input => { if (input) input.indeterminate = !!mixedPerms[group]?.[item.key]; }} onChange={() => handleToggle(group, item.key)} /><span>{item.label}{mixedPerms[group]?.[item.key] && <span className="block text-xs text-gray-500">Permitido para alguns selecionados</span>}</span></label>)}</div></details>)}
                   </div>
                 </fieldset>
                 <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  {(error || success) && <p role={error ? 'alert' : 'status'} className={`w-full rounded-lg border p-3 text-sm [overflow-wrap:anywhere] ${error ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>{[error, success].filter(Boolean).join(' ')}</p>}
                   <p className="text-sm text-gray-600">Aplicar para <strong>{selectedIds.length}</strong> publicador(es)</p>
-                  <Button onClick={handleSave} disabled={isSaving || !selectedIds.length} className="gap-2 bg-purple-600 hover:bg-purple-700">{isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{isSaving ? 'Aplicando...' : 'Aplicar acessos'}</Button>
+                  <Button onClick={handleSave} disabled={isSaving || !selectedIds.length} className="gap-2 bg-purple-600 hover:bg-purple-700">{isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{isSaving ? 'Salvando...' : 'Salvar acessos'}</Button>
                 </div>
               </section>
             </div>
@@ -309,7 +330,7 @@ function GestaoAcessosContent() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <div className="grid min-w-0 grid-cols-1 gap-3 @min-[32rem]:grid-cols-2 @min-[64rem]:grid-cols-5 [&>div]:min-w-0 [&_input]:min-w-0 [&_select]:min-w-0">
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1">Usuário</label>
                     <select
@@ -369,7 +390,7 @@ function GestaoAcessosContent() {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                   <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700" onClick={() => { setLogAction(''); setLogEntity(''); setLogUser(''); setLogFrom(''); setLogTo(''); }}>
                     Limpar filtros
                   </Button>
@@ -379,7 +400,7 @@ function GestaoAcessosContent() {
                 </div>
 
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="grid grid-cols-6 bg-gray-50 text-xs font-semibold text-gray-600 px-3 py-2">
+                  <div aria-hidden="true" className="hidden @min-[64rem]:grid grid-cols-[1.1fr_1.1fr_1.5fr_1.2fr_0.8fr_1fr] gap-4 bg-gray-50 text-xs font-semibold text-gray-600 px-3 py-2">
                     <div>Data</div>
                     <div>Usuário</div>
                     <div>Ação</div>
@@ -394,16 +415,31 @@ function GestaoAcessosContent() {
                   ) : (
                     <div className="divide-y divide-gray-100">
                       {logs.map(row => (
-                        <div key={row.id} className="grid grid-cols-6 px-3 py-2 text-xs text-gray-700">
-                          <div>{new Date(row.created_at).toLocaleString('pt-BR')}</div>
-                          <div>{row.nome_chamado || row.nome_completo || '-'}</div>
-                          <div>{row.action}</div>
-                          <div>{row.entity || '-'}</div>
-                          <div>{row.entity_id || '-'}</div>
-                          <div className="truncate" title={row.details ? JSON.stringify(row.details) : ''}>
-                            {row.details ? JSON.stringify(row.details) : '-'}
+                        <dl key={row.id} className="grid min-w-0 grid-cols-1 gap-3 px-3 py-4 text-sm text-gray-700 @min-[32rem]:grid-cols-2 @min-[64rem]:grid-cols-[1.1fr_1.1fr_1.5fr_1.2fr_0.8fr_1fr] @min-[64rem]:gap-4 @min-[64rem]:py-3 @min-[64rem]:text-xs">
+                          {[
+                            ['Data', new Date(row.created_at).toLocaleString('pt-BR')],
+                            ['Usuário', row.nome_chamado || row.nome_completo || '-'],
+                            ['Ação', row.action],
+                            ['Entidade', row.entity || '-'],
+                            ['ID', row.entity_id ?? '-'],
+                          ].map(([label, value]) => (
+                            <div key={label} className="min-w-0">
+                              <dt className="mb-1 text-xs font-semibold text-gray-500 @min-[64rem]:sr-only">{label}</dt>
+                              <dd className="[overflow-wrap:anywhere]">{value}</dd>
+                            </div>
+                          ))}
+                          <div className="min-w-0 @max-[64rem]:col-span-full">
+                            <dt className="sr-only">Detalhes</dt>
+                            <dd>
+                              {row.details ? (
+                                <details className="min-w-0">
+                                  <summary className="cursor-pointer rounded text-purple-700 hover:text-purple-900 focus-visible:outline-2 focus-visible:outline-purple-600">Ver detalhes</summary>
+                                  <pre className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-md bg-gray-50 p-3 text-xs text-gray-700 [overflow-wrap:anywhere]">{JSON.stringify(row.details, null, 2)}</pre>
+                                </details>
+                              ) : <span className="text-gray-500">Sem detalhes</span>}
+                            </dd>
                           </div>
-                        </div>
+                        </dl>
                       ))}
                     </div>
                   )}

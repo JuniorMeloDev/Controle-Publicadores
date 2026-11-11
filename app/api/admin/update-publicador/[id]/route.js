@@ -7,6 +7,7 @@ import { getUserIdFromRequest, getUserPermissions } from '@/app/lib/server-acces
 import { isAllowed } from '@/app/lib/access-control';
 import { registerAuditLog } from '@/app/lib/audit-log';
 import bcrypt from 'bcryptjs';
+import { validatePublisherHistoryDate } from '@/app/lib/publisher-history-date';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +41,7 @@ function dateToISO(date) {
 /**
  * Função auxiliar para registrar uma mudança no histórico.
  */
-async function registrarHistorico(client, publicadorId, campo, valorAntigo, valorNovo) {
+async function registrarHistorico(client, publicadorId, campo, valorAntigo, valorNovo, dataMudanca = null) {
   const vAntigo = Array.isArray(valorAntigo) ? valorAntigo.join(', ') : valorAntigo;
   const vNovo = Array.isArray(valorNovo) ? valorNovo.join(', ') : valorNovo;
 
@@ -51,8 +52,8 @@ async function registrarHistorico(client, publicadorId, campo, valorAntigo, valo
   await client.query(
     `INSERT INTO publicador_historico 
      (publicador_id, campo_alterado, valor_antigo, valor_novo, data_mudanca) 
-     VALUES ($1, $2, $3, $4, NOW())`,
-    [publicadorId, campo, vAntigo, vNovo]
+     VALUES ($1, $2, $3, $4, COALESCE($5::timestamptz, NOW()))`,
+    [publicadorId, campo, vAntigo, vNovo, dataMudanca]
   );
 }
 
@@ -88,6 +89,12 @@ export async function PUT(request, context) {
      console.error("[ERRO] Data de Batismo inválida.");
      return NextResponse.json({ message: 'Data de Batismo está em formato inválido. Use dd/mm/aaaa.' }, { status: 400 });
   }
+
+  let dataPrivilegios, dataDesignacoes;
+  try {
+    dataPrivilegios = validatePublisherHistoryDate(body.data_alteracao_privilegios);
+    dataDesignacoes = validatePublisherHistoryDate(body.data_alteracao_designacoes);
+  } catch (error) { return NextResponse.json({ message: error.message }, { status: 400 }); }
 
   let contatos;
   try { if (body.contatos_emergencia !== undefined) contatos = normalizeEmergencyContacts(body.contatos_emergencia); }
@@ -166,8 +173,8 @@ export async function PUT(request, context) {
     // Privilégios e Designações
     const finalPrivilegios = privilegios.length > 0 ? privilegios : null;
     const finalDesignacoes = designacoes.length > 0 ? designacoes : null;
-    if (String(dadosAntigos.privilegios || '') !== String(finalPrivilegios || '')) await registrarHistorico(client, id, 'privilegios', dadosAntigos.privilegios, finalPrivilegios);
-    if (String(dadosAntigos.designacoes || '') !== String(finalDesignacoes || '')) await registrarHistorico(client, id, 'designacoes', dadosAntigos.designacoes, finalDesignacoes);
+    if (String(dadosAntigos.privilegios || '') !== String(finalPrivilegios || '')) await registrarHistorico(client, id, 'privilegios', dadosAntigos.privilegios, finalPrivilegios, dataPrivilegios);
+    if (String(dadosAntigos.designacoes || '') !== String(finalDesignacoes || '')) await registrarHistorico(client, id, 'designacoes', dadosAntigos.designacoes, finalDesignacoes, dataDesignacoes);
 
     let hashSenha = null;
     if (senha && senha.trim() !== '') {
@@ -207,7 +214,7 @@ export async function PUT(request, context) {
       action: 'publicador_editado',
       entity: 'publicador',
       entityId: id,
-      details: { nome_completo, email }
+      details: { nome_completo, email, data_alteracao_privilegios: body.data_alteracao_privilegios, data_alteracao_designacoes: body.data_alteracao_designacoes }
     });
     
     return NextResponse.json({ message: 'Publicador atualizado com sucesso!' }, { status: 200 });

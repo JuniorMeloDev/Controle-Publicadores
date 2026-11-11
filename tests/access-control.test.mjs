@@ -14,6 +14,54 @@ function loadService(file, exports, dependencies = {}) {
 const { canAccessRoute } = loadService('route-access.js', ['canAccessRoute']);
 const personal = { isSuperAdmin: false, permissions: access.normalizePermissions(null) };
 const all = { isSuperAdmin: true, permissions: access.buildAllPermissions() };
+const editor = loadService('access-editor.js', ['createAccessDrafts', 'summarizeAccessDrafts', 'setDraftPermission']);
+
+test('access editor loads saved grants and saves checked and unchecked changes together', async () => {
+  const original = { pages: { publicadores: true }, actions: { designacoes_salvar: true } };
+  let drafts = editor.createAccessDrafts(['8'], { 8: original });
+  assert.equal(editor.summarizeAccessDrafts(drafts).permissions.actions.designacoes_salvar, true);
+  drafts = editor.setDraftPermission(drafts, 'actions', 'designacoes_confirmacoes', true);
+  drafts = editor.setDraftPermission(drafts, 'actions', 'designacoes_salvar', false);
+  let saved;
+  const client = { query: async (sql, params) => {
+    if (sql.includes('COALESCE')) return { rows: [{ id: 8, super_admin: false, permissoes: original }] };
+    if (sql.includes('INSERT INTO acessos_app')) saved = JSON.parse(params[1]);
+    return { rows: [] };
+  } };
+  const { updateAccess } = loadService('access-management.js', ['updateAccess'], {
+    ensureAccessTable: async () => {}, getUserAccess: async () => all, registerAuditLog: async () => {},
+  });
+  const result = await updateAccess(client, 7, { publicadorId: 8, permissoes: drafts['8'], mode: 'replace' });
+  assert.equal(result.status, 200);
+  assert.equal(saved.actions.designacoes_confirmacoes, true);
+  assert.equal(saved.actions.designacoes_salvar, false);
+  assert.equal(saved.pages.publicadores, true);
+  const reloaded = editor.createAccessDrafts(['8'], { 8: saved });
+  assert.equal(reloaded['8'].actions.designacoes_confirmacoes, true);
+  assert.equal(reloaded['8'].actions.designacoes_salvar, false);
+  assert.equal(original.actions.designacoes_salvar, true);
+});
+
+test('bulk access editor displays mixed grants and preserves untouched individual permissions', () => {
+  let drafts = editor.createAccessDrafts(['8', '9'], {
+    8: { pages: { publicadores: true }, actions: { designacoes_salvar: true } },
+    9: { pages: { reunioes: true } },
+  });
+  const summary = editor.summarizeAccessDrafts(drafts);
+  assert.equal(summary.mixed.pages.publicadores, true);
+  assert.equal(summary.permissions.pages.publicadores, false);
+  drafts = editor.setDraftPermission(drafts, 'actions', 'designacoes_confirmacoes', true);
+  assert.equal(drafts['8'].actions.designacoes_confirmacoes, true);
+  assert.equal(drafts['9'].actions.designacoes_confirmacoes, true);
+  assert.equal(drafts['8'].pages.publicadores, true);
+  assert.equal(drafts['9'].pages.publicadores, false);
+  assert.equal(drafts['9'].pages.reunioes, true);
+  drafts = editor.setDraftPermission(drafts, 'actions', 'designacoes_confirmacoes', false);
+  assert.equal(drafts['8'].actions.designacoes_confirmacoes, false);
+  assert.equal(drafts['9'].actions.designacoes_confirmacoes, false);
+  const empty = editor.summarizeAccessDrafts(editor.createAccessDrafts([], {}));
+  assert.ok(Object.values(empty.permissions.pages).every(value => value === false));
+});
 
 test('S21 viewing and export require separate explicit grants regardless of page access', () => {
   for (const view of [false, true]) for (const exp of [false, true]) {

@@ -251,10 +251,13 @@ export function MobileDesignationModal({ isOpen, onClose, schedule: savedSchedul
       };
 
       // 1. Define Pools
-      const elders = publicadores.filter(p => p.privilegios?.includes('anciao'));
-      const eldersAndMSUnique = publicadores.filter(p => p.privilegios?.includes('anciao') || p.privilegios?.includes('servo_ministerial'));
-      const males = publicadores.filter(p => p.sexo === 'Masculino');
-      const females = publicadores.filter(p => p.sexo === 'Feminino');
+      const eligiblePublishers = publicadores.filter(p =>
+         !['inativos', 'removidos'].includes(normalizeText(p.nome_grupo).trim())
+      );
+      const elders = eligiblePublishers.filter(p => p.privilegios?.includes('anciao'));
+      const eldersAndMSUnique = eligiblePublishers.filter(p => p.privilegios?.includes('anciao') || p.privilegios?.includes('servo_ministerial'));
+      const males = eligiblePublishers.filter(p => p.sexo === 'Masculino');
+      const females = eligiblePublishers.filter(p => p.sexo === 'Feminino');
       const malesNotElder = males.filter(p => !p.privilegios?.includes('anciao'));
       const malesForBibleReading = males.filter(p => !p.privilegios?.includes('anciao') && !p.privilegios?.includes('servo_ministerial'));
 

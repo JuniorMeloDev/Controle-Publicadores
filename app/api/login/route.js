@@ -17,7 +17,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 export async function POST(req) {
   const body = await req.json();
-  const { email, senha } = body; // ALTERADO: nome_completo para email
+  const { email, senha, manterConectado } = body;
   if (typeof email !== 'string' || typeof senha !== 'string' || email.length > 254 || senha.length > 200) return NextResponse.json({ message: 'Dados inválidos.' }, { status: 400 });
 
   const client = await pool.connect();
@@ -45,17 +45,18 @@ export async function POST(req) {
 
     // 5. LOGIN BEM-SUCEDIDO! Criar a sessão.
     // Criamos um "token" (um crachá digital)
+    const sessionDuration = manterConectado === true ? 30 * 24 * 60 * 60 : 8 * 60 * 60;
     const token = jwt.sign(
       { userId: user.id, nome: user.nome_completo }, // O que guardamos no crachá
       JWT_SECRET,
-      { expiresIn: '1h' } // Crachá expira em 1 hora
+      { expiresIn: sessionDuration }
     );
 
     // 6. Colocamos esse crachá em um "cookie" seguro
     const cookie = serialize('auth_token', token, {
       httpOnly: true, // O JavaScript do navegador não pode ver
       secure: process.env.NODE_ENV === 'production', // Só enviar em HTTPS
-      maxAge: 60 * 60, // 1 hora
+      maxAge: sessionDuration,
       path: '/', // Válido para o site inteiro
       sameSite: 'strict',
     });

@@ -222,6 +222,13 @@ export default function FormularioInformacoes({
                 </div>
               ))}
             </div>
+            {formData.data_alteracao_privilegios !== undefined && (
+              <div className="mt-3 rounded-lg border border-purple-100 bg-purple-50 p-3">
+                <label htmlFor="data_alteracao_privilegios" className={labelClass}>Data da alteração dos privilégios</label>
+                <input id="data_alteracao_privilegios" name="data_alteracao_privilegios" type="date" required value={formData.data_alteracao_privilegios} onChange={handleChange} disabled={isLoading} className={baseInputClass} aria-describedby="ajuda-data-privilegios" />
+                <p id="ajuda-data-privilegios" className="mt-2 text-xs text-gray-600">Informe quando os privilégios foram concedidos ou retirados. Essa data aparecerá no histórico.</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -244,6 +251,13 @@ export default function FormularioInformacoes({
               </div>
             ))}
           </div>
+          {formData.data_alteracao_designacoes !== undefined && (
+            <div className="rounded-lg border border-purple-100 bg-purple-50 p-3">
+              <label htmlFor="data_alteracao_designacoes" className={labelClass}>Data da alteração das designações especiais</label>
+              <input id="data_alteracao_designacoes" name="data_alteracao_designacoes" type="date" required value={formData.data_alteracao_designacoes} onChange={handleChange} disabled={isLoading} className={baseInputClass} aria-describedby="ajuda-data-designacoes" />
+              <p id="ajuda-data-designacoes" className="mt-2 text-xs text-gray-600">Informe quando as designações foram concedidas ou retiradas. Essa data aparecerá no histórico.</p>
+            </div>
+          )}
 
           <button 
             type="submit" 

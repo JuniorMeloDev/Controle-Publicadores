@@ -11,6 +11,7 @@ import { Eye, EyeOff } from 'lucide-react';
 export default function LoginPage() {
   const [email, setEmail] = useState(''); // ALTERADO: nome para email
   const [senha, setSenha] = useState('');
+  const [manterConectado, setManterConectado] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [recovering, setRecovering] = useState(false);
@@ -33,7 +34,8 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           email: email, // ALTERADO: nome_completo para email
-          senha: senha 
+          senha: senha,
+          ...(!recovering ? { manterConectado } : {}),
         }),
       });
 
@@ -119,6 +121,23 @@ export default function LoginPage() {
             </div>
           </div>}
           {/* --- FIM DA MUDANÇA --- */}
+
+          {!recovering && (
+            <label className="flex cursor-pointer items-start gap-3 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={manterConectado}
+                onChange={(e) => setManterConectado(e.target.checked)}
+                disabled={isLoading}
+                aria-describedby="manter-conectado-ajuda"
+                className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 accent-purple-600 focus-visible:outline-2 focus-visible:outline-purple-600"
+              />
+              <span>
+                <span className="block font-medium">Manter conectado neste dispositivo</span>
+                <span id="manter-conectado-ajuda" className="mt-1 block text-xs text-gray-500"></span>
+              </span>
+            </label>
+          )}
 
           <button 
             type="submit" 

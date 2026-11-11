@@ -133,6 +133,8 @@ export default function DetalhesPublicador({
         senha: '',
         privilegios: pubData.privilegios || [],
         designacoes: pubData.designacoes || [],
+        data_alteracao_privilegios: undefined,
+        data_alteracao_designacoes: undefined,
       });
 
       if (!canViewActivities) { setRelatorios([]); return; }
@@ -168,16 +170,16 @@ export default function DetalhesPublicador({
     if (message) onMessageDismiss();
     const { value, checked } = e.target;
     setFormData(prevData => {
-      if (checked) return { ...prevData, privilegios: [...prevData.privilegios, value] };
-      return { ...prevData, privilegios: prevData.privilegios.filter(p => p !== value) };
+      const date = prevData.data_alteracao_privilegios ?? formatDateBR(new Date()).split('/').reverse().join('-');
+      return { ...prevData, data_alteracao_privilegios: date, privilegios: checked ? [...prevData.privilegios, value] : prevData.privilegios.filter(p => p !== value) };
     });
   };
   const handleDesignacaoChange = (e) => {
     if (message) onMessageDismiss();
     const { value, checked } = e.target;
     setFormData(prevData => {
-      if (checked) return { ...prevData, designacoes: [...prevData.designacoes, value] };
-      return { ...prevData, designacoes: prevData.designacoes.filter(d => d !== value) };
+      const date = prevData.data_alteracao_designacoes ?? formatDateBR(new Date()).split('/').reverse().join('-');
+      return { ...prevData, data_alteracao_designacoes: date, designacoes: checked ? [...prevData.designacoes, value] : prevData.designacoes.filter(d => d !== value) };
     });
   };
 
