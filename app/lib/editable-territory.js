@@ -38,6 +38,10 @@ export function validateEditableLayout(value) {
   const roads=value.roads.map(r=>{
     if(!Array.isArray(r.points)||r.points.length<2||r.points.length>50)error('Uma rua precisa de 2 a 50 pontos.');
     const road={id:id(r.id),name:text(r.name),points:r.points.map(point)};
+    if(r.labelFontSize!==undefined){
+      if(typeof r.labelFontSize!=='number'||!Number.isFinite(r.labelFontSize)||r.labelFontSize < 8||r.labelFontSize > 32)error('O tamanho da fonte deve estar entre 8 e 32.');
+      road.labelFontSize=Math.round(r.labelFontSize*100)/100;
+    }
     if(r.kind==='boundary')road.kind='boundary';
     if(r.googlePlaceId!==undefined){
       if(typeof r.googlePlaceId!=='string'||!/^[-\w]{1,300}$/.test(r.googlePlaceId))error('Identificação da rua no Google inválida.');
@@ -51,7 +55,18 @@ export function validateEditableLayout(value) {
     }
     return road;
   });
-  const landmarks=value.landmarks.map(p=>({id:id(p.id),name:text(p.name),position:point(p.position),kind:['reference','school','shop','square'].includes(p.kind)?p.kind:'reference'}));
+  const landmarks=value.landmarks.map(p=>{
+    const marker={id:id(p.id),name:text(p.name),position:point(p.position),kind:['reference','school','shop','square','pharmacy','supermarket','restaurant','bakery','church','hairdresser','hospital'].includes(p.kind)?p.kind:'reference'};
+    if(p.labelRotation!==undefined){
+      if(typeof p.labelRotation!=='number'||!Number.isFinite(p.labelRotation)||p.labelRotation < -180||p.labelRotation > 180)error('A rotação da referência deve estar entre -180 e 180 graus.');
+      marker.labelRotation=Math.round(p.labelRotation*100)/100;
+    }
+    if(p.labelFontSize!==undefined){
+      if(typeof p.labelFontSize!=='number'||!Number.isFinite(p.labelFontSize)||p.labelFontSize < 8||p.labelFontSize > 32)error('O tamanho da fonte deve estar entre 8 e 32.');
+      marker.labelFontSize=Math.round(p.labelFontSize*100)/100;
+    }
+    return marker;
+  });
   const ids=[...roads,...landmarks].map(p=>p.id);if(new Set(ids).size!==ids.length)error('Dois elementos têm a mesma identificação.');
   const result={version:1,outline,roads,landmarks};
   if(value.autoBoundaryFingerprint!==undefined){
@@ -70,9 +85,16 @@ export function validateEditableLayout(value) {
 }
 
 export function editableDrawingBounds(layout) {
-  const points=[...layout.outline,...layout.roads.flatMap(r=>r.points),...layout.landmarks.flatMap(p=>p.id.startsWith('osm-point-')?[p.position]:[p.position,[Math.min(1000,p.position[0]+35+p.name.length*9),p.position[1]]])];
-  const left=Math.max(0,Math.min(...points.map(p=>p[0]))-45),top=Math.max(0,Math.min(...points.map(p=>p[1]))-45);
-  const right=Math.min(1000,Math.max(...points.map(p=>p[0]))+45),bottom=Math.min(700,Math.max(...points.map(p=>p[1]))+45);
+  const points=[...layout.outline,...layout.roads.flatMap(r=>r.points),...layout.landmarks.flatMap(p=>{
+    if(p.id.startsWith('osm-point-'))return [p.position];
+    const angle=(p.labelRotation||0)*Math.PI/180,cos=Math.cos(angle),sin=Math.sin(angle);
+    const lines=p.name.split(/\r?\n/),size=p.labelFontSize||16,lineHeight=size*1.25;
+    const top=5-(lines.length-1)*lineHeight/2-size-2,bottom=5+(lines.length-1)*lineHeight/2+4;
+    const right=35+Math.max(...lines.map(line=>line.length))*size*0.65;
+    return [p.position,...[[25,top],[right,top],[25,bottom],[right,bottom]].map(([x,y])=>[p.position[0]+x*cos-y*sin,p.position[1]+x*sin+y*cos])];
+  })];
+  const left=Math.min(...points.map(p=>p[0]))-45,top=Math.min(...points.map(p=>p[1]))-45;
+  const right=Math.max(...points.map(p=>p[0]))+45,bottom=Math.max(...points.map(p=>p[1]))+45;
   return {left,top,width:Math.max(1,right-left),height:Math.max(1,bottom-top)};
 }
 

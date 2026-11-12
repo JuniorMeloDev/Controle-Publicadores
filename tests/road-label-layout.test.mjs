@@ -5,6 +5,14 @@ import { roadLabelLayout } from '../app/lib/road-label-layout.js';
 const horizontal = { id: 'horizontal', name: 'R. Cel. Kléber de Andrade', points: [[0, 200], [600, 200]] };
 const vertical = { id: 'vertical', name: 'Av. Bernardo Vieira de Melo', points: [[300, 0], [300, 400]] };
 const measure = text => text.length * 9;
+test('smaller street fonts reduce the label width while keeping it centered',()=>{
+  const smaller={...horizontal,labelFontSize:12};
+  const parts=roadLabelLayout(smaller,[smaller],measure);
+  assert.equal(parts.length,1);
+  assert.equal(parts[0].width,measure(horizontal.name)*12/18);
+  assert.equal(parts[0].offset,300);
+  assert.equal(parts[0].text,horizontal.name);
+});
 
 test('crossing street names split at word boundaries and leave the junction clear', () => {
   for (const road of [horizontal, vertical]) {
