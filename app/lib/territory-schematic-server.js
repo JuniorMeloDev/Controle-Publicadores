@@ -1,3 +1,5 @@
+import { withTerritoryDrawing } from './territory-map-display.js';
+
 ﻿const unavailable = () => Object.assign(new Error('O esquema precisa ser preparado novamente após atualizar o PDF.'), { status: 503 });
 const validKey = key => typeof key === 'string' && /^(geral|territorio-\d+)$/.test(key);
 export async function preparedSchematicInfo(client, key, hash) {
@@ -17,11 +19,11 @@ export async function readPreparedSchematic(client, key, hash) {
 }
 export async function findSharedSchematic(client, token) {
   if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
-  return (await client.query(`SELECT t.numero,t.descricao,t.referencias,t.mapa_url,t.limites,
+  return withTerritoryDrawing((await client.query(`SELECT t.numero,t.descricao,t.referencias,t.mapa_url,t.limites,
     t.mapa_layout,t.mapa_prototipo,g.nome_grupo AS grupo_nome,g.cor_mapa AS grupo_cor,
     m.chave AS imagem_chave,md5(m.conteudo) AS imagem_hash
     FROM campo_territorios t LEFT JOIN grupos g ON g.id=t.mapa_grupo_id
     LEFT JOIN campo_mapas m ON m.territorio_id=t.id
     WHERE t.mapa_share_token=$1 AND t.ativo=TRUE
-      AND (t.mapa_layout IS NOT NULL OR m.chave IS NOT NULL)`,[token])).rows[0] || null;
+      AND (t.mapa_layout IS NOT NULL OR t.limites IS NOT NULL OR m.chave IS NOT NULL)`,[token])).rows[0] || null);
 }

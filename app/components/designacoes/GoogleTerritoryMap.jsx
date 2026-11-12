@@ -16,16 +16,17 @@ export function loadGoogleMaps(key) {
   return loading;
 }
 const points = geometry => geometry?.coordinates?.[0]?.slice(0, -1).map(([lng, lat]) => ({ lat, lng })) || [];
+const noReferences=[];
 
-export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', initialGeometry = null, onChange, onSelect, center = null, pointCount = 0, onPointCountChange, appearance = 'default', viewRevision = 0, focusBoundary = null, boundaryFocusSide = null, heightClassName = 'h-[460px] min-h-80' }) {
+export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', initialGeometry = null, onChange, onSelect, center = null, pointCount = 0, onPointCountChange, appearance = 'default', viewRevision = 0, focusBoundary = null, boundaryFocusSide = null, heightClassName = 'h-[460px] min-h-80', references=noReferences, focusedReferenceId=null, onReferenceClick }) {
   const element = useRef(null);
   const instance = useRef(null);
   const fitView = useRef(null);
-  const handlers = useRef({ onChange, onSelect, onPointCountChange });
+  const handlers = useRef({ onChange, onSelect, onPointCountChange, onReferenceClick });
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  useEffect(() => { handlers.current = { onChange, onSelect, onPointCountChange }; }, [onChange, onSelect, onPointCountChange]);
+  useEffect(() => { handlers.current = { onChange, onSelect, onPointCountChange, onReferenceClick }; }, [onChange, onSelect, onPointCountChange, onReferenceClick]);
   useEffect(() => {
     if (!key) return;
     let disposed = false;
@@ -78,7 +79,7 @@ export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', 
     for (const item of areas) {
       if (!item.limites || (mode && item.id === selected)) continue;
       const path = points(item.limites);
-      const layer = new maps.Polygon({ map, paths: path, strokeColor: item.id === 'geral' ? '#475569' : card ? '#0369a1' : '#9333ea', strokeWeight: review ? 2 : item.id === selected ? 4 : 2, fillColor: card ? '#0ea5e9' : '#9333ea', fillOpacity: review ? 0 : item.id === 'geral' ? 0.03 : item.id === selected ? card ? 0.12 : 0.25 : 0.1, zIndex: item.id === 'geral' ? 0 : 1, clickable: !review && !mode && item.id !== 'geral' });
+      const layer = new maps.Polygon({ map, paths: path, strokeColor: item.id === 'geral' ? '#475569' : (card ? '#0369a1' : '#9333ea'), strokeWeight: review ? 2 : item.id === selected ? 4 : 2, fillColor: (card ? '#0ea5e9' : '#9333ea'), fillOpacity: review ? 0 : item.id === 'geral' ? 0.03 : item.id === selected ? card ? 0.12 : 0.25 : 0.1, zIndex: item.id === 'geral' ? 0 : 1, clickable: !review && !mode && item.id !== 'geral' });
       layers.push(layer);
       listeners.push(layer.addListener('click', () => handlers.current.onSelect?.(item.id)));
       if (!selectedArea?.limites || item.id === selected) path.forEach(p => bounds.extend(p));
@@ -121,6 +122,24 @@ export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', 
     }
     return () => { resizeObserver?.disconnect(); cancelAnimationFrame(fitFrame); fitView.current = null; listeners.forEach(listener => listener.remove()); layers.forEach(layer => layer.setMap(null)); };
   }, [ready, areas, selected, mode, initialGeometry, appearance, viewRevision, focusBoundary, boundaryFocusSide]);
+  useEffect(()=>{
+    if(!ready||!instance.current)return;
+    const maps=window.google.maps;
+    const markers=references.map((reference,index)=>{
+      const focused=reference.id===focusedReferenceId;
+      const marker=new maps.Marker({map:instance.current,position:reference.location,title:reference.name,
+        label:{text:String(index+1),color:'#ffffff',fontSize:'11px',fontWeight:'700'},
+        icon:{path:maps.SymbolPath.CIRCLE,scale:focused?15:12,fillColor:focused?'#ea580c':reference.selected?'#7e22ce':'#64748b',fillOpacity:1,strokeColor:'#ffffff',strokeWeight:2},zIndex:focused?40:30});
+      const listener=marker.addListener('click',()=>handlers.current.onReferenceClick?.(reference.id));
+      return {marker,listener};
+    });
+    return()=>markers.forEach(({marker,listener})=>{listener.remove();marker.setMap(null);});
+  },[ready,references,focusedReferenceId]);
+  useEffect(()=>{
+    if(!ready||!instance.current||!focusedReferenceId)return;
+    const reference=references.find(item=>item.id===focusedReferenceId);
+    if(reference){instance.current.panTo(reference.location);if(instance.current.getZoom()<18)instance.current.setZoom(18);}
+  },[ready,focusedReferenceId,references]);
   if (!key) return <div className="rounded-xl border border-dashed border-purple-300 bg-purple-50 p-6 text-sm text-gray-700"><p className="font-semibold text-gray-900">Configure o Google Maps para desenhar os limites</p><p className="mt-2">Ative a Maps JavaScript API no Google Cloud e configure a chave do site. Os PDFs continuam disponíveis como referência.</p><a className="mt-3 inline-block text-purple-700 underline" href="https://developers.google.com/maps/documentation/javascript/get-api-key?hl=pt-br" target="_blank" rel="noopener noreferrer">Como configurar a chave</a></div>;
   return <div className="space-y-2">{error && <p role="alert" className="text-sm text-red-700">{error}</p>}<div ref={element} aria-label="Mapa dos limites dos territórios" className={`${heightClassName} w-full rounded-xl border border-gray-200`} />{appearance === 'territory-review' && <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600"><p>Confira as ruas dentro e ao redor do contorno azul. Use + para ampliar.</p><button type="button" disabled={!ready} className="font-medium text-purple-700 underline disabled:opacity-50" onClick={() => fitView.current?.()}>Enquadrar território</button></div>}{mode && <p className="text-sm text-gray-500">{pointCount} pontos no contorno</p>}{!ready && !error && <p role="status" className="text-sm text-gray-500">Carregando Google Maps…</p>}</div>;
 }

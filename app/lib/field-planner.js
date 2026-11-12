@@ -1,4 +1,4 @@
-import { fieldDate, fieldId, validateFieldRecord } from './field-service.js';
+import { fieldDate, fieldId, validateFieldRecord, isTerritoryAllowedForOuting } from './field-service.js';
 import { formatDateBR } from './date-format.js';
 
 export const TERRITORY_PERIODS = { semana: 'Durante a semana', fim_semana: 'Fim de semana', ambos: 'Ambos' };
@@ -34,6 +34,7 @@ export function generateFieldSchedule(snapshot, config) {
       }
       const usage = id => planned.filter(s => s.territorios.includes(id)).map(s => s.data);
       const candidates = territories.filter(t => {
+        if (!isTerritoryAllowedForOuting(t, { data: date, modalidade: 'territorio', grupos: rule.grupos })) return false;
         const period = periods[t.id] || territoryPeriod(t);
         if (!Object.hasOwn(TERRITORY_PERIODS, period)) throw new Error('Período de território inválido.');
         if ((period === 'semana' && weekend) || (period === 'fim_semana' && !weekend)) return false;

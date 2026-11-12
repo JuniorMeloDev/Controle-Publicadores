@@ -13,7 +13,8 @@ test('shared schematic uses active territory tokens and requires no geographical
   assert.equal(await findSharedSchematic(client,'bad'),null);assert.equal(calls.length,0);
   await findSharedSchematic(client,'a'.repeat(43));
   assert.match(calls[0].sql,/JOIN campo_mapas/);assert.match(calls[0].sql,/t.ativo\s*=\s*TRUE/);
-  assert.ok(!calls[0].sql.includes('limites IS NOT NULL'));assert.ok(!calls[0].sql.includes('publicadores'));
+  assert.match(calls[0].sql, /AND \(t\.mapa_layout IS NOT NULL OR t\.limites IS NOT NULL OR m\.chave IS NOT NULL\)/);
+  assert.ok(!calls[0].sql.includes('publicadores'));
   assert.deepEqual(calls[0].values,['a'.repeat(43)]);
 });
 test('private diagram authorizes before database access and validates territory selection', async () => {

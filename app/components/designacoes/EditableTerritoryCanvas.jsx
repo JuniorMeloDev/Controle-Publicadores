@@ -1,14 +1,27 @@
 ﻿'use client';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { MapPin, Store, Trees, School, Plus, Minus } from 'lucide-react';
-import { editableDrawingBounds } from '@/app/lib/editable-territory';
+import { editableDrawingBounds, automaticReferenceGroups } from '@/app/lib/editable-territory';
+import { roadLabelLayout } from '@/app/lib/road-label-layout';
 
 export function EditableTerritoryCanvas({layout,color='#0284c7',number,editing=false,tool='',selected=null,onSelect,onChange,onCheckpoint,highlightSide=null}) {
   const svg=useRef(null),drag=useRef(null);
   const prefix=useId().replace(/:/g,'');
+  const [measureLabel,setMeasureLabel]=useState(()=>text=>text.length*9);
+  useEffect(()=>{
+    let active=true;
+    document.fonts.ready.then(()=>{
+      if(!active)return;
+      const context=document.createElement('canvas').getContext('2d');
+      if(context){context.font='600 18px Arial';setMeasureLabel(()=>text=>context.measureText(text).width);}
+    });
+    return()=>{active=false;};
+  },[]);
+  const roadLabels=useMemo(()=>layout.roads.map(road=>({road,parts:roadLabelLayout(road,layout.roads,measureLabel)})),[layout.roads,measureLabel]);
   const locate=event=>{const p=svg.current.createSVGPoint();p.x=event.clientX;p.y=event.clientY;const local=p.matrixTransform(svg.current.getScreenCTM().inverse());return [Math.max(0,Math.min(1000,local.x)),Math.max(0,Math.min(700,local.y))];};
   const center=layout.outline.reduce((p,n)=>[p[0]+n[0]/layout.outline.length,p[1]+n[1]/layout.outline.length],[0,0]);
   const bounds=editableDrawingBounds(layout);
+  const referenceGroups=useMemo(()=>automaticReferenceGroups(layout.landmarks),[layout.landmarks]);
   function start(event,type,index,id){if(!editing)return;event.stopPropagation();onCheckpoint?.();drag.current={type,index,id};event.currentTarget.setPointerCapture(event.pointerId);}
   function move(event){if(!drag.current||!editing)return;const p=locate(event),target=drag.current;let next;
     if(target.type==='outline')next={...layout,outline:layout.outline.map((old,i)=>i===target.index?p:old)};
@@ -33,9 +46,13 @@ export function EditableTerritoryCanvas({layout,color='#0284c7',number,editing=f
     {editing&&<rect width="1000" height="700" fill={`url(#${prefix}-grid)`} />}
     <polygon points={layout.outline.map(p=>p.join(',')).join(' ')} fill={color} fillOpacity="0.78" stroke={color} strokeWidth="4" strokeLinejoin="round" onClick={event=>{if(tool!=='road'&&tool!=='reference')pick(event,{type:'outline'});}} />
     {editing&&Number.isInteger(highlightSide)&&layout.outline[highlightSide]&&<g pointerEvents="none"><line x1={layout.outline[highlightSide][0]} y1={layout.outline[highlightSide][1]} x2={layout.outline[(highlightSide+1)%layout.outline.length][0]} y2={layout.outline[(highlightSide+1)%layout.outline.length][1]} stroke="#ea580c" strokeWidth="7" strokeDasharray="9 5" /><text x={(layout.outline[highlightSide][0]+layout.outline[(highlightSide+1)%layout.outline.length][0])/2} y={(layout.outline[highlightSide][1]+layout.outline[(highlightSide+1)%layout.outline.length][1])/2-12} textAnchor="middle" fontSize="18" fontWeight="700" fill="#9a3412" stroke="white" strokeWidth="4" paintOrder="stroke">Lateral {highlightSide+1}</text></g>}
-    {layout.roads.map(road=><g key={road.id} onClick={event=>pick(event,{type:'road',id:road.id})} className={editing?'cursor-pointer':''}><path id={`${prefix}-${road.id}`} d={road.points.map((p,i)=>`${i?'L':'M'}${p[0]},${p[1]}`).join(' ')} stroke={selected?.id===road.id?'#cbd5e1':'white'} strokeWidth="27" strokeLinecap="round" fill="none" /><text fontSize="18" fill="#0f172a" dy="-4" fontWeight="600"><textPath href={`#${prefix}-${road.id}`} startOffset="50%" textAnchor="middle">{road.name}</textPath></text>{editing&&selected?.type==='road'&&selected.id===road.id&&road.points.map((p,i)=>handle(p,i,'road',road.id))}</g>)}
+    {/* Draw all street surfaces first so intersections cannot cover earlier labels. */}
+    {layout.roads.map(road=><path key={road.id} id={`${prefix}-${road.id}`} d={road.points.map((p,i)=>`${i?'L':'M'}${p[0]},${p[1]}`).join(' ')} stroke={selected?.id===road.id?'#cbd5e1':'white'} strokeWidth="27" strokeLinecap="round" fill="none" onClick={event=>pick(event,{type:'road',id:road.id})} className={editing?'cursor-pointer':''} />)}
+    {roadLabels.map(({road,parts})=><g key={road.id} aria-label={road.name} onClick={event=>pick(event,{type:'road',id:road.id})} className={editing?'cursor-pointer':''}>{parts.map((part,index)=><text key={index} fontFamily="Arial, sans-serif" fontSize="18" fill="#0f172a" dominantBaseline="central" fontWeight="600" stroke="white" strokeWidth="3" strokeLinejoin="round" paintOrder="stroke"><textPath href={`#${prefix}-${road.id}`} startOffset={part.offset} textAnchor="middle" textLength={part.width} lengthAdjust="spacingAndGlyphs">{part.text}</textPath></text>)}</g>)}
+    {editing&&selected?.type==='road'&&layout.roads.find(road=>road.id===selected.id)?.points.map((p,i)=>handle(p,i,'road',selected.id))}
     <g pointerEvents="none"><circle cx={center[0]-80} cy={center[1]-65} r="26" fill="white" fillOpacity="0.9" stroke="#0f172a" strokeWidth="2" /><text x={center[0]-80} y={center[1]-56} textAnchor="middle" fontSize="25" fontWeight="700" fill="#0f172a">{number}</text></g>
-    {layout.landmarks.map(marker=>{const Icon={school:School,shop:Store,square:Trees,reference:MapPin}[marker.kind]||MapPin;return <g key={marker.id} onClick={event=>pick(event,{type:'landmark',id:marker.id})} onPointerDown={event=>start(event,'landmark',0,marker.id)} className={editing?'cursor-move':''}><circle cx={marker.position[0]} cy={marker.position[1]} r="19" fill="white" stroke={selected?.id===marker.id?'#0f172a':color} strokeWidth="2" /><Icon x={marker.position[0]-11} y={marker.position[1]-11} width="22" height="22" color="#0f172a" /><text x={marker.position[0]+27} y={marker.position[1]+5} fontSize="16" fontWeight="600" fill="#0f172a" stroke="white" strokeWidth="4" paintOrder="stroke" strokeLinejoin="round">{marker.name}</text></g>;})}
+    {layout.landmarks.filter(marker=>editing||!marker.id.startsWith('osm-point-')).map(marker=>{const Icon={school:School,shop:Store,square:Trees,reference:MapPin}[marker.kind]||MapPin;return <g key={marker.id} onClick={event=>pick(event,{type:'landmark',id:marker.id})} onPointerDown={event=>start(event,'landmark',0,marker.id)} className={editing?'cursor-move':''}><circle cx={marker.position[0]} cy={marker.position[1]} r="19" fill="white" stroke={selected?.id===marker.id?'#0f172a':color} strokeWidth="2" /><Icon x={marker.position[0]-11} y={marker.position[1]-11} width="22" height="22" color="#0f172a" /><text x={marker.position[0]+27} y={marker.position[1]+5} fontSize="16" fontWeight="600" fill="#0f172a" stroke="white" strokeWidth="4" paintOrder="stroke" strokeLinejoin="round">{marker.name}</text></g>;})}
+    {!editing&&referenceGroups.map(group=><g key={group.number} aria-label={group.markers.map(marker=>marker.name).join(', ')}><title>{group.markers.map(marker=>marker.name).join(', ')}</title><circle cx={group.position[0]} cy={group.position[1]} r="15" fill="white" stroke={color} strokeWidth="2" /><text x={group.position[0]} y={group.position[1]} textAnchor="middle" dominantBaseline="central" fontSize="16" fontWeight="700" fill="#0f172a">{group.number}</text></g>)}
     {editing&&(tool==='outline'||selected?.type==='outline')&&layout.outline.map((p,i)=>handle(p,i,'outline'))}
   </svg>;
 }
@@ -43,6 +60,7 @@ export function EditableTerritoryCanvas({layout,color='#0284c7',number,editing=f
 export function EditableTerritoryView(props) {
   const [zoom,setZoom]=useState(1);
   const bounds=editableDrawingBounds(props.layout);
+  const references=automaticReferenceGroups(props.layout.landmarks);
   const button='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 disabled:opacity-40';
-  return <div className="space-y-2"><div className="flex justify-end gap-2"><button type="button" aria-label="Diminuir desenho" disabled={zoom<=1} className={button} onClick={()=>setZoom(value=>Math.max(1,value-0.5))}><Minus size={16} /></button><button type="button" className="text-xs text-slate-600" onClick={()=>setZoom(1)} aria-label="Ajustar desenho à tela">{Math.round(zoom*100)}%</button><button type="button" aria-label="Ampliar desenho" disabled={zoom>=3} className={button} onClick={()=>setZoom(value=>Math.min(3,value+0.5))}><Plus size={16} /></button></div><div className="max-h-[80vh] overflow-auto"><div className="mx-auto" style={{width:`calc(min(100%, ${64*bounds.width/bounds.height}vh) * ${zoom})`}}><EditableTerritoryCanvas {...props} /></div></div>{props.layout.roads.some(road=>road.googlePlaceId)&&<p className="text-xs text-slate-500">Ruas consultadas no <a href="https://maps.google.com/" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Google Maps</a>.</p>}</div>;
+  return <div className="space-y-2"><div className="flex justify-end gap-2"><button type="button" aria-label="Diminuir desenho" disabled={zoom<=1} className={button} onClick={()=>setZoom(value=>Math.max(1,value-0.5))}><Minus size={16} /></button><button type="button" className="text-xs text-slate-600" onClick={()=>setZoom(1)} aria-label="Ajustar desenho à tela">{Math.round(zoom*100)}%</button><button type="button" aria-label="Ampliar desenho" disabled={zoom>=3} className={button} onClick={()=>setZoom(value=>Math.min(3,value+0.5))}><Plus size={16} /></button></div><div className="max-h-[80vh] overflow-auto"><div className="mx-auto" style={{width:`calc(min(100%, ${64*bounds.width/bounds.height}vh) * ${zoom})`}}><EditableTerritoryCanvas {...props} /></div></div>{references.length>0&&<section className="rounded-lg border border-slate-200 bg-slate-50 p-3"><h4 className="mb-2 text-sm font-semibold text-slate-800">Pontos de referência</h4><ol className="grid gap-2 sm:grid-cols-2">{references.map(group=><li key={group.number} className="flex items-start gap-2 text-sm text-slate-700"><span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white font-bold">{group.number}</span><span>{group.markers.map(marker=>marker.name).join(" · ")}</span></li>)}</ol></section>}{props.layout.roads.some(road=>road.googlePlaceId)&&<p className="text-xs text-slate-500">Ruas consultadas no <a href="https://maps.google.com/" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Google Maps</a>.</p>}</div>;
 }

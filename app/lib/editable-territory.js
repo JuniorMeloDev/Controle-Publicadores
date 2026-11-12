@@ -1,4 +1,15 @@
 ﻿const error = message => { throw new Error(message); };
+export function automaticReferenceGroups(landmarks) {
+  const groups=[];
+  for(const marker of landmarks.filter(item=>item.id.startsWith('osm-point-'))){
+    let group=groups.find(item=>Math.hypot(item.position[0]-marker.position[0],item.position[1]-marker.position[1])<42);
+    if(!group){group={number:groups.length+1,position:[...marker.position],markers:[]};groups.push(group);}
+    group.markers.push(marker);
+    group.position=[0,1].map(axis=>group.markers.reduce((sum,item)=>sum+item.position[axis],0)/group.markers.length);
+  }
+  return groups;
+}
+
 export function validateEditableLayout(value) {
   if (!value || value.version !== 1) error('Desenho inválido.');
   const point = p => {
@@ -42,11 +53,24 @@ export function validateEditableLayout(value) {
   });
   const landmarks=value.landmarks.map(p=>({id:id(p.id),name:text(p.name),position:point(p.position),kind:['reference','school','shop','square'].includes(p.kind)?p.kind:'reference'}));
   const ids=[...roads,...landmarks].map(p=>p.id);if(new Set(ids).size!==ids.length)error('Dois elementos têm a mesma identificação.');
-  return {version:1,outline,roads,landmarks};
+  const result={version:1,outline,roads,landmarks};
+  if(value.autoBoundaryFingerprint!==undefined){
+    if(typeof value.autoBoundaryFingerprint!=='string'||!/^[-\w]{1,80}$/.test(value.autoBoundaryFingerprint))error('Referência do contorno automático inválida.');
+    result.autoBoundaryFingerprint=value.autoBoundaryFingerprint;
+  }
+  if(value.autoDrawingRevision!==undefined){
+    if(!Number.isInteger(value.autoDrawingRevision)||value.autoDrawingRevision<1)error('Versão do cartão automático inválida.');
+    result.autoDrawingRevision=value.autoDrawingRevision;
+  }
+  if(value.selectedReferenceIds!==undefined){
+    if(!Array.isArray(value.selectedReferenceIds)||value.selectedReferenceIds.length>100||value.selectedReferenceIds.some(key=>typeof key!=='string'||!/^[-\w]{1,80}$/.test(key)))error('Seleção de referências inválida.');
+    result.selectedReferenceIds=[...new Set(value.selectedReferenceIds)];
+  }
+  return result;
 }
 
 export function editableDrawingBounds(layout) {
-  const points=[...layout.outline,...layout.roads.flatMap(r=>r.points),...layout.landmarks.flatMap(p=>[p.position,[Math.min(1000,p.position[0]+35+p.name.length*9),p.position[1]]])];
+  const points=[...layout.outline,...layout.roads.flatMap(r=>r.points),...layout.landmarks.flatMap(p=>p.id.startsWith('osm-point-')?[p.position]:[p.position,[Math.min(1000,p.position[0]+35+p.name.length*9),p.position[1]]])];
   const left=Math.max(0,Math.min(...points.map(p=>p[0]))-45),top=Math.max(0,Math.min(...points.map(p=>p[1]))-45);
   const right=Math.min(1000,Math.max(...points.map(p=>p[0]))+45),bottom=Math.min(700,Math.max(...points.map(p=>p[1]))+45);
   return {left,top,width:Math.max(1,right-left),height:Math.max(1,bottom-top)};

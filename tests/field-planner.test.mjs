@@ -8,6 +8,40 @@ const snapshot = (overrides = {}) => ({ territorios: [territory(1, 'semana'), te
 const config = (overrides = {}) => ({ inicio: '2026-11-04', fim: '2026-11-07', intervalo: 14,
   regras: [{ dia: 3, horario: '08:30', quantidade: 1 }, { dia: 6, horario: '08:30', quantidade: 1 }], ...overrides });
 
+test('weekend suggestions follow map ownership and allow separate groups at the same time', () => {
+  const state = snapshot({ territorios: [
+    { ...territory(1), mapa_grupo_id: 10 },
+    { ...territory(2), mapa_grupo_id: 20 },
+    { ...territory(3), mapa_grupo_id: null },
+  ] });
+  const result = generateFieldSchedule(state, config({ inicio: '2026-11-07', fim: '2026-11-08', regras: [
+    { dia: 6, horario: '08:30', quantidade: 1, grupos: [10] },
+    { dia: 6, horario: '08:30', quantidade: 1, grupos: [20] },
+    { dia: 0, horario: '08:30', quantidade: 1, grupos: [30] },
+  ] }));
+  assert.deepEqual(result.rows.map(row => row.territorios), [[1], [2], []]);
+  assert.equal(result.warnings.length, 1);
+  const weekday = generateFieldSchedule(state, config({ regras: [{ dia: 3, horario: '08:30', quantidade: 3, grupos: [10] }] }));
+  assert.deepEqual(weekday.rows[0].territorios, [1, 2, 3]);
+  const congregation = generateFieldSchedule(state, config({ regras: [{ dia: 6, horario: '08:30', quantidade: 3, grupos: [] }] }));
+  assert.deepEqual(congregation.rows[0].territorios, [1, 2, 3]);
+  const combined = generateFieldSchedule(state, config({ regras: [{ dia: 6, horario: '08:30', quantidade: 3, grupos: [10, 20] }] }));
+  assert.deepEqual(combined.rows[0].territorios, [1, 2]);
+});
+
+test('batch saving rechecks territory ownership when the map changes after preview', async () => {
+  let inserts = 0;
+  const client = { query: async sql => {
+    if (sql.startsWith('SELECT id, periodo, mapa_grupo_id')) return { rows: [{ id: 1, periodo: 'ambos', mapa_grupo_id: 20 }] };
+    if (sql.startsWith('INSERT')) inserts++;
+    return { rows: [] };
+  } };
+  await assert.rejects(mutateFieldService(client, { entity: 'saidas', action: 'batch', records: [{
+    data: '2026-11-07', horario: '08:30', modalidade: 'territorio', grupos: [10], territorios: [1],
+  }] }), error => error.status === 409 && /grupo responsável/i.test(error.message));
+  assert.equal(inserts, 0);
+});
+
 test('schedule respects weekday pools, prioritizes oldest history and leaves leaders unassigned', () => {
   const { rows } = generateFieldSchedule(snapshot(), config());
   assert.deepEqual(rows.map(r => r.territorios), [[1], [2]]);

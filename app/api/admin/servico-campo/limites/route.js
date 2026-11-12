@@ -31,7 +31,7 @@ export async function POST(request) {
   try {
     client = await pool.connect(); await client.query('BEGIN'); transaction = true;
     const result = await saveTerritoryBoundary(client, body);
-    await registerAuditLog(client, { userId: getUserIdFromRequest(request), action: 'campo_limite_salvo', entity: 'campo_territorio', entityId: result.id || 'geral', details: { revisao: result.revisao } });
+    await registerAuditLog(client, { userId: getUserIdFromRequest(request), action: 'campo_limite_salvo', entity: 'campo_territorio', entityId: result.id || 'geral', details: { revisao: result.revisao, ...(body.referencia_ids!==undefined?{referencia_ids:body.referencia_ids}:{}) } });
     await client.query('COMMIT'); transaction = false;
     return NextResponse.json(result);
   } catch (error) { if (transaction) await client.query('ROLLBACK'); return failure(error); }

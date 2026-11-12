@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { Pool } from 'pg';
 import { findSharedSchematic, preparedSchematicInfo } from '@/app/lib/territory-schematic-server';
 import { TerritoryMapCard } from '@/app/components/designacoes/TerritoryMapCard';
+import { territoryMapDisplay } from '@/app/lib/territory-map-display';
 
 export const dynamic = 'force-dynamic';
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
@@ -22,7 +23,7 @@ export default async function SharedTerritoryMap({ params }) {
   const result = await findTerritory(token);
   if (!result) notFound();
   const { imagem_chave: _key, imagem_hash: _hash, ...territory } = result;
-  if (territory.mapa_prototipo && territory.mapa_layout) return <TerritoryMapCard territory={territory} congregation={process.env.NEXT_PUBLIC_NOME_CONGREGACAO || 'Praia dos Corais'} />;
+  if (territoryMapDisplay(territory) !== 'original') return <TerritoryMapCard territory={territory} congregation={process.env.NEXT_PUBLIC_NOME_CONGREGACAO || 'Praia dos Corais'} />;
   let info;
   const client = await pool.connect();
   try { info = await preparedSchematicInfo(client, result.imagem_chave, result.imagem_hash); }

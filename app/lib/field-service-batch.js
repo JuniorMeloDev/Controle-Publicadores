@@ -1,4 +1,4 @@
-import { fieldDate, fieldId, validateFieldRecord } from './field-service.js';
+import { fieldDate, fieldId, validateFieldRecord, isTerritoryAllowedForOuting } from './field-service.js';
 import { FIELD_RESULTS, TERRITORY_PERIODS, validateImportedHistory } from './field-planner.js';
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
@@ -29,7 +29,7 @@ export async function mutateFieldBatch(client, body, mutate) {
     if (!Number.isInteger(interval) || interval < 1 || interval > 365) throw fail('Intervalo de programação inválido.');
     const pending = await client.query('SELECT id FROM campo_designacoes WHERE territorio_id = ANY($1::int[]) AND data_conclusao IS NULL', [selected]);
     if (pending.rows.length) throw fail('Um território ficou pendente após a prévia. Gere a programação novamente.', 409);
-    const territories = (await client.query('SELECT id, periodo FROM campo_territorios WHERE id = ANY($1::int[]) AND ativo', [selected])).rows;
+    const territories = (await client.query('SELECT id, periodo, mapa_grupo_id FROM campo_territorios WHERE id = ANY($1::int[]) AND ativo', [selected])).rows;
     const latest = (await client.query('SELECT territorio_id, MAX(data_conclusao)::text AS data FROM campo_designacoes WHERE territorio_id = ANY($1::int[]) GROUP BY territorio_id', [selected])).rows;
     const planned = (await client.query('SELECT data::text AS data, territorios FROM campo_saidas WHERE territorios && $1::int[]', [selected])).rows;
     for (const row of rows) {
@@ -37,6 +37,7 @@ export async function mutateFieldBatch(client, body, mutate) {
       const weekend = [0, 6].includes(new Date(`${row.data}T12:00:00Z`).getUTCDay());
       for (const id of row.territorios) {
         const territory = territories.find(t => t.id === id);
+        if (territory && !isTerritoryAllowedForOuting(territory, row)) throw fail('O grupo responsável por um território mudou. Confira os vínculos no mapa e gere a programação novamente.', 409);
         if (!territory || (territory.periodo === 'semana' && weekend) || (territory.periodo === 'fim_semana' && !weekend)) throw fail('Um território não está disponível para o dia escolhido. Gere novamente.', 409);
         const uses = [...latest.filter(d => d.territorio_id === id && d.data), ...planned.filter(s => s.territorios.includes(id))];
         if (uses.some(use => Math.abs(Date.parse(use.data) - Date.parse(row.data)) / 86400000 < interval)) throw fail('O histórico ou a agenda mudou após a prévia. Confira o intervalo e gere novamente.', 409);

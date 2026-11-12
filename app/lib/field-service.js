@@ -1,5 +1,14 @@
 export const FIELD_MODES = { territorio: 'Território', cartas: 'Cartas', revisitas: 'Revisitas e estudos' };
 
+export function usesGroupTerritories(outing) {
+  return outing.modalidade === 'territorio' && outing.grupos?.length > 0
+    && [0, 6].includes(new Date(`${outing.data}T12:00:00Z`).getUTCDay());
+}
+
+export function isTerritoryAllowedForOuting(territory, outing) {
+  return !usesGroupTerritories(outing) || outing.grupos.some(id => Number(id) === Number(territory.mapa_grupo_id));
+}
+
 export function fieldMapUrl(value) {
   const result = text(value, 1000);
   if (!result) return '';
@@ -77,4 +86,16 @@ export function validateFieldRecord(entity, input) {
     return { id, territorio_id: fieldId(input.territorio_id), publicador_id: fieldId(input.publicador_id), data_designacao, data_conclusao, observacoes: text(input.observacoes) };
   }
   throw new Error('Cadastro inválido.');
+}
+export function isFieldOutingCompleted(outing, assignments = [], results = []) {
+  if (outing.modalidade !== 'territorio' || !outing.territorios?.length) return false;
+  const outingResults = results.filter(result => result.saida_id === outing.id);
+  const marker = `Entrega registrada pela saída ${outing.id}.`;
+  return outing.territorios.every(territoryId => {
+    const result = outingResults.find(item => item.territorio_id === territoryId);
+    if (result?.resultado === 'concluido') return true;
+    return assignments.some(assignment => assignment.territorio_id === territoryId
+      && assignment.data_conclusao
+      && (assignment.observacoes === marker || (result?.designacao_id && assignment.id === result.designacao_id)));
+  });
 }

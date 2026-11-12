@@ -9,6 +9,15 @@
   .dark :is(.bg-gray-50, [class~="bg-gray-50/30"], [class~="bg-gray-50/50"], [class~="bg-gray-50/70"], [class~="md:bg-gray-50/50"]) { background-color: #111114; }
   .dark :is(.bg-gray-100, .bg-gray-200, .bg-neutral-100, .bg-neutral-200, [class~="bg-gray-100/50"], [class~="bg-gray-100/80"]) { background-color: #27272a; }
   .dark .bg-gray-300 { background-color: #3f3f46; }
+  .dark .bg-slate-50 { background-color: #111114; }
+  .dark :is(.bg-slate-100, .bg-slate-200) { background-color: #27272a; }
+  .dark :is(.text-slate-950, .text-slate-900, .text-slate-800, .text-slate-700) { color: #f4f4f5; }
+  .dark :is(.text-slate-600, .text-slate-500, .text-slate-400) { color: #a1a1aa; }
+  .dark :is(.border-slate-100, .border-slate-200, .border-slate-300) { border-color: #3f3f46; }
+  .dark :is([class~="hover:bg-slate-50"], [class~="hover:bg-slate-100"]):hover { background-color: #27272a; }
+  .dark :is([class~="hover:text-slate-900"], [class~="hover:text-slate-700"]):hover { color: #f4f4f5; }
+  .dark :is(input, select, textarea) { color-scheme: dark; }
+  .dark :is(select, select option, select optgroup) { background-color: #18181b; color: #f4f4f5; }
   .dark :is(.text-gray-950, .text-gray-900, .text-gray-800, .text-gray-700, .text-neutral-950, .text-neutral-900, .text-neutral-800, .text-neutral-700, .text-black) { color: #f4f4f5; }
   .dark :is(.text-gray-600, .text-gray-500, .text-gray-400, .text-neutral-600, .text-neutral-500) { color: #a1a1aa; }
   .dark :is(.border-gray-100, .border-gray-200, .border-gray-300, .border-neutral-200, .border-neutral-300) { border-color: #3f3f46; }
@@ -25,8 +34,12 @@
   .dark :is(.text-red-600, .text-red-700, .text-red-800) { color: #fda4af; }
   .dark :is(.bg-green-50, .bg-green-100) { background-color: #15392c; }
   .dark :is(.text-green-700, .text-green-800) { color: #86efac; }
-  .dark :is(.bg-amber-50, .bg-yellow-50) { background-color: #3b2d15; }
-  .dark :is(.text-amber-700, .text-amber-800) { color: #fcd34d; }
+  .dark :is(.bg-amber-50, .bg-amber-100, .bg-yellow-50, .bg-yellow-100) { background-color: #3b2d15; }
+  .dark :is(.text-amber-700, .text-amber-800, .text-amber-900, .text-amber-950, .text-yellow-700, .text-yellow-800, .text-yellow-900, .text-yellow-950) { color: #fde68a; }
+  .dark :is(.bg-sky-50, .bg-sky-100, [class~="bg-sky-50/40"]) { background-color: #142b3d; }
+  .dark :is(.text-sky-700, .text-sky-800, .text-sky-900, .text-sky-950) { color: #bae6fd; }
+  .dark :is(.border-sky-100, .border-sky-200, .border-sky-300) { border-color: #31577e; }
+  .dark :is([class~="hover:bg-amber-50"], [class~="hover:bg-amber-100"]):hover { background-color: #4a381b; }
   .dark :is(.bg-orange-50, [class~="bg-orange-50/70"]) { background-color: #3b2518; }
   .dark :is(.text-orange-600, .text-orange-700, .text-orange-900) { color: #fdba74; }
   .dark :is(.border-orange-100, .border-orange-200) { border-color: #7c4525; }

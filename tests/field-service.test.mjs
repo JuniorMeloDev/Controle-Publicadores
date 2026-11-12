@@ -2,11 +2,32 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadModule, loadRoute } from './helpers/load-source.mjs';
 
-const { fieldId, fieldDate, fieldServiceYear, weeklyDates, validateFieldRecord } = await loadModule('../../app/lib/field-service.js');
+const { fieldId, fieldDate, fieldServiceYear, weeklyDates, validateFieldRecord, isFieldOutingCompleted } = await loadModule('../../app/lib/field-service.js');
 const { mutateFieldService, readFieldService } = await loadModule('../../app/lib/field-service-server.js');
 const { canAccessRoute } = await loadModule('../../app/lib/route-access.js');
 const { prepareFieldMap, saveFieldMap } = await loadModule('../../app/lib/field-map.js');
 const outing = overrides => ({ data: '2026-10-17', horario: '08:30', modalidade: 'territorio', grupos: [1], territorios: [3], ...overrides });
+
+test('agenda hides only outings whose own territories have all been completed', () => {
+  const row = outing({ id: 10, territorios: [3, 4] });
+  const results = [
+    { saida_id: 10, territorio_id: 3, resultado: 'concluido' },
+    { saida_id: 10, territorio_id: 4, resultado: 'parcial', designacao_id: 40 },
+  ];
+  assert.equal(isFieldOutingCompleted(row, [], results), false);
+  assert.equal(isFieldOutingCompleted(row, [], [...results.slice(0, 1), { ...results[1], resultado: 'nao_trabalhado' }]), false);
+  assert.equal(isFieldOutingCompleted(row, [], results.map(result => ({ ...result, resultado: 'concluido' }))), true);
+  const assignment = { id: 40, territorio_id: 4, data_conclusao: '2026-10-18' };
+  assert.equal(isFieldOutingCompleted(row, [assignment], results), true);
+  assert.equal(isFieldOutingCompleted(row, [{ ...assignment, id: 99 }], results), false);
+  assert.equal(isFieldOutingCompleted(row, [{ ...assignment, data_conclusao: null }], results), false);
+  const deliveries = [3, 4].map(territorio_id => ({ territorio_id, data_conclusao: '2026-10-18', observacoes: 'Entrega registrada pela saída 10.' }));
+  assert.equal(isFieldOutingCompleted(row, deliveries), true);
+  assert.equal(isFieldOutingCompleted(row, deliveries.map(item => ({ ...item, observacoes: 'Entrega registrada pela saída 9.' }))), false);
+  assert.equal(isFieldOutingCompleted({ ...row, id: 11 }, deliveries, results), false);
+  assert.equal(isFieldOutingCompleted(outing({ id: 10, territorios: [] })), false);
+  assert.equal(isFieldOutingCompleted(outing({ id: 10, modalidade: 'cartas' }), deliveries, results), false);
+});
 
 test('field records reject invalid IDs, dates, map protocols and malformed lists', () => {
   for (const value of [true, -1, 0, '1.5', '2x', 2147483648]) assert.throws(() => fieldId(value));
@@ -42,7 +63,7 @@ function serviceFixture({ conflict = false, inactive = false, existing = {}, ove
   const calls = [];
   const client = { query: async (sql, params = []) => {
     calls.push({ sql, params });
-    if (sql.includes('FOR SHARE')) return { rows: params[0].map(id => ({ id, ativo: !inactive })) };
+    if (sql.includes('FOR SHARE')) return { rows: params[0].map(id => ({ id, ativo: !inactive, mapa_grupo_id: 1 })) };
     if (sql.includes('FOR UPDATE')) return { rows: Object.keys(existing).length ? [existing] : [] };
     if (sql.startsWith('SELECT id FROM campo_saidas')) return { rows: conflict ? [{ id: 99 }] : [] };
     if (sql.startsWith('SELECT id FROM campo_designacoes')) return { rows: overlap ? [{ id: 99 }] : [] };
@@ -104,6 +125,34 @@ test('recurring outings are planned separately from territory handovers and conc
   assert.ok(fixture.calls[0].sql.includes('pg_advisory_xact_lock'));
   assert.deepEqual(fixture.calls.filter(call => call.sql.startsWith('INSERT')).map(call => call.params[0]), ['2026-10-17', '2026-10-24', '2026-10-31']);
   assert.ok(!fixture.calls.some(call => /(?:INSERT INTO|UPDATE) campo_designacoes/.test(call.sql)));
+});
+
+test('manual weekend outings reject foreign or unmapped territories before writing', async () => {
+  for (const date of ['2026-10-17', '2026-10-18']) {
+    for (const owner of [2, null]) {
+      const fixture = serviceFixture();
+      const originalQuery = fixture.client.query;
+      fixture.client.query = async (sql, params) => sql.startsWith('SELECT id, mapa_grupo_id')
+        ? { rows: [{ id: 3, mapa_grupo_id: owner }] } : originalQuery(sql, params);
+      await assert.rejects(mutateFieldService(fixture.client, { entity: 'saidas', action: 'save', record: outing({ data: date }) }), /vinculados no mapa/);
+      assert.ok(!fixture.calls.some(call => call.sql.startsWith('INSERT')));
+    }
+  }
+});
+
+test('monthly routines can repeat without territories and fill each date independently', async () => {
+  const fixture = serviceFixture();
+  const result = await mutateFieldService(fixture.client, { entity: 'saidas', action: 'save', record: outing({
+    dirigente_publicador_id: 2, semanas: 4, territorios: [], local_id: 1,
+  }) });
+  assert.equal(result.ids.length, 4);
+  assert.ok(!fixture.calls.some(call => call.sql.startsWith('INSERT INTO campo_designacoes')));
+  const weekday = serviceFixture();
+  await mutateFieldService(weekday.client, { entity: 'saidas', action: 'save', record: outing({ data: '2026-10-20', grupos: [2] }) });
+  assert.ok(!weekday.calls.some(call => call.sql.startsWith('SELECT id, mapa_grupo_id')));
+  const congregation = serviceFixture();
+  await mutateFieldService(congregation.client, { entity: 'saidas', action: 'save', record: outing({ grupos: [] }) });
+  assert.ok(!congregation.calls.some(call => call.sql.startsWith('SELECT id, mapa_grupo_id')));
 });
 
 test('any existing publisher can lead directly without a leader registration', async () => {

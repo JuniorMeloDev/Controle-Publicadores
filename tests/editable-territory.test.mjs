@@ -1,7 +1,7 @@
 ﻿import assert from 'node:assert/strict';
 import test from 'node:test';
 import { validateEditableLayout,layoutFromBoundary } from '../app/lib/editable-territory.js';
-import { saveEditableTerritory } from '../app/lib/editable-territory-server.js';
+import { saveEditableTerritory, readEditableTerritory } from '../app/lib/editable-territory-server.js';
 import { loadRoute } from './helpers/load-source.mjs';
 const layout={version:1,outline:[[100,100],[800,100],[800,600],[100,600]],roads:[{id:'road',name:'Rua A',points:[[100,300],[800,300]]}],landmarks:[{id:'school',name:'Escola',position:[600,200],kind:'school'}]};
 test('editable map validates geometry and bounded content without fixed group or territory counts',()=>{
@@ -26,4 +26,23 @@ test('editable map endpoint authorizes before reading and rolls back if auditing
   const dependencies={Pool:class{async connect(){connects++;return{release(){},async query(sql){calls.push(sql);return{rows:[]};}};}},authorizeRequest:async()=>({status:403}),saveEditableTerritory:async()=>({id:41,revisao:1}),getUserIdFromRequest:()=>1,registerAuditLog:async()=>{throw new Error('audit');}};
   let route=loadRoute('../../app/api/admin/servico-campo/desenho/route.js',dependencies);assert.equal((await route.POST({})).status,403);assert.equal(connects,0);
   route=loadRoute('../../app/api/admin/servico-campo/desenho/route.js',{...dependencies,authorizeRequest:async()=>null});assert.equal((await route.POST({json:async()=>body})).status,500);assert.ok(calls.includes('ROLLBACK'));assert.ok(!calls.includes('COMMIT'));
+});
+
+test('validated non-pilot territories can open and save drawings without changing saved boundaries', async () => {
+  const boundary = { type: 'Polygon', coordinates: [[[-35,-9],[-34.99,-9],[-34.99,-8.99],[-35,-8.99],[-35,-9]]] };
+  const calls = [];
+  const client = { query: async (sql, values) => {
+    calls.push({ sql, values });
+    if (sql.includes('FROM campo_territorios')) return { rows: [{ id: 41, numero: 2, limites: boundary, mapa_prototipo: false, mapa_layout: null, mapa_layout_revisao: 0 }] };
+    if (sql.includes('FROM grupos')) return { rows: [] };
+    return { rows: [] };
+  } };
+  const result = await readEditableTerritory(client, 41);
+  assert.equal(result.territory.mapa_layout.outline.length, 4);
+  assert.deepEqual(result.territory.limites, boundary);
+  assert.ok(!calls.some(call => /UPDATE|INSERT/.test(call.sql)));
+  await saveEditableTerritory(client, { ...body, grupo_id: null, layout: result.territory.mapa_layout });
+  const update = calls.find(call => call.sql.startsWith('UPDATE campo_territorios'));
+  assert.ok(update.sql.includes('mapa_prototipo=TRUE'));
+  assert.ok(!update.sql.includes('limites='));
 });

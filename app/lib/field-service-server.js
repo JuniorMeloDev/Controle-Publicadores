@@ -1,4 +1,4 @@
-import { fieldId, fieldDate, validateFieldRecord, weeklyDates } from './field-service.js';
+import { fieldId, fieldDate, validateFieldRecord, weeklyDates, usesGroupTerritories, isTerritoryAllowedForOuting } from './field-service.js';
 import { mutateFieldBatch } from './field-service-batch.js';
 
 const tables = { locais: 'campo_locais', territorios: 'campo_territorios', saidas: 'campo_saidas', designacoes: 'campo_designacoes' };
@@ -80,6 +80,12 @@ export async function mutateFieldService(client, body) {
   if (record.dirigente_publicador_id) await reference(client, 'publicadores', [record.dirigente_publicador_id], [], false);
   if (record.territorios) await reference(client, 'campo_territorios', record.territorios, old.territorios || []);
   if (record.territorio_id) await reference(client, 'campo_territorios', [record.territorio_id], [old.territorio_id]);
+  if (body.entity === 'saidas' && usesGroupTerritories(record) && record.territorios.length) {
+    const territories = (await client.query('SELECT id, mapa_grupo_id FROM campo_territorios WHERE id = ANY($1::int[]) FOR SHARE', [record.territorios])).rows;
+    if (record.territorios.some(id => !territories.some(t => t.id === id && isTerritoryAllowedForOuting(t, record)))) {
+      throw fieldError('No fim de semana, escolha apenas territórios vinculados no mapa aos grupos desta saída. Confira os grupos e os territórios selecionados.');
+    }
+  }
   if (body.entity === 'designacoes') {
     // History is append-only. Corrections require a separately audited workflow.
     if (record.id) throw fieldError('Use Registrar conclusão para atualizar uma designação.');

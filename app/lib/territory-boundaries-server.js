@@ -2,11 +2,13 @@ import { randomBytes } from 'node:crypto';
 import { fieldId } from './field-service.js';
 import { validateBoundary, checkBoundaryPlacement } from './territory-boundaries.js';
 import { territoryBoundaryProposal } from './territory-boundary-proposals.js';
+import { withTerritoryDrawing } from './territory-map-display.js';
+import { territoryReferenceOptions, applyTerritoryReferenceSelection } from './territory-reference-selection.js';
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 export async function readTerritoryBoundaries(client) {
   const geral = (await client.query('SELECT limites, revisao FROM campo_mapa_geral WHERE id = 1')).rows[0];
-  const territorios = (await client.query(`SELECT t.id, t.numero, t.descricao, t.limites, t.mapa_revisao, t.mapa_share_token, t.ativo,
+  const territorios = (await client.query(`SELECT t.id, t.numero, t.descricao, t.limites, t.mapa_revisao, t.mapa_share_token, t.ativo, t.mapa_layout, t.mapa_layout_revisao,
     md5(m.conteudo) AS pdf_hash
     FROM campo_territorios t LEFT JOIN campo_mapas m ON m.territorio_id = t.id ORDER BY t.numero`)).rows;
   return { geral, territorios: territorios.map(territory => {
@@ -28,6 +30,14 @@ export async function saveTerritoryBoundary(client, body) {
   if (!selected) throw fail('Mapa não encontrado.', 404);
   const revision = id === null ? selected.revisao : selected.mapa_revisao;
   if (revision !== body.revisao) throw fail('Outra pessoa alterou este mapa. Atualize a página antes de editar novamente.', 409);
+  let drawing;
+  if(id!==null&&body.referencia_ids!==undefined){
+    if(body.desenho_revisao!==selected.mapa_layout_revisao)throw fail('O cartão foi alterado. Atualize a página antes de escolher as referências.',409);
+    try{
+      const current=withTerritoryDrawing({...selected,limites:boundary}).mapa_layout;
+      drawing=applyTerritoryReferenceSelection(current,territoryReferenceOptions(boundary,selected.mapa_layout),body.referencia_ids);
+    }catch(error){throw fail(error.message);}
+  }
   try {
     if (id === null) {
       for (const territory of territorios.filter(t => t.limites)) checkBoundaryPlacement(territory.limites, boundary);
@@ -41,9 +51,12 @@ export async function saveTerritoryBoundary(client, body) {
     }
   } catch (e) { throw fail(e.message); }
   if (id === null) await client.query('UPDATE campo_mapa_geral SET limites = $1::jsonb, revisao = revisao + 1 WHERE id = 1', [JSON.stringify(boundary)]);
+  else if(drawing)await client.query(`UPDATE campo_territorios SET limites=$2::jsonb,mapa_revisao=mapa_revisao+1,
+    mapa_share_token=COALESCE(mapa_share_token,$3),mapa_layout=$4::jsonb,mapa_layout_revisao=mapa_layout_revisao+1,mapa_prototipo=TRUE WHERE id=$1`,
+    [id,JSON.stringify(boundary),randomBytes(32).toString('base64url'),JSON.stringify(drawing)]);
   else await client.query(`UPDATE campo_territorios SET limites = $2::jsonb, mapa_revisao = mapa_revisao + 1,
     mapa_share_token = COALESCE(mapa_share_token, $3) WHERE id = $1`, [id, JSON.stringify(boundary), randomBytes(32).toString('base64url')]);
-  return { id, revisao: revision + 1 };
+  return { id, revisao: revision + 1, ...(drawing?{mapa_layout:drawing,desenho_revisao:selected.mapa_layout_revisao+1}:{}) };
 }
 
 export async function findPublicTerritory(client, token) {

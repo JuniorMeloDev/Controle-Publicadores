@@ -23,7 +23,7 @@ import { TerritoryBoundaryEditor } from './TerritoryBoundaryEditor';
 import { CongregationSchematic } from './CongregationSchematic';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
-import { FIELD_MODES } from '@/app/lib/field-service';
+import { FIELD_MODES, isFieldOutingCompleted, usesGroupTerritories, isTerritoryAllowedForOuting } from '@/app/lib/field-service';
 import { useDesignationPeriod } from './DesignationPeriodContext';
 import { DesignationPeriodFilters, designationToolbarClass, designationListHeaderClass } from './DesignationLayout';
 
@@ -109,14 +109,16 @@ export function FieldServiceTab() {
   const territoryUrls = () => Object.fromEntries(data.territorios.filter(t => t.ativo && t.mapa_share_token && (t.limites || data.mapas.some(map => map.territorio_id === t.id)))
     .map(t => [t.id, new URL(`/mapa-territorio/${t.mapa_share_token}`, window.location.origin).toString()]));
   function shareOuting(row) { openShare(buildFieldOutingMessage(row, data, territoryUrls())); }
-  const agenda = data.saidas.filter(row => (!year || row.data.startsWith(year)) && (!month || row.data.slice(5, 7) === month) && (!groupFilter || !row.grupos.length || row.grupos.includes(Number(groupFilter))));
+  const agenda = data.saidas.filter(row => !isFieldOutingCompleted(row, data.designacoes, data.resultados) && (!year || row.data.startsWith(year)) && (!month || row.data.slice(5, 7) === month) && (!groupFilter || !row.grupos.length || row.grupos.includes(Number(groupFilter))));
   const history = data.designacoes.filter(row =>
     (!historyYear || row.data_designacao.slice(0, 4) === historyYear) &&
     (!historyMonth || row.data_designacao.slice(5, 7) === historyMonth)
   );
   const openAssignments = data.designacoes.filter(row => !row.data_conclusao);
   const historyYears = [...new Set([today().slice(0, 4), ...data.designacoes.map(row => row.data_designacao.slice(0, 4))])].filter(Boolean).sort().reverse();
-  const options = entity => data[entity].filter(row => row.ativo !== false || row.id === Number(form[entity === 'locais' ? 'local_id' : 'territorio_id']) || (entity === 'grupos' ? form.grupos : form.territorios)?.includes(row.id));
+  const options = entity => data[entity].filter(row => row.ativo !== false || row.id === Number(form[entity === 'locais' ? 'local_id' : 'territorio_id']) || (entity === 'grupos' ? form.grupos : form.territorios)?.includes(row.id))
+    .filter(row => entity !== 'territorios' || editor?.entity !== 'saidas' || isTerritoryAllowedForOuting(row, form) || form.territorios?.includes(row.id))
+    .map(row => entity === 'territorios' && editor?.entity === 'saidas' ? { ...row, nome: `Território ${row.numero}${row.mapa_grupo_id ? ` · ${name('grupos', row.mapa_grupo_id)}` : ' · Sem grupo no mapa'}${!isTerritoryAllowedForOuting(row, form) ? ' · Fora dos grupos selecionados: remova para salvar' : ''}` } : row);
   const update = (key, value) => setForm(current => ({ ...current, [key]: value }));
   const openEditor = (entity, row) => {
     if (!canEdit) return;
@@ -180,7 +182,7 @@ export function FieldServiceTab() {
       <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:flex xl:w-auto xl:flex-wrap [&>button]:h-auto [&>button]:min-h-11 [&>button]:min-w-0 [&>button]:w-full [&>button]:whitespace-normal [&>button]:py-2 xl:[&>button]:w-auto">
       {section === 'conclusoes' && isAllowed(permissions, 'designacoes_pdf', 'actions') && <FieldHistoryExport data={data} disabled={loading || Boolean(error)} />}
       {section === 'conclusoes' && isAllowed(permissions, 'designacoes_pdf', 'actions') && <FieldLeadersExport data={data} initialYear={historyYear} initialMonth={historyMonth} disabled={loading || Boolean(error)} />}
-      {canEdit && !loading && !error && section === 'saidas' && <Button variant="outline" onClick={() => setBatchDialog('schedule')}>Gerar programação</Button>}
+      {canEdit && !loading && !error && section === 'saidas' && <Button variant="outline" onClick={() => setBatchDialog('schedule')}>Gerar programação automática</Button>}
       {canEdit && ['saidas', 'locais'].includes(section) && <Button disabled={loading || Boolean(error)} className="bg-purple-600 hover:bg-purple-700 text-white" onClick={() => openEditor(section)}><Plus className="h-4 w-4 mr-2" />{section === 'saidas' ? 'Nova saída' : 'Novo local'}</Button>}</div>
     </div>
     {!canEdit && <p className="text-sm text-gray-500">Você tem acesso de leitura. A edição depende da permissão de Serviço de Campo na gestão de acessos.</p>}
@@ -225,6 +227,9 @@ export function FieldServiceTab() {
       <DialogHeader><DialogTitle>{editor?.entity === 'complete' ? 'Registrar conclusão' : `${editor?.id ? 'Editar' : 'Cadastrar'} ${titles[editor?.entity] || ''}`}</DialogTitle><DialogDescription>{editor?.entity === 'saidas' ? 'Escolha o dirigente, os grupos e o local da consideração. Sem grupos selecionados, a saída é da congregação.' : editor?.entity === 'designacoes' ? 'Registre a entrega do território ao responsável. A conclusão será registrada separadamente.' : 'Preencha os dados abaixo. Desative cadastros para preservar o histórico.'}</DialogDescription></DialogHeader>
       {recentTerritoryId && <TerritoryRecentHistory territoryId={recentTerritoryId} data={data} onClose={() => setRecentTerritoryId(null)} />}
       <form onSubmit={submit} className="space-y-4"><fieldset disabled={busy} className="space-y-4">
+        {editor?.entity === 'saidas' && <p className="rounded-lg bg-purple-50 p-3 text-sm text-purple-900">Para montar o mês, defina horário, local, dirigente e grupos, deixe os territórios vazios e escolha quantas saídas criar em &quot;Repetir semanalmente&quot;. Depois, edite cada data para escolher seus territórios. No fim de semana, cadastre uma saída por grupo.</p>}
+        {editor?.entity === 'saidas' && usesGroupTerritories(form) && <p role="status" className="text-sm text-gray-600">Nos fins de semana, a lista mostra os territórios vinculados no mapa aos grupos selecionados. Selecione um grupo por saída para manter sua programação separada. Territórios sem grupo no mapa não entram nessa lista.</p>}
+        {editor?.entity === 'saidas' && usesGroupTerritories(form) && !data.territorios.some(t => t.ativo && isTerritoryAllowedForOuting(t, form)) && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Nenhum território ativo está vinculado a esses grupos. Confira o campo &quot;Grupo responsável&quot; no mapa dos territórios. Você pode salvar a programação sem territórios e preenchê-los depois.</p>}
         {editor?.entity === 'saidas' && <><div className="grid sm:grid-cols-2 gap-4"><Field label="Data">{input('data', 'date', true)}</Field><Field label="Horário"><div className="space-y-2"><label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={form.horario === 'Pós reunião'} onChange={e => update('horario', e.target.checked ? 'Pós reunião' : '08:30')} />Pós reunião</label>{form.horario !== 'Pós reunião' && input('horario', 'time', true)}</div></Field><PublisherCombobox label="Dirigente" value={form.dirigente_publicador_id} onChange={value => update('dirigente_publicador_id', value)} publishers={data.publicadores.map(row => ({ id: row.id, nome_completo: row.nome }))} placeholder="A definir" disabled={busy} /><Field label="Local da consideração">{select('local_id', 'locais', 'A definir', setLocation)}</Field></div><Choices label="Grupos (nenhum = congregação)" options={options('grupos')} selected={form.grupos || []} onChange={value => update('grupos', value)} /><Field label="Modalidade"><select className={controlClass} value={form.modalidade} onChange={e => update('modalidade', e.target.value)}>{Object.entries(FIELD_MODES).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></Field>{form.modalidade === 'territorio' && <Choices label="Territórios planejados (opcional)" options={options('territorios')} selected={form.territorios || []} onChange={chooseOutingTerritories} />}{!editor.id && <Field label="Repetir semanalmente"><select className={controlClass} value={form.semanas} onChange={e => update('semanas', Number(e.target.value))}>{Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{i ? `${i + 1} saídas, uma por semana` : 'Somente esta saída'}</option>)}</select></Field>}{notes('observacoes', 'Observações')}</>}
         {editor?.entity === 'designacoes' && form.territorio_id && <Button type="button" variant="outline" size="sm" onClick={() => setRecentTerritoryId(Number(form.territorio_id))}>Consultar últimas 3 conclusões</Button>}
         {editor?.entity === 'saidas' && form.modalidade === 'territorio' && form.territorios?.length > 0 && <div className="flex flex-wrap gap-2">{form.territorios.map(id => <Button key={id} type="button" variant="outline" size="sm" onClick={() => setRecentTerritoryId(id)}>Histórico do território {data.territorios.find(row => row.id === id)?.numero}</Button>)}</div>}
