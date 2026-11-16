@@ -28,25 +28,23 @@ test('card 2 proposal is valid and shares the saved side of territory 1 without 
   assert.equal(territory.limites, null);
 });
 
-test('all 30 drafts fit the reference boundary and only the explicitly disputed pair overlaps', () => {
+test('all 30 drafts fit the reference boundary without overlaps after correcting territory 19', () => {
   assert.deepEqual(Object.keys(territoryBoundaryProposals).map(Number), Array.from({ length: 30 }, (_, index) => index + 2));
   for (const [number, proposal] of Object.entries(territoryBoundaryProposals)) {
     assert.match(proposal.pdf_hash, /^[a-f0-9]{32}$/);
-    assert.equal(proposal.divisas.length, 4);
+    assert.equal(proposal.divisas.length, number === '19' ? 2 : 4);
     const boundary = validateBoundary(proposal.limites);
     checkBoundaryPlacement(boundary, proposalGeneralReference, [neighbor]);
     const territory = { numero: Number(number), ativo: true, limites: null, pdf_hash: proposal.pdf_hash };
     assert.ok(territoryBoundaryProposal(territory, [neighbor]));
     for (const [otherNumber, other] of Object.entries(territoryBoundaryProposals)) {
       if (Number(otherNumber) >= Number(number)) continue;
-      if (number === '20' && otherNumber === '19') {
-        assert.throws(() => checkBoundaryPlacement(boundary, proposalGeneralReference, [{ numero: 19, limites: other.limites }]), /sobrepõe/);
-      } else checkBoundaryPlacement(boundary, proposalGeneralReference, [{ numero: otherNumber, limites: other.limites }]);
+      checkBoundaryPlacement(boundary, proposalGeneralReference, [{ numero: otherNumber, limites: other.limites }]);
     }
   }
 });
 
-test('unresolved card 19/20 overlap cannot be published even when neither territory is saved', async () => {
+test('corrected card 19/20 proposals can be published without an outdated PDF conflict', async () => {
   const rows = [{ ...neighbor, id: 1, mapa_revisao: 1 }, ...[19, 20].map(numero => ({
     id: numero, numero, ativo: true, limites: null, mapa_revisao: 0, pdf_hash: territoryBoundaryProposals[numero].pdf_hash
   }))];
@@ -58,11 +56,11 @@ test('unresolved card 19/20 overlap cannot be published even when neither territ
     return { rows: [] };
   } };
   for (const number of [19, 20]) {
-    await assert.rejects(saveTerritoryBoundary(client, {
+    await saveTerritoryBoundary(client, {
       territorio: number, revisao: 0, limites: territoryBoundaryProposals[number].limites
-    }), /faixa comum dos cartões 19 e 20/);
+    });
   }
-  assert.ok(!calls.some(sql => sql.startsWith('UPDATE')));
+  assert.equal(calls.filter(sql => sql.startsWith('UPDATE')).length, 2);
 });
 
 test('proposal is unavailable after publication, PDF replacement, neighbor changes or for other territories', () => {

@@ -18,7 +18,7 @@ export function loadGoogleMaps(key) {
 const points = geometry => geometry?.coordinates?.[0]?.slice(0, -1).map(([lng, lat]) => ({ lat, lng })) || [];
 const noReferences=[];
 
-export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', initialGeometry = null, onChange, onSelect, center = null, pointCount = 0, onPointCountChange, appearance = 'default', viewRevision = 0, focusBoundary = null, boundaryFocusSide = null, heightClassName = 'h-[460px] min-h-80', references=noReferences, focusedReferenceId=null, onReferenceClick }) {
+export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', initialGeometry = null, onChange, onSelect, center = null, pointCount = 0, onPointCountChange, appearance = 'default', viewRevision = 0, focusBoundary = null, boundaryFocusSide = null, overlapGeometry = null, neighborGeometry = null, heightClassName = 'h-[460px] min-h-80', references=noReferences, focusedReferenceId=null, onReferenceClick }) {
   const element = useRef(null);
   const instance = useRef(null);
   const fitView = useRef(null);
@@ -84,7 +84,7 @@ export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', 
       listeners.push(layer.addListener('click', () => handlers.current.onSelect?.(item.id)));
       if (!selectedArea?.limites || item.id === selected) path.forEach(p => bounds.extend(p));
     }
-    const editingPath = mode === 'edit' ? points(initialGeometry) : [];
+    const editingPath = mode ? points(initialGeometry) : [];
     let viewBounds = bounds;
     if (editingPath.length) {
       const editingBounds = new maps.LatLngBounds();
@@ -106,7 +106,7 @@ export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', 
       if(path[boundaryFocusSide])layers.push(new maps.Polyline({map,path:[path[boundaryFocusSide],path[(boundaryFocusSide+1)%path.length]],strokeColor:'#ea580c',strokeWeight:7,zIndex:20,clickable:false}));
     }
     if (mode) {
-      const path = mode === 'edit' ? points(initialGeometry) : [];
+      const path = points(initialGeometry);
       const draftPath = new maps.MVCArray(path.map(p => new maps.LatLng(p)));
       const draft = new maps.Polygon({ map, paths: new maps.MVCArray([draftPath]), strokeColor: '#ea580c', fillColor: '#fb923c', fillOpacity: 0.2, strokeWeight: 3, editable: true, clickable: true, zIndex: 10 });
       layers.push(draft);
@@ -122,6 +122,25 @@ export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', 
     }
     return () => { resizeObserver?.disconnect(); cancelAnimationFrame(fitFrame); fitView.current = null; listeners.forEach(listener => listener.remove()); layers.forEach(layer => layer.setMap(null)); };
   }, [ready, areas, selected, mode, initialGeometry, appearance, viewRevision, focusBoundary, boundaryFocusSide]);
+  // The neighboring border changes independently from the editable draft.
+  useEffect(() => {
+    if (!ready || !instance.current || !neighborGeometry) return;
+    const layer = new window.google.maps.Polygon({ map: instance.current, paths: points(neighborGeometry),
+      strokeColor: '#0369a1', strokeWeight: 3, fillOpacity: 0, clickable: false, zIndex: 1 });
+    return () => layer.setMap(null);
+  }, [ready, neighborGeometry]);
+  // Updating the conflict highlight must not recreate the polygon being dragged.
+  useEffect(() => {
+    if (!ready || !instance.current || !overlapGeometry) return;
+    const polygons = overlapGeometry.type === 'MultiPolygon' ? overlapGeometry.coordinates : [overlapGeometry.coordinates];
+    const layers = polygons.map(rings => new window.google.maps.Polygon({
+      map: instance.current,
+      paths: rings.map(ring => ring.slice(0, -1).map(([lng, lat]) => ({ lat, lng }))),
+      strokeColor: '#dc2626', strokeWeight: 3, fillColor: '#dc2626', fillOpacity: 0.45,
+      clickable: false, zIndex: 11
+    }));
+    return () => layers.forEach(layer => layer.setMap(null));
+  }, [ready, overlapGeometry]);
   useEffect(()=>{
     if(!ready||!instance.current)return;
     const maps=window.google.maps;
@@ -141,5 +160,5 @@ export function GoogleTerritoryMap({ areas = [], selected = 'geral', mode = '', 
     if(reference){instance.current.panTo(reference.location);if(instance.current.getZoom()<18)instance.current.setZoom(18);}
   },[ready,focusedReferenceId,references]);
   if (!key) return <div className="rounded-xl border border-dashed border-purple-300 bg-purple-50 p-6 text-sm text-gray-700"><p className="font-semibold text-gray-900">Configure o Google Maps para desenhar os limites</p><p className="mt-2">Ative a Maps JavaScript API no Google Cloud e configure a chave do site. Os PDFs continuam disponíveis como referência.</p><a className="mt-3 inline-block text-purple-700 underline" href="https://developers.google.com/maps/documentation/javascript/get-api-key?hl=pt-br" target="_blank" rel="noopener noreferrer">Como configurar a chave</a></div>;
-  return <div className="space-y-2">{error && <p role="alert" className="text-sm text-red-700">{error}</p>}<div ref={element} aria-label="Mapa dos limites dos territórios" className={`${heightClassName} w-full rounded-xl border border-gray-200`} />{appearance === 'territory-review' && <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600"><p>Confira as ruas dentro e ao redor do contorno azul. Use + para ampliar.</p><button type="button" disabled={!ready} className="font-medium text-purple-700 underline disabled:opacity-50" onClick={() => fitView.current?.()}>Enquadrar território</button></div>}{mode && <p className="text-sm text-gray-500">{pointCount} pontos no contorno</p>}{!ready && !error && <p role="status" className="text-sm text-gray-500">Carregando Google Maps…</p>}</div>;
+  return <div className="space-y-2">{error && <p role="alert" className="text-sm text-red-700">{error}</p>}<div ref={element} aria-label="Mapa dos limites dos territórios" className={`${heightClassName} w-full rounded-xl border border-gray-200`} />{appearance === 'territory-review' && <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600"><p>Confira as ruas dentro e ao redor do contorno {mode ? 'laranja' : 'azul'}. Use + para ampliar.</p><button type="button" disabled={!ready} className="font-medium text-purple-700 underline disabled:opacity-50" onClick={() => fitView.current?.()}>Enquadrar território</button></div>}{mode && <p className="text-sm text-gray-500">{pointCount} pontos no contorno</p>}{!ready && !error && <p role="status" className="text-sm text-gray-500">Carregando Google Maps…</p>}</div>;
 }

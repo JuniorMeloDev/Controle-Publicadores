@@ -5,6 +5,7 @@ import { getUserIdFromRequest } from '@/app/lib/server-access';
 import { registerAuditLog } from '@/app/lib/audit-log';
 import { fieldId } from '@/app/lib/field-service';
 import { readEditableTerritory,saveEditableTerritory } from '@/app/lib/editable-territory-server';
+import { backupEditableTerritoryDraft } from '@/app/lib/editable-territory-draft-backup-server';
 export const dynamic='force-dynamic';
 const pool=new Pool({connectionString:process.env.POSTGRES_URL});
 const failure=error=>NextResponse.json({message:error.code==='23505'?'Este número de território já está em uso.':error.status?error.message:'Não foi possível carregar ou salvar o desenho.'},{status:error.code==='23505'?409:error.status||500});
@@ -16,6 +17,8 @@ export async function GET(request){
 export async function POST(request){
   const denied=await authorizeRequest(request,'POST');if(denied)return denied;
   let body;try{body=await request.json();if(!body||typeof body!=='object')throw new Error();}catch{return NextResponse.json({message:'Dados inválidos.'},{status:400});}
+  try { await backupEditableTerritoryDraft(body, getUserIdFromRequest(request)); }
+  catch { return NextResponse.json({message:'Não foi possível guardar a cópia de segurança. Mantenha esta janela aberta e tente salvar novamente.'},{status:503}); }
   let client,transaction=false;
   try{client=await pool.connect();await client.query('BEGIN');transaction=true;const result=await saveEditableTerritory(client,body);
     await registerAuditLog(client,{userId:getUserIdFromRequest(request),action:'campo_desenho_salvo',entity:'campo_territorio',entityId:result.id,details:{revisao:result.revisao,grupo_id:body.grupo_id,numero:body.numero}});

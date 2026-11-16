@@ -3,6 +3,7 @@ const cross = (a, b) => a[0] * b[1] - a[1] * b[0];
 
 // Reserve the junction itself, then distribute whole words along its free sides.
 export function roadLabelLayout(road, roads, measure = text => text.length * 9) {
+  if (!road.name.trim()) return [];
   const baseMeasure=measure;
   measure=text=>baseMeasure(text)*(road.labelFontSize||18)/18;
   const length = road.points.slice(1).reduce((sum, point, i) => sum + distance(road.points[i], point), 0);

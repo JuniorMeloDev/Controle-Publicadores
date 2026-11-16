@@ -16,7 +16,7 @@ export function validateEditableLayout(value) {
     if(!Array.isArray(p)||p.length!==2||p.some(n=>typeof n!=='number'||!Number.isFinite(n))||p[0]<0||p[0]>1000||p[1]<0||p[1]>700)error('Um ponto está fora da área do desenho.');
     return p.map(n=>Math.round(n*100)/100);
   };
-  const text = (s,max=100) => {if(typeof s!=='string'||!s.trim()||s.trim().length>max)error('Preencha os nomes com até 100 caracteres.');return s.trim();};
+  const text = (s,max=100,allowEmpty=false) => {if(typeof s!=='string'||(!allowEmpty&&!s.trim())||s.trim().length>max)error('Preencha os nomes com até 100 caracteres.');return s.trim();};
   const id = s => {if(typeof s!=='string'||!/^[-\w]{1,80}$/.test(s))error('Identificação de elemento inválida.');return s;};
   if(!Array.isArray(value.outline)||value.outline.length<3||value.outline.length>200)error('A forma precisa de 3 a 200 pontos.');
   const outline=value.outline.map(point);
@@ -37,7 +37,7 @@ export function validateEditableLayout(value) {
   if(!Array.isArray(value.roads)||value.roads.length>100||!Array.isArray(value.landmarks)||value.landmarks.length>100)error('Limite de 100 ruas e 100 referências por desenho.');
   const roads=value.roads.map(r=>{
     if(!Array.isArray(r.points)||r.points.length<2||r.points.length>50)error('Uma rua precisa de 2 a 50 pontos.');
-    const road={id:id(r.id),name:text(r.name),points:r.points.map(point)};
+    const road={id:id(r.id),name:text(r.name,100,true),points:r.points.map(point)};
     if(r.labelFontSize!==undefined){
       if(typeof r.labelFontSize!=='number'||!Number.isFinite(r.labelFontSize)||r.labelFontSize < 8||r.labelFontSize > 32)error('O tamanho da fonte deve estar entre 8 e 32.');
       road.labelFontSize=Math.round(r.labelFontSize*100)/100;

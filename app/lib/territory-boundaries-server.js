@@ -42,12 +42,10 @@ export async function saveTerritoryBoundary(client, body) {
     if (id === null) {
       for (const territory of territorios.filter(t => t.limites)) checkBoundaryPlacement(territory.limites, boundary);
     } else {
-      checkBoundaryPlacement(boundary, geral?.limites, territorios.filter(t => t.id !== id && t.limites));
-      const peer = territorios.find(t => t.numero === selected.sugestao?.conflito_com);
-      if (peer?.sugestao) {
-        try { checkBoundaryPlacement(boundary, geral?.limites, [{ numero: peer.numero, limites: peer.sugestao.limites }]); }
-        catch { throw new Error(`Confira e ajuste a faixa comum dos cartões 19 e 20 antes de validar. O contorno ainda sobrepõe a sugestão do território ${peer.numero}.`); }
-      }
+      // A reviewed 19/18 border can be confirmed manually without modifying territory 18.
+      const confirmedBorder18 = selected.numero === 19 && body.confirmar_divisa_com_18 === true;
+      checkBoundaryPlacement(boundary, geral?.limites, territorios.filter(t => t.id !== id && t.limites && !(confirmedBorder18 && t.numero === 18)));
+      // Unpublished suggestions may come from outdated PDFs; only saved borders constrain publication.
     }
   } catch (e) { throw fail(e.message); }
   if (id === null) await client.query('UPDATE campo_mapa_geral SET limites = $1::jsonb, revisao = revisao + 1 WHERE id = 1', [JSON.stringify(boundary)]);
@@ -56,7 +54,9 @@ export async function saveTerritoryBoundary(client, body) {
     [id,JSON.stringify(boundary),randomBytes(32).toString('base64url'),JSON.stringify(drawing)]);
   else await client.query(`UPDATE campo_territorios SET limites = $2::jsonb, mapa_revisao = mapa_revisao + 1,
     mapa_share_token = COALESCE(mapa_share_token, $3) WHERE id = $1`, [id, JSON.stringify(boundary), randomBytes(32).toString('base64url')]);
-  return { id, revisao: revision + 1, ...(drawing?{mapa_layout:drawing,desenho_revisao:selected.mapa_layout_revisao+1}:{}) };
+  return { id, revisao: revision + 1,
+    ...(id !== null && selected.numero === 19 && body.confirmar_divisa_com_18 === true ? { divisa_18_confirmada: true } : {}),
+    ...(drawing?{mapa_layout:drawing,desenho_revisao:selected.mapa_layout_revisao+1}:{}) };
 }
 
 export async function findPublicTerritory(client, token) {

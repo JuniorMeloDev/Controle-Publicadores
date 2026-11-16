@@ -5,6 +5,12 @@ import { roadLabelLayout } from '../app/lib/road-label-layout.js';
 const horizontal = { id: 'horizontal', name: 'R. Cel. Kléber de Andrade', points: [[0, 200], [600, 200]] };
 const vertical = { id: 'vertical', name: 'Av. Bernardo Vieira de Melo', points: [[300, 0], [300, 400]] };
 const measure = text => text.length * 9;
+
+test('an unnamed street has no text label and keeps its geometry', () => {
+  const road = { ...horizontal, name: '' };
+  assert.deepEqual(roadLabelLayout(road, [road, vertical], measure), []);
+  assert.deepEqual(road.points, horizontal.points);
+});
 test('smaller street fonts reduce the label width while keeping it centered',()=>{
   const smaller={...horizontal,labelFontSize:12};
   const parts=roadLabelLayout(smaller,[smaller],measure);
