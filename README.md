@@ -104,6 +104,17 @@ Os e-mails são individuais. São necessárias as variáveis `EMAIL_USER`,
 
 ### Alertas pessoais e lembretes de designações
 
+Em **Configurações → Alertas**, as regras de designações, limpeza e relatório
+mensal valem para o sininho e para o push. Ative as notificações personalizadas
+em **Minhas notificações no aparelho (push)** para receber os avisos nesse
+navegador ou app. O cron diário das 10h (horário de Brasília) tenta entregar os
+avisos não lidos uma vez por aparelho, inclusive com os lembretes por e-mail
+desativados. Ao tocar na notificação, o site abre o aviso do sininho. Os pushes
+enviados pela Agenda de Serviço de Campo continuam no momento do envio pela Agenda.
+
+Para habilitar os avisos automáticos, execute `npm run migrate:field-service`
+e configure `CRON_SECRET` e as [variáveis VAPID](#notificações-de-serviço-de-campo-no-aparelho).
+
 O sininho mostra apenas alertas da pessoa conectada: próximas designações de todas
 as categorias, limpeza do grupo/responsável e relatório do mês anterior pendente.
 O prazo do relatório usa o mês civil; a consulta respeita o ano de serviço.
@@ -434,6 +445,19 @@ pode publicar um título e uma mensagem para os aparelhos que ativaram avisos
 gerais. Ao tocar na notificação, o visitante abre uma página pública com esse
 texto. O conteúdo também aparece na tela bloqueada, conforme as configurações
 do aparelho.
+
+Em **Mural da congregação → Nova publicação → Anúncio**, salvar uma publicação
+já visível inicia o envio imediatamente após a gravação. O push vai para os
+aparelhos com notificações personalizadas ativadas dentro do público escolhido
+no formulário. **Anciãos** e **Anciãos e Servos Ministeriais** restringem a
+leitura, os anexos e o push aos privilégios escolhidos. A lista de grupos do
+mural mostra os grupos ativos, com exceção de Inativos e Removidos. Ao tocar,
+o publicador abre o anúncio após autenticação. Editar
+um anúncio que já teve o envio iniciado não dispara outro aviso.
+
+Para anúncios com data futura, o cron `/api/cron/mural` processa as publicações
+do dia a partir da meia-noite de Brasília (03h UTC), conforme a janela do
+agendador. Ele usa o mesmo `CRON_SECRET` dos lembretes.
 
 Antes de publicar a aplicação, aplique `npm run migrate:field-service` para
 criar as tabelas e atualizar as inscrições existentes. Configure estas

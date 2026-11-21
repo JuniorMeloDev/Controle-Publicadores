@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
-import { deliverFieldPushes, deliverGeneralPushes } from '../app/lib/field-push.js';
+import { createHash } from 'node:crypto';
+import { deliverFieldPushes, deliverGeneralPushes, deliverPushRows } from '../app/lib/field-push.js';
 import { handleDevicePush } from '../app/lib/device-push-api.js';
 import { canAccessRoute } from '../app/lib/route-access.js';
-import { fieldNoticeFromHash } from '../app/lib/push-client.js';
+import { boardNoticeFromHash, fieldNoticeFromHash, notificationFromHash } from '../app/lib/push-client.js';
 import { isPushId, parsePushSubscription, PUSH_DEVICE_COOKIE } from '../app/lib/push-subscriptions.js';
 import { loadRoute } from './helpers/load-source.mjs';
 
@@ -142,6 +143,48 @@ test('general delivery selects only general opt-ins and sends the public message
   assert.deepEqual(sent, [[endpoint('general'), { generalId: deviceId, title: 'Aviso fictício', body: 'Mensagem pública de teste.' }]]);
 });
 
+test('scheduled push uses the unread bell notifications, sends once per device and respects account changes', async () => {
+  const rows = [
+    { aparelho_id: 'test-a', publicador_id: 101, endpoint: endpoint('a'), chaves: keys },
+    { aparelho_id: 'test-b', publicador_id: 101, endpoint: endpoint('b'), chaves: keys },
+    { aparelho_id: 'test-c', publicador_id: 102, endpoint: endpoint('c'), chaves: keys },
+  ];
+  const assignment = { id: 'vida-1', publicador_id: 101 };
+  const sent = [], ledger = new Set(), requests = [];
+  const client = { async query(sql, params) {
+    if (sql.startsWith('DELETE')) return { rows: [] };
+    if (sql.startsWith('SELECT')) {
+      assert.match(sql, /WHERE publicador_id IS NOT NULL/);
+      return { rows };
+    }
+    assert.match(sql, /s.publicador_id = \$2[\s\S]+NOT EXISTS \(SELECT 1 FROM alertas_lidos[\s\S]+ON CONFLICT DO NOTHING/);
+    const [device, , , id] = params;
+    const fingerprint = device + ':' + id;
+    if (device === 'test-c' || ledger.has(fingerprint)) return { rows: [] };
+    ledger.add(fingerprint);
+    return { rows: [device] };
+  } };
+  const source = readFileSync(new URL('../app/lib/bell-push.js', import.meta.url), 'utf8')
+    .replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
+  const worker = vm.runInNewContext(source + '\ndeliverBellPushes', {
+    createHash, getActiveAssignments: async () => [assignment], assignmentVersion: ({id}) => 'v-' + id,
+    getBellNotifications: async (_client, publisher, _today, options) => {
+      assert.equal(options.includeField, false);
+      assert.equal(options.assignments.length, publisher === 101 ? 1 : 0);
+      assert.equal(options.versions[0], 'v-vida-1');
+      requests.push(publisher);
+      return [{ id: 'designação:teste', category: 'designacao', detail: 'fixture private', read: false },
+        { id: 'lida:1', category: 'limpeza', read: true }];
+    },
+    deliverPushRows: (db, items, message, config, _send, claim) =>
+      deliverPushRows(db, items, message, config, async (sub, data) => sent.push([sub.endpoint, JSON.parse(data)]), claim),
+  });
+  assert.deepEqual(await worker(client, { today: '2030-01-07', settings: {}, vapid }), { sent: 2, failed: 0, skipped: 1 });
+  assert.deepEqual(await worker(client, { today: '2030-01-07', settings: {}, vapid }), { sent: 0, failed: 0, skipped: 3 });
+  assert.deepEqual(requests, [101, 102, 101, 102]);
+  assert.deepEqual(sent, ['a', 'b'].map(name => [endpoint(name), { alertId: 'designação:teste', category: 'designacao' }]));
+});
+
 test('publishing general notices is restricted to super admins and duplicate requests do not send again', async () => {
   const path = '/api/admin/notificacoes/avisos-gerais';
   assert.equal(canAccessRoute({ isSuperAdmin: false }, path, 'POST'), false);
@@ -205,4 +248,14 @@ test('service worker displays generic copy and opens the exact notice with or wi
   assert.equal(shown[1].body, 'Mensagem pública');
   await dispatch('notificationclick', { notification: { ...shown[1], close() {} } });
   assert.equal(opened[1], origin + '/avisos/' + deviceId);
+  await dispatch('push', { data: { json: () => ({ alertId: 'vida:2030-01-15:Leitura bíblica', category: 'designacao' }) } });
+  assert.equal(shown[2].body, 'Você tem um novo aviso no sininho.');
+  await dispatch('notificationclick', { notification: { ...shown[2], close() {} } });
+  assert.equal(notificationFromHash(new URL(opened[2]).hash), 'vida:2030-01-15:Leitura bíblica');
+  assert.equal(notificationFromHash('#aviso-pessoal=%C3'), null);
+  await dispatch('push', { data: { json: () => ({ boardId: '42', title: 'Conteúdo interno' }) } });
+  assert.equal(shown[3].title, 'Mural da congregação');
+  assert.equal(shown[3].body, 'Um novo anúncio foi publicado.');
+  await dispatch('notificationclick', { notification: { ...shown[3], close() {} } });
+  assert.equal(boardNoticeFromHash(new URL(opened[3]).hash), 42);
 });

@@ -3,10 +3,13 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { loadModule, loadRoute } from './helpers/load-source.mjs';
+import { deliverBoardPushes } from '../app/lib/board-push.js';
+import { BOARD_AUDIENCES } from '../app/lib/board-audiences.js';
+import { boardGroupAvailableSql, boardRoleSql, getVisiblePosts } from '../app/lib/congregation-board-server.js';
 
 const { isCalendarDate } = await loadModule('../../app/lib/meeting-calendar.js');
 const source = readFileSync(new URL('../app/lib/congregation-board.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
-const context = vm.createContext({ isCalendarDate, URL });
+const context = vm.createContext({ BOARD_AUDIENCES, isCalendarDate, URL });
 vm.runInContext(source + '\nglobalThis.board = { canManageBoard, validateBoardPost };', context);
 const { canManageBoard, validateBoardPost } = context.board;
 const valid = { tipo: 'anuncio', titulo: 'Aviso de teste', mensagem: 'Mensagem de teste', inicio: '2030-01-07' };
@@ -39,14 +42,27 @@ test('materials require a safe link and preserve audience and publication period
   assert.equal(material.fim, '2030-02-01'); assert.equal(material.confirmar_leitura, false);
 });
 
-function fixture() {
+test('role audiences are explicit and cannot be mixed with a field group', () => {
+  assert.equal(validateBoardPost(valid).publico, 'todos');
+  for (const publico of ['anciaos', 'anciaos_servos']) {
+    const validated = validateBoardPost({ ...valid, publico });
+    assert.equal(validated.publico, publico);
+    assert.equal(validated.grupo_id, null);
+    assert.throws(() => validateBoardPost({ ...valid, publico, grupo_id: 1 }), /Público inválido/);
+  }
+  assert.throws(() => validateBoardPost({ ...valid, publico: 'constructor' }), /Público inválido/);
+});
+
+function fixture({ vapid = null, auditFails = false, deniedUpdate = false } = {}) {
   let userId = 10;
   let access = { user: { privilegios: [] } };
   let posts = [{ id: 1, tipo: 'anuncio' }];
   const calls = [];
+  const jobs = [];
   const client = { release() {}, query: async (sql, params) => {
     calls.push({ sql, params });
-    if (sql.startsWith('SELECT id FROM grupos')) return { rows: [{ id: 3 }] };
+    if (sql.startsWith('SELECT id FROM grupos')) return { rows: params[0] === 3 ? [{ id: 3 }] : [] };
+    if (deniedUpdate && /^(UPDATE|DELETE FROM) mural_congregacao/.test(sql)) return { rows: [] };
     if (/RETURNING id/.test(sql)) return { rows: [{ id: 1 }] };
     return { rows: [] };
   } };
@@ -54,9 +70,17 @@ function fixture() {
     Pool: class { connect() { return client; } },
     getUserIdFromRequest: () => userId, getUserAccess: async () => access,
     canManageBoard, validateBoardPost, ensureBoardTables: async () => {},
-    getVisiblePosts: async () => posts, registerAuditLog: async (_client, input) => calls.push({ audit: input }),
+    getVisiblePosts: async () => posts,
+    registerAuditLog: async (_client, input) => {
+      if (auditFails) throw new Error('audit fixture');
+      calls.push({ audit: input });
+    },
+    fieldPushVapid: () => vapid,
+    boardGroupAvailableSql, boardRoleSql,
+    after: callback => { calls.push({ after: true }); jobs.push(callback); },
+    deliverBoardPushes: async (_pool, options) => calls.push({ push: options }),
   });
-  return { route, calls, user: value => { userId = value; }, access: value => { access = value; }, posts: value => { posts = value; } };
+  return { route, jobs, calls, user: value => { userId = value; }, access: value => { access = value; }, posts: value => { posts = value; } };
 }
 const request = body => ({ url: 'http://localhost/api/mural', headers: { get: () => null }, json: async () => body });
 
@@ -97,12 +121,78 @@ test('elder edits clear reading confirmations and audit the write inside a trans
   assert.equal(f.calls.at(-1).sql, 'COMMIT');
 });
 
+test('board management filters role-restricted posts and rejects unavailable groups and guessed edit IDs', async () => {
+  const f = fixture({ deniedUpdate: true }); f.access({ isSuperAdmin: true });
+  assert.equal((await f.route.GET({ url: 'http://localhost/api/mural?manage=1' })).status, 200);
+  assert.ok(f.calls[0].sql.includes(boardRoleSql));
+  assert.ok(f.calls[1].sql.includes(boardGroupAvailableSql));
+  assert.match(f.calls[1].sql, /COALESCE\(ativo, TRUE\)[\s\S]+NOT IN \('inativos', 'removidos'\)/);
+  f.calls.length = 0;
+  assert.equal((await f.route.POST(request({ ...valid, action: 'save', grupo_id: 99 }))).status, 400);
+  assert.ok(f.calls[0].sql.includes(boardGroupAvailableSql));
+  f.calls.length = 0;
+  assert.equal((await f.route.POST(request({ ...valid, action: 'save', id: 123 }))).status, 404);
+  const update = f.calls.find(call => call.sql?.startsWith('UPDATE mural_congregacao'));
+  assert.ok(update.sql.includes(boardRoleSql));
+  assert.ok(!update.sql.includes('publico = $'));
+  assert.equal((await f.route.POST(request({ action: 'delete', id: 123 }))).status, 404);
+  assert.ok(f.calls.find(call => call.sql?.startsWith('DELETE FROM mural_congregacao')).sql.includes(boardRoleSql));
+});
+
+test('announcements queue within the transaction and start push only after commit', async () => {
+  const vapid = { publicKey: 'test-key' };
+  const f = fixture({ vapid }); f.access({ isSuperAdmin: true });
+  assert.equal((await f.route.POST(request({ ...valid, action: 'save' }))).status, 200);
+  const queueIndex = f.calls.findIndex(call => call.sql?.startsWith('INSERT INTO mural_push_pendentes'));
+  const commitIndex = f.calls.findIndex(call => call.sql === 'COMMIT');
+  assert.ok(queueIndex > 0 && queueIndex < commitIndex);
+  assert.equal(f.calls.at(-1).after, true);
+  await f.jobs[0]();
+  assert.equal(f.calls.at(-1).push.postId, 1);
+  f.calls.length = 0;
+  await f.route.POST(request({ ...valid, action: 'save', id: 1 }));
+  assert.ok(!f.calls.some(call => call.sql?.startsWith('INSERT INTO mural_push_pendentes')));
+  const failed = fixture({ vapid, auditFails: true }); failed.access({ isSuperAdmin: true });
+  assert.equal((await failed.route.POST(request({ ...valid, action: 'save' }))).status, 500);
+  assert.equal(failed.calls.at(-1).sql, 'ROLLBACK');
+  assert.equal(failed.jobs.length, 0);
+});
+
+test('board delivery claims published announcements atomically and sends only a private reference', async () => {
+  const sent = [];
+  const db = { async query(sql, params) {
+    assert.match(sql, /DELETE FROM mural_push_pendentes[\s\S]+post.inicio <= [\s\S]+m.grupo_id = p.grupo_id/);
+    assert.match(sql, /JOIN publicadores p ON p.id = s.publicador_id/);
+    assert.ok(sql.includes(boardRoleSql));
+    assert.match(sql, /m.fim >= [\s\S]+s.expira_em > NOW/);
+    assert.deepEqual(params, [7, 'test-key']);
+    return { rows: [{ aviso_id: '7', endpoint: 'https://fcm.googleapis.com/fcm/send/fixture', chaves: {} }] };
+  } };
+  await deliverBoardPushes(db, { postId: 7, vapid: { publicKey: 'test-key' },
+    send: async (_device, data, options) => sent.push([JSON.parse(data), options.topic]),
+  });
+  assert.deepEqual(sent, [[{ boardId: '7' }, 'mural-7']]);
+});
+
+test('scheduled board delivery accepts only the authorized scheduler', async () => {
+  let runs = 0;
+  const route = loadRoute('../../app/api/cron/mural/route.js', {
+    Pool: class {}, process: { env: { CRON_SECRET: 'test-secret' } }, fieldPushVapid: () => ({}),
+    ensureBoardTables: async () => {},
+    deliverBoardPushes: async () => { runs++; return { sent: 0, failed: 0, skipped: 0 }; },
+  });
+  assert.equal((await route.GET({ headers: new Headers({ 'x-vercel-cron': '1' }) })).status, 401);
+  assert.equal(runs, 0);
+  assert.equal((await route.GET({ headers: new Headers({ authorization: 'Bearer test-secret' }) })).status, 200);
+  assert.equal(runs, 1);
+});
+
 test('visible board query filters by publisher group, publication dates and outing time', async () => {
-  const { getVisiblePosts } = await loadModule('../../app/lib/congregation-board-server.js');
   let captured;
   await getVisiblePosts({ query: async (sql, params) => { captured = { sql, params }; return { rows: [] }; } }, 10);
   assert.deepEqual(captured.params, [10]);
   for (const filter of ['m.grupo_id = p.grupo_id', 'm.inicio <=', 'm.fim >=', 'm.data + m.horario::time', 'l.publicador_id = p.id']) assert.ok(captured.sql.includes(filter));
+  assert.ok(captured.sql.includes(boardRoleSql));
 });
 
 test('overview excludes cancelled meetings and publishes programme titles without private metadata', async () => {

@@ -63,9 +63,9 @@ export async function getActiveAssignments(client, { publisherId, today }) {
     });
 }
 
-export async function getPersonalNotifications(client, publisherId, today) {
-    const settings = await getAlertSettings(client);
-    const assignments = await getActiveAssignments(client, { publisherId, today });
+export async function getPersonalNotifications(client, publisherId, today, options = {}) {
+    const settings = options.settings ?? await getAlertSettings(client);
+    const assignments = options.assignments ?? await getActiveAssignments(client, { publisherId, today });
     let reportPending = false;
     if (settings.reportsEnabled) {
         const period = previousReportPeriod(today);
@@ -79,7 +79,8 @@ export async function getPersonalNotifications(client, publisherId, today) {
         reportPending = report.rows.length > 0;
     }
     const notifications = buildNotifications({ assignments, settings, today, reportPending });
-    notifications.unshift(...await readFieldNotifications(client, publisherId));
+    if (options.includeField !== false) notifications.unshift(...await readFieldNotifications(client, publisherId));
+    notifications.unshift(...(options.refusals || []));
     const { rows: read } = await client.query('SELECT notificacao_id FROM alertas_lidos WHERE publicador_id = $1', [publisherId]);
     const readIds = new Set(read.map(row => row.notificacao_id));
     return notifications.map(n => ({ ...n, read: readIds.has(n.id) }));

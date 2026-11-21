@@ -7,6 +7,7 @@ import { todayInBrazil, buildEmailReminders, reminderMessage } from '@/app/lib/a
 import { getEmailLogoAttachment } from '@/app/lib/email-brand';
 import { emailSender } from '@/app/lib/email-layout';
 import { deliverAbsenceEmails } from '@/app/lib/meeting-absence-service';
+import { deliverBellPushes } from '@/app/lib/bell-push';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -19,13 +20,23 @@ export async function GET(request) {
     }
     const client = await pool.connect();
     try {
-        await deliverRefusalEmails(client);
         const settings = await getAlertSettings(client);
-        if (!settings.emailEnabled && !settings.absenceEmailEnabled) return NextResponse.json({ message: 'Lembretes por e-mail desativados.' });
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            return NextResponse.json({ message: 'Envio de e-mail não configurado.' }, { status: 503 });
-        }
         const today = todayInBrazil();
+        let push;
+        try { push = await deliverBellPushes(client, { today, settings }); }
+        catch (error) {
+            console.error('Falha ao processar notificações push:', error.code || error.name);
+            push = { error: 'Não foi possível processar as notificações no aparelho.' };
+        }
+        await deliverRefusalEmails(client);
+        const pushResult = push ? { push } : {};
+        const pushFailed = push?.error || push?.failed;
+        if (!settings.emailEnabled && !settings.absenceEmailEnabled) return NextResponse.json(
+            { message: push ? 'Notificações no aparelho processadas.' : 'Lembretes por e-mail desativados.', ...pushResult },
+            { status: pushFailed ? 503 : 200 });
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            return NextResponse.json({ message: 'Envio de e-mail não configurado.', ...pushResult }, { status: 503 });
+        }
         const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
             connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000 });
         let logo;
@@ -33,7 +44,7 @@ export async function GET(request) {
             logo ||= await getEmailLogoAttachment();
             return transporter.sendMail({ from: emailSender(process.env.EMAIL_USER), ...message, attachments: [logo] });
         } });
-        if (!settings.emailEnabled) return NextResponse.json({ message: 'Relatórios de ausentes processados.', absence }, { status: absence.failed ? 503 : 200 });
+        if (!settings.emailEnabled) return NextResponse.json({ message: 'Relatórios de ausentes processados.', absence, ...pushResult }, { status: absence.failed || pushFailed ? 503 : 200 });
         const assignments = await getActiveAssignments(client, { today });
         const { rows: publishers } = await client.query(`SELECT p.id, p.nome_completo, p.nome_chamado, p.email,
             COALESCE(pref.email_designacoes, TRUE) AS email_reminders_enabled
@@ -53,7 +64,7 @@ export async function GET(request) {
                 from: emailSender(process.env.EMAIL_USER), to: reminder.email, ...reminderMessage(reminder), attachments: [logo],
             });
         });
-        return NextResponse.json({ message: 'Lembretes processados.', ...totals, absence }, { status: totals.failed || absence.failed ? 503 : 200 });
+        return NextResponse.json({ message: 'Lembretes processados.', ...totals, absence, ...pushResult }, { status: totals.failed || absence.failed || pushFailed ? 503 : 200 });
     } catch (error) {
         console.error('Falha ao processar lembretes:', error.message);
         return NextResponse.json({ message: 'Não foi possível processar os lembretes.' }, { status: 500 });

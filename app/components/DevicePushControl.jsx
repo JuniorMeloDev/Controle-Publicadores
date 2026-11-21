@@ -1,18 +1,21 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Button } from '@/app/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { applicationServerKey, clearDevicePush, requestDevicePush, supportsDevicePush } from '@/app/lib/push-client';
 
 const subscribeToSupport = () => () => {};
 const serverSupport = () => null;
 
-export function DevicePushControl({ userId = null, general = false }) {
+export function DevicePushControl({ userId = null, general = false, inviteOnEntry = false }) {
   const supported = useSyncExternalStore(subscribeToSupport, supportsDevicePush, serverSupport);
   const [device, setDevice] = useState(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [inviteDismissed, setInviteDismissed] = useState(false);
+  const settingsButton = useRef(null);
 
   useEffect(() => {
     if (!supportsDevicePush()) return;
@@ -51,6 +54,7 @@ export function DevicePushControl({ userId = null, general = false }) {
       if (device.enabled) {
         await requestDevicePush(general, 'DELETE', { userId });
         await clearDevicePush({ registration: device.registration, general });
+        setInviteDismissed(true);
         setDevice(current => ({ ...current, enabled: false }));
         setMessage(general ? 'Avisos gerais desativados.' : 'Notificações personalizadas desativadas.');
         window.dispatchEvent(new Event('device-push:updated'));
@@ -73,6 +77,7 @@ export function DevicePushControl({ userId = null, general = false }) {
         subscription = await manager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
       }
       await requestDevicePush(general, 'PUT', { userId, publicKey: device.publicKey, subscription: subscription.toJSON() });
+      setInviteDismissed(true);
       setDevice(current => ({ ...current, enabled: true, endpoint: subscription.endpoint, subscriptionKey: device.publicKey, subscription }));
       setMessage(general ? 'Avisos gerais ativados.' : 'Notificações personalizadas ativadas.');
       window.dispatchEvent(new Event('device-push:updated'));
@@ -88,8 +93,9 @@ export function DevicePushControl({ userId = null, general = false }) {
   const available = device?.registration?.active && device.publicKey && Notification.permission !== 'denied';
   const inactive = device?.enabled && (device.subscription?.endpoint !== device.endpoint
     || device.subscriptionKey !== device.publicKey || Notification.permission !== 'granted');
+  const inviteOpen = inviteOnEntry && general && supported && available && !device.enabled && !inviteDismissed;
   return <div className="space-y-1 text-sm">
-    {supported ? <Button type="button" variant="outline" size="sm" disabled={busy || (!device?.enabled && !available)} onClick={toggle}>
+    {supported ? <Button ref={settingsButton} type="button" variant="outline" size="sm" disabled={busy || (!device?.enabled && !available)} onClick={toggle}>
       {device?.enabled ? (general ? 'Desativar avisos gerais' : 'Desativar notificações personalizadas')
         : (general ? 'Ativar avisos gerais' : 'Ativar notificações personalizadas')}
     </Button> : <p className="text-gray-600">Notificações no aparelho indisponíveis neste navegador. No iPhone ou iPad, abra o app pela Tela de Início.</p>}
@@ -98,5 +104,22 @@ export function DevicePushControl({ userId = null, general = false }) {
       : inactive ? <p className="text-gray-600">Para receber novamente, desative e reative as notificações neste aparelho.</p>
       : device && !device.publicKey ? <p className="text-gray-600">As notificações no aparelho ainda não foram configuradas.</p>
       : device && !device.registration?.active ? <p className="text-gray-600">Preparando as notificações neste aparelho…</p> : null}
+    {inviteOnEntry && <Dialog open={Boolean(inviteOpen)} onOpenChange={open => { if (!open) setInviteDismissed(true); }}>
+      <DialogContent className="w-[calc(100%_-_2rem)] max-w-sm rounded-xl text-foreground"
+        onCloseAutoFocus={event => {
+          event.preventDefault();
+          (settingsButton.current?.disabled ? document.getElementById('email') : settingsButton.current)?.focus();
+        }}>
+        <DialogHeader>
+          <DialogTitle className="pr-5">Quer receber avisos gerais?</DialogTitle>
+          <DialogDescription>Receba os avisos da congregação neste aparelho, mesmo com o site fechado.</DialogDescription>
+        </DialogHeader>
+        {message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setInviteDismissed(true)}>Agora não</Button>
+          <Button type="button" disabled={busy} onClick={toggle}>{busy ? 'Ativando…' : 'Ativar avisos gerais'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>}
   </div>;
 }

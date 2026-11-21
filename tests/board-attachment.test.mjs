@@ -49,20 +49,25 @@ test('a real DOCX produces a readable browser preview and oversized ZIP expansio
 });
 
 test('private attachment route rejects other groups, expired publications and anonymous requests', async () => {
-  let userId = 10, visible = [], elder = false, reads = 0;
+  let userId = 10, visible = false, manager = false, roleAllowed = true;
   const route = loadRoute('../../app/api/mural/anexo/[id]/route.js', {
-    Pool: class { connect() { return { release() {}, query: async () => { reads++; return { rows: [{ nome: 'test.pdf', mime: 'application/pdf', conteudo: pdf, previa_html: null }] }; } }; } },
-    getUserIdFromRequest: () => userId, getUserAccess: async () => ({ elder }), canManageBoard: access => access.elder,
-    ensureBoardTables: async () => {}, getVisiblePosts: async () => visible, attachmentPreview, Response, Uint8Array,
+    Pool: class { connect() { return { release() {} }; } },
+    getUserIdFromRequest: () => userId, getUserAccess: async () => ({ manager }), canManageBoard: access => access.manager,
+    ensureBoardTables: async () => {}, attachmentPreview, Response, Uint8Array,
+    getBoardAttachment: async (_client, { id, userId: viewer, manage }) => {
+      assert.equal(viewer, 10); assert.equal(id, 1);
+      if (roleAllowed && (visible || manage)) return { nome: 'test.pdf', mime: 'application/pdf', conteudo: pdf, previa_html: null };
+    },
   });
   const req = { url: 'http://localhost/api/mural/anexo/1' }, params = { params: Promise.resolve({ id: '1' }) };
-  assert.equal((await route.GET(req, params)).status, 404); assert.equal(reads, 0);
-  visible = [{ id: 1 }];
+  assert.equal((await route.GET(req, params)).status, 404);
+  visible = true;
   const response = await route.GET(req, params);
   assert.equal(response.status, 200); assert.match(response.headers.get('Content-Disposition'), /^inline/);
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), pdf);
   assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
-  visible = []; elder = true; assert.equal((await route.GET(req, params)).status, 200);
+  visible = false; manager = true; assert.equal((await route.GET(req, params)).status, 200);
+  roleAllowed = false; assert.equal((await route.GET(req, params)).status, 404);
   userId = null; assert.equal((await route.GET(req, params)).status, 401);
 });
 

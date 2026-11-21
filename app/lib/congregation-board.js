@@ -1,4 +1,5 @@
 import { isCalendarDate } from './meeting-calendar';
+import { BOARD_AUDIENCES } from './board-audiences.js';
 
 export const canManageBoard = access => access?.isSuperAdmin === true ||
   (Array.isArray(access?.user?.privilegios) && access.user.privilegios.includes('anciao'));
@@ -14,6 +15,7 @@ export function validateBoardPost(body, { hasAttachment = false } = {}) {
   const horario = text('horario');
   const local = text('local');
   const link = text('link');
+  const publico = body.publico === undefined ? 'todos' : body.publico;
   const grupo_id = body.grupo_id == null || body.grupo_id === '' ? null : Number(body.grupo_id);
   if (!['anuncio', 'saida', 'material'].includes(tipo)) throw new Error('Tipo de publicação inválido.');
   if (!titulo || titulo.length > 160 || !mensagem || mensagem.length > 5000) throw new Error('Informe título (até 160 caracteres) e mensagem (até 5.000 caracteres).');
@@ -21,6 +23,7 @@ export function validateBoardPost(body, { hasAttachment = false } = {}) {
   if (tipo === 'saida' && (!isCalendarDate(data) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(horario) || !local)) throw new Error('Informe data, horário e local da saída de campo.');
   if (tipo === 'saida' && (data < inicio || (fim && data > fim))) throw new Error('A saída deve ocorrer dentro do período de publicação.');
   if (local.length > 250 || (grupo_id !== null && (!Number.isSafeInteger(grupo_id) || grupo_id <= 0))) throw new Error('Local ou grupo inválido.');
+  if (typeof publico !== 'string' || !Object.hasOwn(BOARD_AUDIENCES, publico) || (publico !== 'todos' && grupo_id !== null)) throw new Error('Público inválido.');
   if (tipo === 'material' && !link && !hasAttachment) throw new Error('Informe o link do material ou anexe um arquivo.');
   if (link) {
     let url;
@@ -29,5 +32,5 @@ export function validateBoardPost(body, { hasAttachment = false } = {}) {
   }
   return { tipo, titulo, mensagem, inicio, fim: fim || null, data: tipo === 'saida' ? data : null,
     horario: tipo === 'saida' ? horario : null, local: tipo === 'saida' ? local : null,
-    link: link || null, grupo_id, fixado: body.fixado === true, confirmar_leitura: tipo === 'anuncio' && body.confirmar_leitura === true };
+    link: link || null, grupo_id, publico, fixado: body.fixado === true, confirmar_leitura: tipo === 'anuncio' && body.confirmar_leitura === true };
 }

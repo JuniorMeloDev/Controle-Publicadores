@@ -19,6 +19,7 @@ export function loadRoute(path, dependencies) {
         withAssignmentResponses: async (_client, assignments) => assignments,
         getRefusalNotifications: async () => [],
         deliverRefusalEmails: async () => {},
+        deliverBellPushes: async () => null,
         confirmationEmailContent: async () => ({ html: '', text: '' }),
         getActiveAssignments: async () => [],
         meaningfulAssignments: items => items,

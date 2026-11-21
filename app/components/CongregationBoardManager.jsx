@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { useUserSession } from './UserSessionProvider';
 import { Megaphone, Plus, Pencil, Trash2 } from 'lucide-react';
 import { ATTACHMENT_ACCEPT, ATTACHMENT_HELP, MAX_ATTACHMENT_BYTES } from '@/app/lib/attachment-info';
+import { BOARD_AUDIENCES, boardAudienceLabel } from '@/app/lib/board-audiences';
 
 const input = 'mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900';
-const blank = () => ({ tipo: 'anuncio', titulo: '', mensagem: '', inicio: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }), fim: '', data: '', horario: '', local: '', link: '', grupo_id: '', fixado: false, confirmar_leitura: false });
+const blank = () => ({ tipo: 'anuncio', titulo: '', mensagem: '', inicio: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }), fim: '', data: '', horario: '', local: '', link: '', grupo_id: null, publico: 'todos', fixado: false, confirmar_leitura: false });
 
 export default function CongregationBoardManager() {
   const { user } = useUserSession();
@@ -61,6 +62,12 @@ export default function CongregationBoardManager() {
     finally { setBusy(false); }
   }
   const field = (key, value) => setForm(previous => ({ ...previous, [key]: value }));
+  const audience = form?.grupo_id ? `grupo:${form.grupo_id}` : form?.publico || 'todos';
+  const unavailableGroup = form?.grupo_id && !groups.some(group => group.id === form.grupo_id);
+  function changeAudience(value) {
+    const isGroup = value.startsWith('grupo:');
+    setForm(previous => ({ ...previous, publico: isGroup ? 'todos' : value, grupo_id: isGroup ? Number(value.slice(6)) : null }));
+  }
   if (!allowed) return null;
   return <section className="mb-5 rounded-xl border border-purple-200 bg-white p-4 sm:p-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="flex items-center gap-2 font-semibold text-gray-900"><Megaphone className="h-5 w-5 text-purple-600" />Mural da congregação</h2><p className="mt-1 text-sm text-gray-500">Publique anúncios, saídas de campo e materiais úteis para os publicadores.</p></div><button type="button" onClick={() => setOpen(!open)} className="rounded-lg border border-purple-200 px-3 py-2 text-sm font-medium text-purple-700">{open ? 'Fechar gerenciamento' : 'Gerenciar publicações'}</button></div>
@@ -71,7 +78,11 @@ export default function CongregationBoardManager() {
         <h3 className="font-semibold text-gray-900">{form.id ? 'Editar publicação' : 'Nova publicação'}</h3>
         <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2 disabled:opacity-60">
           <label className="text-sm text-gray-700">Tipo<select aria-label="Tipo" className={input} value={form.tipo} onChange={event => field('tipo', event.target.value)}><option value="anuncio">Anúncio</option><option value="saida">Saída de campo</option><option value="material">Material útil</option></select></label>
-          <label className="text-sm text-gray-700">Público<select className={input} value={form.grupo_id ?? ''} onChange={event => field('grupo_id', event.target.value)}><option value="">Toda a congregação</option>{groups.map(group => <option key={group.id} value={group.id}>{group.nome_grupo}</option>)}</select></label>
+          <label className="text-sm text-gray-700">Público<select className={input} value={audience} onChange={event => changeAudience(event.target.value)}>
+            {Object.entries(BOARD_AUDIENCES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            {unavailableGroup && <option disabled value={audience}>Grupo indisponível</option>}
+            {groups.map(group => <option key={group.id} value={`grupo:${group.id}`}>{group.nome_grupo}</option>)}
+          </select></label>
           <label className="text-sm text-gray-700 sm:col-span-2">Título<input required maxLength={160} className={input} value={form.titulo} onChange={event => field('titulo', event.target.value)} /></label>
           <label className="text-sm text-gray-700 sm:col-span-2">Mensagem<textarea required maxLength={5000} rows={4} className={input} value={form.mensagem} onChange={event => field('mensagem', event.target.value)} /></label>
           <label className="text-sm text-gray-700">Exibir a partir de<input required type="date" className={input} value={form.inicio} onChange={event => field('inicio', event.target.value)} /></label>
@@ -87,9 +98,10 @@ export default function CongregationBoardManager() {
           {form.tipo === 'anuncio' && <><label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={form.fixado} onChange={event => field('fixado', event.target.checked)} />Fixar anúncio importante</label><label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={form.confirmar_leitura} onChange={event => field('confirmar_leitura', event.target.checked)} />Solicitar confirmação de leitura</label></>}
         </fieldset>
         {form.id && <p className="text-xs text-gray-500">Ao salvar alterações, as confirmações de leitura serão reiniciadas.</p>}
+        {!form.id && form.tipo === 'anuncio' && <p className="text-sm text-gray-600">Quando o anúncio ficar visível, o público selecionado receberá um aviso no aparelho se tiver ativado as notificações personalizadas.</p>}
         <div className="flex gap-3"><button disabled={busy} className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{busy ? 'Salvando...' : 'Salvar publicação'}</button><button type="button" disabled={busy} onClick={() => { setForm(null); setAttachment(null); }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700">Cancelar</button></div>
       </form> : <button type="button" disabled={busy || loading} onClick={() => { setForm(blank()); setAttachment(null); setDeleting(null); setMessage(''); }} className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm text-white disabled:opacity-50"><Plus className="h-4 w-4" />Nova publicação</button>}
-      {loading ? <p role="status" className="text-sm text-gray-500">Carregando publicações...</p> : !posts.length ? <p className="text-sm text-gray-500">Nenhuma publicação cadastrada.</p> : <ul className="space-y-2">{posts.map(post => <li key={post.id} className="rounded-lg border border-gray-200 p-3"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="break-words font-medium text-gray-900">{post.titulo}</p><p className="mt-1 text-xs text-gray-500">{post.tipo === 'saida' ? 'Saída de campo' : post.tipo === 'material' ? 'Material útil' : 'Anúncio'} · {post.nome_grupo || 'Toda a congregação'} · {post.inicio.split('-').reverse().join('/')}{post.fim ? ` até ${post.fim.split('-').reverse().join('/')}` : ' · Sem expiração'}</p></div><div className="flex gap-2"><button type="button" disabled={busy} aria-label={`Editar ${post.titulo}`} onClick={() => { setAttachment(null); setForm({ ...post, fim: post.fim || '', link: post.link || '' }); setDeleting(null); }} className="rounded-lg p-2 text-purple-700 hover:bg-purple-50"><Pencil className="h-4 w-4" /></button><button type="button" disabled={busy} aria-label={`Excluir ${post.titulo}`} onClick={() => setDeleting(post.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button></div></div>{deleting === post.id && <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-gray-700"><span>Excluir esta publicação?</span><button type="button" disabled={busy} onClick={() => mutate({ action: 'delete', id: post.id })} className="font-medium text-red-600">Confirmar exclusão</button><button type="button" disabled={busy} onClick={() => setDeleting(null)}>Cancelar</button></div>}</li>)}</ul>}
+      {loading ? <p role="status" className="text-sm text-gray-500">Carregando publicações...</p> : !posts.length ? <p className="text-sm text-gray-500">Nenhuma publicação cadastrada.</p> : <ul className="space-y-2">{posts.map(post => <li key={post.id} className="rounded-lg border border-gray-200 p-3"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="break-words font-medium text-gray-900">{post.titulo}</p><p className="mt-1 text-xs text-gray-500">{post.tipo === 'saida' ? 'Saída de campo' : post.tipo === 'material' ? 'Material útil' : 'Anúncio'} · {boardAudienceLabel(post)} · {post.inicio.split('-').reverse().join('/')}{post.fim ? ` até ${post.fim.split('-').reverse().join('/')}` : ' · Sem expiração'}</p></div><div className="flex gap-2"><button type="button" disabled={busy} aria-label={`Editar ${post.titulo}`} onClick={() => { setAttachment(null); setForm({ ...post, fim: post.fim || '', link: post.link || '' }); setDeleting(null); }} className="rounded-lg p-2 text-purple-700 hover:bg-purple-50"><Pencil className="h-4 w-4" /></button><button type="button" disabled={busy} aria-label={`Excluir ${post.titulo}`} onClick={() => setDeleting(post.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button></div></div>{deleting === post.id && <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-gray-700"><span>Excluir esta publicação?</span><button type="button" disabled={busy} onClick={() => mutate({ action: 'delete', id: post.id })} className="font-medium text-red-600">Confirmar exclusão</button><button type="button" disabled={busy} onClick={() => setDeleting(null)}>Cancelar</button></div>}</li>)}</ul>}
     </div>}
   </section>;
 }

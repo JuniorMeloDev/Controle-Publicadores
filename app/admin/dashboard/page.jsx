@@ -6,6 +6,7 @@ import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import PersonalPortal from '@/app/components/PersonalPortal';
 import CongregationBoardManager from '@/app/components/CongregationBoardManager';
+import { BoardNoticeDialog } from '@/app/components/CongregationOverview';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
 import { Users, Calendar, ArrowRight, TrendingUp, FileText, CheckCircle, Clock, Loader2, X, Printer, Search, MessageCircle } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from '@/app/components/ui/sheet';
@@ -627,9 +628,9 @@ function CongregationDashboard() {
   );
 }
 function DashboardContent() {
-  const { permissions, isLoading } = usePermissions();
+  const { permissions, isLoading, user } = usePermissions();
   if (isLoading) return null;
-  return <><CongregationBoardManager />{permissions?.pages?.dashboard ? <CongregationDashboard /> : <PersonalPortal />}</>;
+  return <><BoardNoticeDialog key={user?.id} /><CongregationBoardManager />{permissions?.pages?.dashboard ? <CongregationDashboard /> : <PersonalPortal />}</>;
 }
 
 export default function Dashboard() {

@@ -84,10 +84,27 @@ self.addEventListener('fetch', (event) => {
 
 const noticeHash = id => typeof id === 'string' && /^[1-9][0-9]{0,18}$/.test(id) ? `#aviso-campo-${id}` : '';
 const isGeneralId = id => typeof id === 'string' && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(id);
+const isAlertId = id => typeof id === 'string' && id.length > 0 && id.length <= 512;
+const isBoardId = id => typeof id === 'string' && /^[1-9][0-9]{0,9}$/.test(id);
+const alertTitles = { designacao: 'Designações', limpeza: 'Limpeza', relatorio: 'Relatório mensal' };
 
 self.addEventListener('push', event => {
   let payload;
   try { payload = event.data?.json(); } catch { return; }
+  if (isBoardId(payload?.boardId)) {
+    event.waitUntil(self.registration.showNotification('Mural da congregação', {
+      body: 'Um novo anúncio foi publicado.',
+      icon: '/icon-192.png', tag: `mural-${payload.boardId}`, data: { boardId: payload.boardId },
+    }));
+    return;
+  }
+  if (isAlertId(payload?.alertId) && Object.hasOwn(alertTitles, payload.category)) {
+    event.waitUntil(self.registration.showNotification(alertTitles[payload.category], {
+      body: 'Você tem um novo aviso no sininho.',
+      icon: '/icon-192.png', tag: `alerta-${payload.alertId}`, data: { alertId: payload.alertId },
+    }));
+    return;
+  }
   if (isGeneralId(payload?.generalId) && typeof payload.title === 'string' && typeof payload.body === 'string') {
     event.waitUntil(self.registration.showNotification(payload.title, {
       body: payload.body, icon: '/icon-192.png', tag: `geral-${payload.generalId}`, data: { generalId: payload.generalId },
@@ -106,6 +123,8 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
   const { data, tag } = event.notification;
   const path = tag.startsWith('geral-') && isGeneralId(data?.generalId) ? `/avisos/${data.generalId}`
+    : tag.startsWith('mural-') && isBoardId(data?.boardId) ? `/admin/dashboard#aviso-mural-${data.boardId}`
+    : tag.startsWith('alerta-') && isAlertId(data?.alertId) ? `/admin/dashboard#aviso-pessoal=${encodeURIComponent(data.alertId)}`
     : tag.startsWith('campo-') ? `/admin/dashboard${noticeHash(data?.noticeId)}` : null;
   if (!path) return;
   event.notification.close();

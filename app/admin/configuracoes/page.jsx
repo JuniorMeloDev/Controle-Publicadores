@@ -4,7 +4,7 @@ import { formatDateBR, formatDateForFile } from '@/app/lib/date-format';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { AlertSettingsCard } from '@/app/components/AlertSettingsCard';
 import { GeneralPushSettingsCard } from '@/app/components/GeneralPushSettingsCard';
-import { PersonalAlertSettingsCard } from '@/app/components/PersonalAlertSettingsCard';
+import { PersonalAlertSettingsCard, PersonalPushSettingsCard } from '@/app/components/PersonalAlertSettingsCard';
 import { SettingsTabs, SettingsPanel } from '@/app/components/SettingsTabs';
 import { SettingsEventsList } from '@/app/components/SettingsEventsList';
 import GroupLeadershipDialog from '@/app/components/GroupLeadershipDialog';
@@ -1006,6 +1006,7 @@ export default function ConfiguracoesPage() {
                         </Card>
                         </SettingsPanel>
                         <SettingsPanel value="alertas">
+                            <PersonalPushSettingsCard />
                             <PersonalAlertSettingsCard />
                             <AlertSettingsCard />
                             <GeneralPushSettingsCard />

@@ -7,7 +7,7 @@ import { Button } from '@/app/components/ui/button';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/app/components/ui/dialog';
 import { isAllowed } from '@/app/lib/access-control';
 import { requestNotifications } from '@/app/lib/notification-client';
-import { fieldNoticeFromHash } from '@/app/lib/push-client';
+import { notificationFromHash } from '@/app/lib/push-client';
 import { DevicePushControl } from '@/app/components/DevicePushControl';
 
 export function NotificationBell({ userId, permissions }) {
@@ -42,7 +42,7 @@ export function NotificationBell({ userId, permissions }) {
         const controller = new AbortController();
         const refresh = () => load(controller.signal);
         const openNotice = () => {
-            const id = fieldNoticeFromHash(window.location.hash);
+            const id = notificationFromHash(window.location.hash);
             if (!id || !userId) return false;
             setTargetId(id);
             setOpen(true);
@@ -63,7 +63,7 @@ export function NotificationBell({ userId, permissions }) {
 
     function clearNotice() {
         setTargetId(null);
-        if (fieldNoticeFromHash(window.location.hash)) {
+        if (notificationFromHash(window.location.hash)) {
             window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
         }
     }
@@ -101,7 +101,7 @@ export function NotificationBell({ userId, permissions }) {
                 </div>
             </div>
             {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-            {sessionExpired && <Link href={targetId ? `/#aviso-campo-${targetId.split(':')[1]}` : '/'} onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700">Entrar novamente</Link>}
+            {sessionExpired && <Link href={targetId ? `/#aviso-pessoal=${encodeURIComponent(targetId)}` : '/'} onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700">Entrar novamente</Link>}
             {targetId && <Button variant="ghost" size="sm" className="justify-self-start" onClick={clearNotice}>Ver todas as notificações</Button>}
             <div className="max-h-[60vh] overflow-y-auto space-y-2">
                 {loading ? <p className="text-center py-8 text-gray-500">Carregando notificações...</p> : !visibleNotices.length && !error ? <p className="text-center py-8 text-gray-500">{targetId ? 'Este aviso não está disponível para a conta atual.' : 'Nenhum alerta no momento.'}</p> : visibleNotices.map(n => {

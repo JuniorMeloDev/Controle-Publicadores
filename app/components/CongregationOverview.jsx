@@ -6,6 +6,9 @@ import Link from 'next/link';
 import { useUserSession } from './UserSessionProvider';
 import MyFieldGroup from './MyFieldGroup';
 import { addCalendarDays } from '@/app/lib/meeting-calendar';
+import { boardNoticeFromHash } from '@/app/lib/push-client';
+import { boardAudienceLabel } from '@/app/lib/board-audiences';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 
 const card = 'rounded-xl border border-gray-200 bg-white p-5';
 const dateLabel = value => {
@@ -17,6 +20,83 @@ const dateLabel = value => {
 
 function AttachmentLink({ post }) {
   return post.anexo_nome ? <a href={`/api/mural/anexo/${post.id}`} target="_blank" rel="noopener noreferrer" className="mt-3 flex items-center gap-2 break-all text-sm font-medium text-purple-700"><FileText className="h-4 w-4 shrink-0" />Abrir anexo: {post.anexo_nome}</a> : null;
+}
+
+function BoardAnnouncement({ post, busy, disabled = busy, onRead }) {
+  return <>
+    <div className="flex flex-wrap items-center gap-2">{post.fixado && <Pin className="h-4 w-4 text-purple-600" aria-label="Anúncio fixado" />}<h3 className="font-semibold text-gray-900">{post.titulo}</h3>{!post.lido && <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700">Novo</span>}</div>
+    <p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-700">{post.mensagem}</p>
+    <p className="mt-3 text-xs text-gray-500">Publicado em {dateLabel(post.inicio)} · {boardAudienceLabel(post)}</p>
+    {post.link && <a href={post.link} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-sm text-purple-700">Abrir material <ExternalLink className="h-3 w-3" /></a>}
+    <AttachmentLink post={post} />
+    <div className="mt-3">{post.lido ? <span className="inline-flex items-center gap-1 text-xs text-green-700"><Check className="h-4 w-4" />Leitura registrada</span> : <button type="button" disabled={disabled} onClick={onRead} className="text-sm font-medium text-purple-700 disabled:opacity-50">{busy ? 'Registrando...' : post.confirmar_leitura ? 'Confirmar leitura' : 'Marcar como lido'}</button>}</div>
+  </>;
+}
+
+async function confirmBoardRead(id) {
+  const response = await fetch('/api/mural', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'read', id }) });
+  if (!response.ok) throw new Error((await response.json()).message);
+}
+
+export function BoardNoticeDialog() {
+  const [id, setId] = useState(null);
+  const [result, setResult] = useState(null);
+  const [readError, setReadError] = useState('');
+  const [reading, setReading] = useState(false);
+  useEffect(() => {
+    let controller;
+    async function load() {
+      controller?.abort();
+      const id = boardNoticeFromHash(window.location.hash);
+      setId(id); setResult(null); setReadError('');
+      if (!id) return;
+      controller = new AbortController();
+      const { signal } = controller;
+      try {
+        const response = await fetch('/api/mural', { cache: 'no-store', signal });
+        if (response.status === 401) {
+          if (!signal.aborted) setResult({ sessionExpired: true });
+          return;
+        }
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.message);
+        const post = body.posts.find(item => item.id === id && item.tipo === 'anuncio');
+        if (!signal.aborted) setResult({ post });
+      } catch (error) {
+        if (!signal.aborted) setResult({ error: error.message || 'Não foi possível carregar o anúncio.' });
+      }
+    }
+    load();
+    window.addEventListener('hashchange', load);
+    return () => { controller?.abort(); window.removeEventListener('hashchange', load); };
+  }, []);
+
+  async function markRead() {
+    setReading(true); setReadError('');
+    try {
+      await confirmBoardRead(id);
+      setResult(current => current?.post?.id === id ? { post: { ...current.post, lido: true } } : current);
+      window.dispatchEvent(new Event('mural:changed'));
+    } catch (error) { setReadError(error.message); }
+    finally { setReading(false); }
+  }
+
+  return <Dialog open={id !== null} onOpenChange={open => {
+    if (open) return;
+    setId(null);
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+  }}>
+    <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%_-_2rem)] overflow-y-auto rounded-xl bg-white text-gray-900">
+      <DialogHeader>
+        <DialogTitle>Anúncio do mural</DialogTitle>
+        <DialogDescription className="sr-only">Publicação da congregação</DialogDescription>
+      </DialogHeader>
+      {result?.post ? <div><BoardAnnouncement post={result.post} busy={reading} onRead={markRead} /></div>
+        : result?.sessionExpired ? <Link href={`/#aviso-mural-${id}`} className="text-sm font-medium text-purple-700">Entrar novamente para ler o anúncio</Link>
+        : <p role="status" className="text-sm text-gray-600">{!result ? 'Carregando anúncio…' : result.error || 'Este anúncio não está disponível para sua conta.'}</p>}
+      {readError && <p role="alert" className="text-sm text-red-700">{readError}</p>}
+    </DialogContent>
+  </Dialog>;
 }
 
 function Section({ title, icon: Icon, items, empty, render }) {
@@ -57,9 +137,7 @@ export default function CongregationOverview() {
   async function confirmRead(id) {
     setReading(id); setError('');
     try {
-      const response = await fetch('/api/mural', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'read', id }) });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message);
+      await confirmBoardRead(id);
       setData(previous => ({ ...previous, posts: previous.posts.map(post => post.id === id ? { ...post, lido: true } : post) }));
     } catch (err) { setError(err.message); }
     finally { setReading(null); }
@@ -86,12 +164,7 @@ export default function CongregationOverview() {
         <ul className="space-y-3">{data.changes.map(change => <li key={change.id}><h3 className="text-sm font-semibold text-amber-900">{change.title}</h3><p className="mt-1 break-words text-sm text-amber-800">{change.description}</p>{change.href && <Link href={change.href} className="mt-1 inline-block text-sm font-medium text-amber-900 underline">Conferir designações</Link>}</li>)}</ul>
       </section>}
       <Section title="Anúncios da congregação" icon={Megaphone} items={data.posts.filter(post => post.tipo === 'anuncio')} empty="Nenhum anúncio publicado no momento." render={post => <li key={post.id} className={`rounded-lg border p-4 ${post.fixado ? 'border-purple-200 bg-purple-50' : 'border-gray-200 bg-gray-50'}`}>
-        <div className="flex flex-wrap items-center gap-2">{post.fixado && <Pin className="h-4 w-4 text-purple-600" aria-label="Anúncio fixado" />}<h3 className="font-semibold text-gray-900">{post.titulo}</h3>{!post.lido && <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700">Novo</span>}</div>
-        <p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-700">{post.mensagem}</p>
-        <p className="mt-3 text-xs text-gray-500">Publicado em {dateLabel(post.inicio)} · {post.nome_grupo || 'Toda a congregação'}</p>
-        {post.link && <a href={post.link} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-sm text-purple-700">Abrir material <ExternalLink className="h-3 w-3" /></a>}
-        <AttachmentLink post={post} />
-        <div className="mt-3">{post.lido ? <span className="inline-flex items-center gap-1 text-xs text-green-700"><Check className="h-4 w-4" />Leitura registrada</span> : <button type="button" disabled={reading !== null} onClick={() => confirmRead(post.id)} className="text-sm font-medium text-purple-700 disabled:opacity-50">{reading === post.id ? 'Registrando...' : post.confirmar_leitura ? 'Confirmar leitura' : 'Marcar como lido'}</button>}</div>
+        <BoardAnnouncement post={post} busy={reading === post.id} disabled={reading !== null} onRead={() => confirmRead(post.id)} />
       </li>} />
       {data.cancelled.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><h2 className="font-semibold text-amber-900">Alterações nesta semana</h2>{data.cancelled.map(meeting => <p key={meeting.id} className="mt-2 text-sm text-amber-800">{dateLabel(meeting.data)} · {meeting.tipo}: {meeting.motivo_cancelamento}</p>)}</div>}
       <div className="grid items-start gap-4 lg:grid-cols-2">
@@ -103,8 +176,8 @@ export default function CongregationOverview() {
         </li>} />
         <Section title="Eventos especiais" icon={CalendarDays} items={data.events} empty="Nenhum próximo evento especial cadastrado." render={event => <li key={event.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4"><span className="text-xs font-medium text-purple-700">{event.tipo}</span><h3 className="mt-1 font-semibold text-gray-900">{event.nome}</h3><p className="mt-1 text-sm text-gray-600">{dateLabel(event.data)}</p></li>} />
       </div>
-      <Section title="Saídas de campo" icon={Users} items={data.posts.filter(post => post.tipo === 'saida')} empty="Nenhuma próxima saída de campo publicada." render={post => <li key={post.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4"><h3 className="font-semibold text-gray-900">{post.titulo}</h3><p className="mt-2 flex items-center gap-2 text-sm text-gray-600"><Clock className="h-4 w-4" />{dateLabel(post.data)} às {post.horario}</p><p className="mt-1 flex items-start gap-2 text-sm text-gray-600"><MapPin className="mt-0.5 h-4 w-4 shrink-0" />{post.local}</p><p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-700">{post.mensagem}</p><p className="mt-2 text-xs text-gray-500">{post.nome_grupo || 'Toda a congregação'}</p>{post.link && <a href={post.link} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm text-purple-700">Ver orientações</a>}<AttachmentLink post={post} /></li>} />
-      <Section title="Materiais úteis" icon={FileText} items={data.posts.filter(post => post.tipo === 'material')} empty="Nenhum material disponibilizado no momento." render={post => <li key={post.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4"><h3 className="font-semibold text-gray-900">{post.titulo}</h3><p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-700">{post.mensagem}</p><p className="mt-2 text-xs text-gray-500">{post.nome_grupo || 'Toda a congregação'}</p>{post.link && <a href={post.link} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-purple-700">Abrir material <ExternalLink className="h-4 w-4" /></a>}<AttachmentLink post={post} /></li>} />
+      <Section title="Saídas de campo" icon={Users} items={data.posts.filter(post => post.tipo === 'saida')} empty="Nenhuma próxima saída de campo publicada." render={post => <li key={post.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4"><h3 className="font-semibold text-gray-900">{post.titulo}</h3><p className="mt-2 flex items-center gap-2 text-sm text-gray-600"><Clock className="h-4 w-4" />{dateLabel(post.data)} às {post.horario}</p><p className="mt-1 flex items-start gap-2 text-sm text-gray-600"><MapPin className="mt-0.5 h-4 w-4 shrink-0" />{post.local}</p><p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-700">{post.mensagem}</p><p className="mt-2 text-xs text-gray-500">{boardAudienceLabel(post)}</p>{post.link && <a href={post.link} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm text-purple-700">Ver orientações</a>}<AttachmentLink post={post} /></li>} />
+      <Section title="Materiais úteis" icon={FileText} items={data.posts.filter(post => post.tipo === 'material')} empty="Nenhum material disponibilizado no momento." render={post => <li key={post.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4"><h3 className="font-semibold text-gray-900">{post.titulo}</h3><p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-700">{post.mensagem}</p><p className="mt-2 text-xs text-gray-500">{boardAudienceLabel(post)}</p>{post.link && <a href={post.link} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-purple-700">Abrir material <ExternalLink className="h-4 w-4" /></a>}<AttachmentLink post={post} /></li>} />
     </>}
   </div>;
 }

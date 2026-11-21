@@ -3,6 +3,19 @@ export function fieldNoticeFromHash(hash) {
   return match ? `campo-saida:${match[1]}` : null;
 }
 
+export function notificationFromHash(hash) {
+  if (!hash.startsWith('#aviso-pessoal=')) return fieldNoticeFromHash(hash);
+  try {
+    const id = decodeURIComponent(hash.slice('#aviso-pessoal='.length));
+    return id.length > 0 && id.length <= 512 ? id : null;
+  } catch { return null; }
+}
+
+export function boardNoticeFromHash(hash) {
+  const match = /^#aviso-mural-([1-9][0-9]{0,9})$/.exec(hash);
+  return match ? Number(match[1]) : null;
+}
+
 export function supportsDevicePush() {
   return window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
@@ -31,8 +44,8 @@ export async function clearDevicePush({ registration, general = false, unsubscri
     await Promise.allSettled([
       unsubscribe && worker.pushManager?.getSubscription().then(subscription => subscription?.unsubscribe()),
       worker.getNotifications?.().then(notifications => {
-        const prefix = general ? 'geral-' : 'campo-';
-        notifications.filter(item => item.tag.startsWith(prefix)).forEach(item => item.close());
+        const prefixes = general ? ['geral-'] : ['campo-', 'alerta-', 'mural-'];
+        notifications.filter(item => prefixes.some(prefix => item.tag.startsWith(prefix))).forEach(item => item.close());
       }),
     ]);
   } catch {

@@ -3,9 +3,26 @@
 import { StatusToast } from '@/app/components/ui/status-toast';
 
 import { useEffect, useState } from 'react';
-import { Mail, Loader2, Save } from 'lucide-react';
+import { Bell, Mail, Loader2, Save } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
+import { DevicePushControl } from '@/app/components/DevicePushControl';
+import { usePermissions } from '@/app/components/PermissionsContext';
+
+export function PersonalPushSettingsCard() {
+    const { user } = usePermissions();
+    if (!user?.id) return null;
+    return <Card className="min-w-0 border-gray-200 bg-white shadow-sm text-gray-900">
+        <CardHeader className="p-4 border-b border-gray-100 bg-gray-50/50">
+            <CardTitle className="text-base font-bold flex items-center gap-2"><Bell className="h-5 w-5 text-purple-600" />Minhas notificações no aparelho (push)</CardTitle>
+            <CardDescription className="text-gray-600">Receba os avisos do seu sininho neste aparelho. Controle também os avisos gerais da congregação.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 flex flex-wrap gap-3">
+            <DevicePushControl userId={user.id} />
+            <DevicePushControl userId={user.id} general />
+        </CardContent>
+    </Card>;
+}
 
 export function PersonalAlertSettingsCard() {
     const [data, setData] = useState(null);

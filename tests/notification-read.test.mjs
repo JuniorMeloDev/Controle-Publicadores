@@ -33,7 +33,7 @@ test('mark all read persists across reloads and cannot mark another user notific
     const route = loadRoute('../../app/api/admin/notificacoes/route.js', {
         getUserIdFromRequest: () => userId,
         todayInBrazil: () => '2030-01-07',
-        getPersonalNotifications: async (_client, id) => fixture.map(key => ({
+        getBellNotifications: async (_client, id) => fixture.map(key => ({
             id: `${key}:${id}`, read: ledger.get(id)?.has(`${key}:${id}`) || false,
         })),
         Pool: class { connect() { return { query: async (sql, params) => {

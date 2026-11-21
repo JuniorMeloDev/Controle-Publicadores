@@ -33,22 +33,26 @@ export async function deliverGeneralPushes(db, notice, {
   } }), vapid, send);
 }
 
-async function deliverPushRows(db, rows, message, vapid, send) {
-  let failures = 0;
+export async function deliverPushRows(db, rows, message, vapid, send = sendNotification, claim) {
+  const totals = { sent: 0, failed: 0, skipped: 0 };
   for (let i = 0; i < rows.length; i += 10) {
     const results = await Promise.allSettled(rows.slice(i, i + 10).map(async row => {
       try {
+        if (claim && !await claim(row)) return 'skipped';
         const { payload, topic } = message(row);
         await send({ endpoint: row.endpoint, keys: row.chaves }, JSON.stringify(payload),
           { vapidDetails: vapid, TTL: 3600, ...(topic && { topic }), timeout: 2500 });
+        return 'sent';
       } catch (error) {
         if (![404, 410].includes(error.statusCode)) throw error;
         await db.query(`DELETE FROM web_push_inscricoes
           WHERE aparelho_id = $1 AND endpoint = $2 AND chaves = $3::jsonb`,
         [row.aparelho_id, row.endpoint, JSON.stringify(row.chaves)]);
+        return 'skipped';
       }
     }));
-    failures += results.filter(result => result.status === 'rejected').length;
+    for (const result of results) totals[result.status === 'rejected' ? 'failed' : result.value]++;
   }
-  if (failures) console.warn('Falhas na entrega de Web Push:', failures);
+  if (totals.failed) console.warn('Falhas na entrega de Web Push:', totals.failed);
+  return totals;
 }

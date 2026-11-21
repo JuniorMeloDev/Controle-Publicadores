@@ -182,7 +182,7 @@ function notificationRoute(userId = 990001) {
         Pool: class { connect() { return { query: async (sql, values) => { queries.push({ sql, values }); return { rows: [] }; }, release() {} }; } },
         getUserIdFromRequest: () => userId,
         todayInBrazil: () => today,
-        getPersonalNotifications: async (_client, id) => { assert.equal(id, userId); return [{ id: 'own-ficticio', read: false }]; },
+        getBellNotifications: async (_client, id) => { assert.equal(id, userId); return [{ id: 'own-ficticio', read: false }]; },
     });
     return { ...route, queries };
 }
@@ -208,13 +208,22 @@ test('cron fails closed without a secret and ignores a spoofed scheduler flag', 
 });
 
 test('authorized cron honors disabled email settings without constructing an SMTP transport', async () => {
+    let pushRuns = 0;
     const route = loadRoute('../../app/api/cron/lembretes/route.js', {
         Pool: class { connect() { return { release() {} }; } },
         process: { env: { CRON_SECRET: 'fictitious-test-secret' } },
         getAlertSettings: async () => defaults,
+        deliverBellPushes: async (_client, { settings }) => {
+            assert.equal(settings, defaults);
+            pushRuns++;
+            return { sent: 1, failed: 0, skipped: 0 };
+        },
         nodemailer: { createTransport() { throw new Error('Must not send'); } },
     });
-    assert.equal((await route.GET({ headers: new Headers({ authorization: 'Bearer fictitious-test-secret' }) })).status, 200);
+    const result = await route.GET({ headers: new Headers({ authorization: 'Bearer fictitious-test-secret' }) });
+    assert.equal(result.status, 200);
+    assert.equal(result.body.push.sent, 1);
+    assert.equal(pushRuns, 1);
 });
 
 test('settings require explicit permission and SMTP/cron setup before enabling emails', async () => {

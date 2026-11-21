@@ -2,7 +2,7 @@ import { Pool } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserAccess } from '@/app/lib/server-access';
 import { canManageBoard } from '@/app/lib/congregation-board';
-import { ensureBoardTables, getVisiblePosts } from '@/app/lib/congregation-board-server';
+import { ensureBoardTables, getBoardAttachment } from '@/app/lib/congregation-board-server';
 import { attachmentPreview } from '@/app/lib/board-attachment';
 
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
@@ -21,9 +21,7 @@ export async function GET(req, { params }) {
     const access = await getUserAccess(client, userId);
     if (!access) return reply('Conta não encontrada.', 401);
     await ensureBoardTables(client);
-    if (!canManageBoard(access) && !(await getVisiblePosts(client, userId)).some(post => post.id === id)) return reply('Anexo não encontrado.', 404);
-    const result = await client.query('SELECT nome, mime, conteudo, previa_html FROM mural_anexos WHERE publicacao_id = $1', [id]);
-    const file = result.rows[0];
+    const file = await getBoardAttachment(client, { id, userId, manage: canManageBoard(access) });
     if (!file) return reply('Anexo não encontrado.', 404);
     const download = new URL(req.url).searchParams.get('download') === '1';
     const html = !download && file.previa_html !== null;

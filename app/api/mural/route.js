@@ -1,13 +1,16 @@
 import { Pool } from '@neondatabase/serverless';
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { getUserIdFromRequest, getUserAccess } from '@/app/lib/server-access';
 import { canManageBoard, validateBoardPost } from '@/app/lib/congregation-board';
-import { ensureBoardTables, getVisiblePosts } from '@/app/lib/congregation-board-server';
+import { boardGroupAvailableSql, boardRoleSql, ensureBoardTables, getVisiblePosts } from '@/app/lib/congregation-board-server';
 import { registerAuditLog } from '@/app/lib/audit-log';
 import { prepareAttachment } from '@/app/lib/board-attachment';
+import { fieldPushVapid } from '@/app/lib/field-push';
+import { deliverBoardPushes } from '@/app/lib/board-push';
 
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 const reply = (body, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'private, no-store' } });
 
 export async function GET(req) {
@@ -23,10 +26,11 @@ export async function GET(req) {
     await ensureBoardTables(client);
     if (!manage) return reply({ posts: await getVisiblePosts(client, userId) });
     const posts = await client.query(`SELECT m.*, m.inicio::text, m.fim::text, m.data::text,
-      g.nome_grupo, a.nome AS anexo_nome FROM mural_congregacao m LEFT JOIN grupos g ON g.id = m.grupo_id
+      g.nome_grupo, a.nome AS anexo_nome FROM mural_congregacao m JOIN publicadores p ON p.id = $1
+      LEFT JOIN grupos g ON g.id = m.grupo_id
       LEFT JOIN mural_anexos a ON a.publicacao_id = m.id
-      ORDER BY m.criado_em DESC`);
-    const groups = await client.query('SELECT id, nome_grupo FROM grupos ORDER BY nome_grupo');
+      WHERE ${boardRoleSql} ORDER BY m.criado_em DESC`, [userId]);
+    const groups = await client.query(`SELECT id, nome_grupo FROM grupos WHERE ${boardGroupAvailableSql} ORDER BY nome_grupo`);
     return reply({ posts: posts.rows, groups: groups.rows });
   } catch { return reply({ message: 'Não foi possível carregar o mural.' }, 500); }
   finally { client?.release(); }
@@ -67,10 +71,12 @@ export async function POST(req) {
     if (body.action === 'save') {
       let hasAttachment = Boolean(upload);
       if (!hasAttachment && body.tipo === 'material' && body.id != null && body.remover_anexo !== true) {
-        hasAttachment = (await client.query('SELECT 1 FROM mural_anexos WHERE publicacao_id = $1', [id])).rows.length > 0;
+        hasAttachment = (await client.query(`SELECT 1 FROM mural_anexos a
+          JOIN mural_congregacao m ON m.id = a.publicacao_id JOIN publicadores p ON p.id = $2
+          WHERE a.publicacao_id = $1 AND ${boardRoleSql}`, [id, userId])).rows.length > 0;
       }
       try { post = validateBoardPost(body, { hasAttachment }); } catch (error) { return reply({ message: error.message }, 400); }
-      if (post.grupo_id && !(await client.query('SELECT id FROM grupos WHERE id = $1', [post.grupo_id])).rows.length) return reply({ message: 'Grupo não encontrado.' }, 400);
+      if (post.grupo_id && !(await client.query(`SELECT id FROM grupos WHERE id = $1 AND ${boardGroupAvailableSql}`, [post.grupo_id])).rows.length) return reply({ message: 'Escolha um grupo ativo do mural.' }, 400);
     }
     if (body.action === 'read') {
       const visible = await getVisiblePosts(client, userId);
@@ -78,17 +84,21 @@ export async function POST(req) {
       await client.query(`INSERT INTO mural_leituras (publicacao_id, publicador_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, userId]);
       return reply({ message: 'Leitura confirmada.' });
     }
+    const vapid = post?.tipo === 'anuncio' ? fieldPushVapid() : null;
     await client.query('BEGIN'); transaction = true;
     let savedId = id;
     if (body.action === 'delete') {
-      const result = await client.query('DELETE FROM mural_congregacao WHERE id = $1 RETURNING id', [id]);
+      const result = await client.query(`DELETE FROM mural_congregacao m WHERE m.id = $1
+        AND EXISTS (SELECT 1 FROM publicadores p WHERE p.id = $2 AND ${boardRoleSql}) RETURNING id`, [id, userId]);
       if (!result.rows.length) { await client.query('ROLLBACK'); transaction = false; return reply({ message: 'Publicação não encontrada.' }, 404); }
     } else {
-      const fields = Object.keys(post);
-      const values = Object.values(post);
+      const fields = Object.keys(post).filter(field => field !== 'publico' || body.id == null || body.publico !== undefined);
+      const values = fields.map(field => post[field]);
       let result;
       if (body.id != null) {
-        result = await client.query(`UPDATE mural_congregacao SET ${fields.map((field, index) => `${field} = $${index + 1}`).join(', ')}, atualizado_em = NOW() WHERE id = $${values.length + 1} RETURNING id`, [...values, id]);
+        result = await client.query(`UPDATE mural_congregacao m SET ${fields.map((field, index) => `${field} = $${index + 1}`).join(', ')},
+          atualizado_em = NOW() WHERE m.id = $${values.length + 1}
+          AND EXISTS (SELECT 1 FROM publicadores p WHERE p.id = $${values.length + 2} AND ${boardRoleSql}) RETURNING id`, [...values, id, userId]);
         if (!result.rows.length) { await client.query('ROLLBACK'); transaction = false; return reply({ message: 'Publicação não encontrada.' }, 404); }
         // An edited announcement requires a fresh reading confirmation.
         await client.query('DELETE FROM mural_leituras WHERE publicacao_id = $1', [id]);
@@ -96,6 +106,9 @@ export async function POST(req) {
         result = await client.query(`INSERT INTO mural_congregacao (${fields.join(', ')}, autor_id) VALUES (${fields.map((_, index) => `$${index + 1}`).join(', ')}, $${values.length + 1}) RETURNING id`, [...values, userId]);
       }
       savedId = result.rows[0].id;
+      if (vapid && body.id == null) {
+        await client.query('INSERT INTO mural_push_pendentes (publicacao_id) VALUES ($1)', [savedId]);
+      }
       if (upload) await client.query(`INSERT INTO mural_anexos (publicacao_id, nome, mime, tamanho, conteudo, previa_html)
         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (publicacao_id) DO UPDATE SET
         nome = EXCLUDED.nome, mime = EXCLUDED.mime, tamanho = EXCLUDED.tamanho, conteudo = EXCLUDED.conteudo, previa_html = EXCLUDED.previa_html`,
@@ -104,6 +117,10 @@ export async function POST(req) {
     }
     await registerAuditLog(client, { userId, action: body.action === 'delete' ? 'mural_excluido' : 'mural_salvo', entity: 'mural', entityId: savedId });
     await client.query('COMMIT'); transaction = false;
+    if (vapid) after(async () => {
+      try { await deliverBoardPushes(pool, { postId: savedId, vapid }); }
+      catch (error) { console.error('Falha ao enviar avisos do mural:', error.code || error.name); }
+    });
     return reply({ message: body.action === 'delete' ? 'Publicação excluída.' : 'Publicação salva.', id: savedId });
   } catch { if (transaction) await client.query('ROLLBACK'); return reply({ message: 'Não foi possível salvar a publicação.' }, 500); }
   finally { client?.release(); }

@@ -48,7 +48,8 @@ export function AlertSettingsCard() {
             {!data ? !error && <p className="text-gray-500">Carregando configurações...</p> : <form onSubmit={save} className="space-y-5">
                 <div className="grid lg:grid-cols-2 gap-6">
                     <div className="space-y-4">
-                        <p className="font-medium text-gray-900">No sininho</p>
+                        <p className="font-medium text-gray-900">No sininho e no aparelho (push)</p>
+                        <p className="text-sm text-gray-600">As mesmas regras valem para os dois. O envio diário ao aparelho depende da ativação das notificações personalizadas.</p>
                         {checkbox('assignmentsEnabled', 'Próximas designações (todas as categorias)')}
                         {number('assignmentDays', 'Mostrar quantos dias antes?')}
                         {checkbox('cleaningEnabled', 'Limpeza do grupo ou como responsável')}
