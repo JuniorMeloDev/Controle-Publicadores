@@ -412,7 +412,53 @@ transação e reverte todos eles no final. Requer `.env.local` com PostgreSQL.
 Edição exige a permissão **Gerenciar Serviço de Campo e Territórios** na gestão de
 acessos; visualização usa a permissão de Designações, e PDF usa **Gerar PDF
 (Designações)**. As alterações são auditadas na mesma transação e as novas tabelas
-integram o backup. Esta versão não envia notificações ou e-mails de campo.
+de planejamento integram o backup.
+
+### Notificações de Serviço de Campo no aparelho
+
+Em **Serviço de Campo → Agenda → Enviar notificação**, o app salva no sino o
+aviso de cada publicador, com os territórios de seu grupo e os mapas disponíveis.
+Na tela de login, qualquer visitante pode escolher **Ativar avisos gerais**.
+Depois de entrar, o publicador pode controlar os avisos gerais e as
+notificações personalizadas separadamente em **Suas notificações**. O navegador
+pede permissão ao clicar na opção de ativar, caso ainda não esteja concedida.
+Sair da conta desvincula as notificações personalizadas e mantém os avisos
+gerais que foram ativados nesse navegador.
+
+Em navegadores compatíveis, as opções funcionam em uma aba comum e o push
+pode chegar com a aba fechada. Ao tocar em um push de Serviço de Campo, o site
+abre o aviso personalizado e pede login se a sessão tiver expirado.
+
+Em **Configurações → Alertas → Avisos gerais no aparelho**, um super admin
+pode publicar um título e uma mensagem para os aparelhos que ativaram avisos
+gerais. Ao tocar na notificação, o visitante abre uma página pública com esse
+texto. O conteúdo também aparece na tela bloqueada, conforme as configurações
+do aparelho.
+
+Antes de publicar a aplicação, aplique `npm run migrate:field-service` para
+criar as tabelas e atualizar as inscrições existentes. Configure estas
+variáveis VAPID no servidor:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+- `VAPID_PUBLIC_KEY` recebe a chave pública gerada.
+- `VAPID_PRIVATE_KEY` recebe a chave privada gerada. Guarde-a nos segredos do
+  ambiente, sem prefixo `NEXT_PUBLIC_` e fora do repositório.
+- `VAPID_SUBJECT` identifica um contato válido, como `mailto:admin@example.com`.
+
+Mantenha o mesmo par VAPID entre publicações. Após uma rotação, os publicadores
+precisam desativar e reativar o push. O site precisa estar em HTTPS. No iPhone e
+iPad, o Web Push exige iOS ou iPadOS 16.4 ou superior e que o site seja
+adicionado à Tela de Início e aberto pelo ícone.
+[WebKit](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)
+
+O push é tentado após o aviso e a auditoria serem confirmados no banco. Reenviar
+uma programação idêntica não gera outra tentativa. Erros de entrega não afetam
+o sino, e inscrições vencidas ou retornadas como inexistentes são removidas.
+Para validar a entrega real, use um ambiente isolado, um par VAPID de teste e
+somente contas e aparelhos de teste.
 
 ### Programação automática de Vida e Ministério
 

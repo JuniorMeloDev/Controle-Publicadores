@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Users, Calendar, LogOut } from 'lucide-react';
+import { logoutDevice } from '@/app/lib/push-client';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -54,7 +55,7 @@ export default function Sidebar() {
       <div className="p-4 border-t border-neutral-800">
         <button 
           onClick={async () => {
-             await fetch('/api/logout', { method: 'POST' });
+             await logoutDevice();
              window.location.href = '/';
           }}
           className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors"

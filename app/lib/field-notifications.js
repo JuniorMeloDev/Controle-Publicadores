@@ -67,8 +67,9 @@ export async function sendFieldNotifications(client, outingId) {
     ON CONFLICT (saida_id, publicador_id) DO UPDATE
     SET id = DEFAULT, data = EXCLUDED.data, conteudo = EXCLUDED.conteudo
     WHERE (campo_saida_notificacoes.data, campo_saida_notificacoes.conteudo)
-      IS DISTINCT FROM (EXCLUDED.data, EXCLUDED.conteudo)`, [id, outing.data, JSON.stringify(payload)]);
-  return { id, ids: [id], destinatarios: recipients.length, notificacoes: saved.rowCount };
+      IS DISTINCT FROM (EXCLUDED.data, EXCLUDED.conteudo)
+    RETURNING id::text AS id`, [id, outing.data, JSON.stringify(payload)]);
+  return { id, ids: [id], destinatarios: recipients.length, notificacoes: saved.rowCount, pushIds: saved.rows.map(row => row.id) };
 }
 
 export async function readFieldNotifications(client, publisherId) {

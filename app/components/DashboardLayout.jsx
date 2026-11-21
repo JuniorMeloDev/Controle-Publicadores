@@ -19,6 +19,7 @@ import { NotificationBell } from '@/app/components/NotificationBell';
 import { PermissionsProvider } from '@/app/components/PermissionsContext';
 import { useUserSession } from '@/app/components/UserSessionProvider';
 import { getPageKeyForPath, isAllowed } from '@/app/lib/access-control';
+import { logoutDevice } from '@/app/lib/push-client';
 
 // Definição dos menus do sistema
 const navigation = [
@@ -149,7 +150,7 @@ export function DashboardLayout({ children, contentClassName = '' }) {
 
   const handleLogout = async () => {
     try {
-        await fetch('/api/logout', { method: 'POST' });
+        await logoutDevice();
         window.dispatchEvent(new Event('session:logout'));
         router.push('/');
     } catch (error) {
@@ -370,7 +371,7 @@ export function DashboardLayout({ children, contentClassName = '' }) {
           <div className="flex items-center gap-2 sm:gap-4">
             {isAllowed(permissions, 'publicadores') && <GlobalSearch />}
 
-            <NotificationBell userId={usuario.id} permissions={permissions} />
+            <NotificationBell key={usuario.id} userId={usuario.id} permissions={permissions} />
             <ThemeToggle />
 
             <div className="relative pl-2 sm:pl-4 border-l border-gray-100" ref={userMenuRef}>

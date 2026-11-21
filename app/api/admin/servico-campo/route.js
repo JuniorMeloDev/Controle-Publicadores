@@ -1,12 +1,14 @@
 import { Pool } from 'pg';
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { authorizeRequest } from '@/app/lib/request-authorization';
 import { readFieldService, mutateFieldService } from '@/app/lib/field-service-server';
 import { registerAuditLog } from '@/app/lib/audit-log';
 import { getUserIdFromRequest } from '@/app/lib/server-access';
 import { prepareFieldMap, saveFieldMap } from '@/app/lib/field-map';
+import { deliverFieldPushes } from '@/app/lib/field-push';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 
 function failure(error) {
@@ -54,7 +56,12 @@ export async function POST(request) {
     await registerAuditLog(client, { userId: getUserIdFromRequest(request), action: `campo_${body.entity}_${body.action}`, entity: `campo_${body.entity}`, entityId: result.id, details: { ...body, ids: result.ids, ...(result.transferencia ? { transferencia: result.transferencia } : {}), ...(result.transferencias?.length ? { transferencias_registradas: result.transferencias } : {}), ...(result.entregas_anteriores_removidas ? { entregas_anteriores_removidas: result.entregas_anteriores_removidas } : {}), ...(map ? { mapa: map.name } : {}) } });
     await client.query('COMMIT');
     transaction = false;
-    return NextResponse.json(result);
+    const { pushIds, ...response } = result;
+    if (pushIds?.length) after(async () => {
+      try { await deliverFieldPushes(pool, pushIds); }
+      catch (error) { console.error('Falha no envio de Web Push de campo:', error.code || error.name); }
+    });
+    return NextResponse.json(response);
   } catch (error) {
     if (transaction) await client.query('ROLLBACK');
     return failure(error);

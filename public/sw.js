@@ -1,8 +1,8 @@
 // Service Worker para PWA do Controle de Publicadores
-const CACHE_NAME = 'controle-publicadores-v1';
+const CACHE_NAME = 'controle-publicadores-v2';
 
 const STATIC_ASSETS = [
-  '/',
+  new Request('/', { credentials: 'omit' }),
   '/manifest.json',
   '/favicon.ico',
   '/file.svg',
@@ -30,9 +30,8 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 // Interceptação de requisições de rede
@@ -43,6 +42,8 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/api/') || url.protocol.startsWith('chrome-extension')) {
     return;
   }
+  if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')
+    || url.searchParams.has('_rsc') || event.request.headers.has('RSC')) return;
 
   // Não interceptar requisições POST, PUT, DELETE, etc.
   if (event.request.method !== 'GET') {
@@ -54,7 +55,7 @@ self.addEventListener('fetch', (event) => {
     fetch(event.request)
       .then((networkResponse) => {
         // Se a resposta for válida, clonar e salvar no cache para uso offline
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic' && !networkResponse.redirected) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
@@ -79,4 +80,50 @@ self.addEventListener('fetch', (event) => {
         });
       })
   );
+});
+
+const noticeHash = id => typeof id === 'string' && /^[1-9][0-9]{0,18}$/.test(id) ? `#aviso-campo-${id}` : '';
+const isGeneralId = id => typeof id === 'string' && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(id);
+
+self.addEventListener('push', event => {
+  let payload;
+  try { payload = event.data?.json(); } catch { return; }
+  if (isGeneralId(payload?.generalId) && typeof payload.title === 'string' && typeof payload.body === 'string') {
+    event.waitUntil(self.registration.showNotification(payload.title, {
+      body: payload.body, icon: '/icon-192.png', tag: `geral-${payload.generalId}`, data: { generalId: payload.generalId },
+    }));
+    return;
+  }
+  if (!noticeHash(payload?.noticeId) || !Number.isSafeInteger(payload.outingId) || payload.outingId <= 0) return;
+  event.waitUntil(self.registration.showNotification('Serviço de Campo', {
+    body: 'Sua programação de campo foi atualizada',
+    icon: '/icon-192.png',
+    tag: `campo-${payload.outingId}`,
+    data: { noticeId: payload.noticeId },
+  }));
+});
+
+self.addEventListener('notificationclick', event => {
+  const { data, tag } = event.notification;
+  const path = tag.startsWith('geral-') && isGeneralId(data?.generalId) ? `/avisos/${data.generalId}`
+    : tag.startsWith('campo-') ? `/admin/dashboard${noticeHash(data?.noticeId)}` : null;
+  if (!path) return;
+  event.notification.close();
+  const url = new URL(path, self.location.origin);
+  event.waitUntil((async () => {
+    const tabs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const tab = tabs.find(client => {
+      const current = new URL(client.url);
+      return current.origin === url.origin && (current.pathname === '/' || current.pathname.startsWith('/admin/') || current.pathname.startsWith('/avisos/'));
+    });
+    if (tab) {
+      try {
+        const opened = tab.url === url.href ? tab : await tab.navigate(url.href);
+        if (opened) return await opened.focus();
+      } catch {
+        // A janela pode ter fechado desde a consulta.
+      }
+    }
+    return self.clients.openWindow(url.href);
+  })());
 });

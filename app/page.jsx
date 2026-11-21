@@ -7,6 +7,8 @@ import { StatusToast } from '@/app/components/ui/status-toast';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation'; 
 import { Eye, EyeOff } from 'lucide-react'; 
+import { clearDevicePush, fieldNoticeFromHash } from '@/app/lib/push-client';
+import { DevicePushControl } from '@/app/components/DevicePushControl';
 
 export default function LoginPage() {
   const [email, setEmail] = useState(''); // ALTERADO: nome para email
@@ -46,7 +48,10 @@ export default function LoginPage() {
           return;
         }
         // Redireciona para o dashboard após login (o middleware vai pegar)
-        router.push('/admin/dashboard'); 
+        const { pushRevoked } = await response.json();
+        if (pushRevoked) await clearDevicePush();
+        const hash = window.location.hash;
+        router.push(`/admin/dashboard${fieldNoticeFromHash(hash) ? hash : ''}`);
       } else {
         const data = await response.json();
         setError(data.message || 'Email ou senha inválidos.');
@@ -150,6 +155,10 @@ export default function LoginPage() {
         <button type="button" disabled={isLoading} onClick={() => { setRecovering(!recovering); setError(''); setMessage(''); setSenha(''); }} className="mt-5 w-full rounded-md text-sm text-purple-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:opacity-50">
           {recovering ? 'Voltar para o login' : 'Esqueci minha senha'}
         </button>
+        {!recovering && <section className="mt-5 space-y-2 border-t pt-4 text-center">
+          <p className="text-sm text-gray-600">Receba avisos gerais neste aparelho, mesmo sem entrar na conta.</p>
+          <DevicePushControl general />
+        </section>}
       </div>
     </main>
   );

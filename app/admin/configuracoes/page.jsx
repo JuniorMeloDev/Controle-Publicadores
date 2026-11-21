@@ -3,6 +3,7 @@
 import { formatDateBR, formatDateForFile } from '@/app/lib/date-format';
 import { DashboardLayout } from '@/app/components/DashboardLayout';
 import { AlertSettingsCard } from '@/app/components/AlertSettingsCard';
+import { GeneralPushSettingsCard } from '@/app/components/GeneralPushSettingsCard';
 import { PersonalAlertSettingsCard } from '@/app/components/PersonalAlertSettingsCard';
 import { SettingsTabs, SettingsPanel } from '@/app/components/SettingsTabs';
 import { SettingsEventsList } from '@/app/components/SettingsEventsList';
@@ -1007,6 +1008,7 @@ export default function ConfiguracoesPage() {
                         <SettingsPanel value="alertas">
                             <PersonalAlertSettingsCard />
                             <AlertSettingsCard />
+                            <GeneralPushSettingsCard />
                         </SettingsPanel>
                         <SettingsPanel value="backup">
                         {/* CARD 4: BACKUP COMPLETO DO BANCO DE DADOS */}

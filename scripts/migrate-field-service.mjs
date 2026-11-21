@@ -13,6 +13,8 @@ try {
   await pool.query(await readFile(new URL('./sql/adicionar-limites-territorios.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/adicionar-mapas-editaveis.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/adicionar-notificacoes-campo.sql', import.meta.url), 'utf8'));
+  await pool.query(await readFile(new URL('./sql/adicionar-inscricoes-web-push.sql', import.meta.url), 'utf8'));
+  await pool.query(await readFile(new URL('./sql/adicionar-avisos-gerais-web-push.sql', import.meta.url), 'utf8'));
   console.log('Serviço de Campo: tabelas e índices criados. Pendências de saídas excluídas corrigidas; histórico de trabalho preservado.');
 } catch (error) {
   console.error('Falha na migração de Serviço de Campo. Código:', error.code || 'desconhecido');
