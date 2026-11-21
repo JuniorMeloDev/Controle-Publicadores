@@ -37,3 +37,10 @@ test('monthly PDF wraps and paginates long cells without losing names or crossin
     if (Array.isArray(p.value)) assert.ok(p.y + (p.value.length - 1) * 4 <= 187);
   }
 });
+
+test('monthly leader report shows territories per group under the common leader', () => {
+  const report = fieldLeadersReport({ ...data, grupos: [...data.grupos, { id: 5, nome: 'Grupo 5' }],
+    saidas: [{ ...data.saidas[0], dirigente_unico: true, grupos: [3, 5], territorios_por_grupo: { 3: [4] } }] }, 2026, 11);
+  assert.equal(report.rows[0].territories, 'Grupo 3: 17\nGrupo 5: A definir');
+  assert.equal(report.leaders, 1);
+});

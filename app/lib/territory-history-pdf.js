@@ -6,7 +6,7 @@ export function territoryHistoryReport(data, serviceYear) {
   if (!Number.isInteger(year) || year < 1901 || year > 2200) throw new Error('Escolha um ano de serviço válido.');
   const start = `${year - 1}-09-01`, end = `${year}-08-31`;
   const names = new Map(data.publicadores.map(p => [p.id, p.nome]));
-  const assignments = data.designacoes.filter(d => d.data_designacao <= end && (!d.data_conclusao || d.data_conclusao >= start));
+  const assignments = data.designacoes.filter(d => d.data_designacao <= end && (!(d.data_conclusao || d.data_transferencia) || (d.data_conclusao || d.data_transferencia) >= start));
   const territories = data.territorios.filter(t => t.ativo || assignments.some(d => d.territorio_id === t.id)).sort((a, b) => a.numero - b.numero);
   return { year, start, end, count: assignments.filter(d => territories.some(t => t.id === d.territorio_id)).length,
     territories: territories.map(t => ({ numero: t.numero, weekend: territoryPeriod(t) === 'fim_semana',
@@ -14,7 +14,7 @@ export function territoryHistoryReport(data, serviceYear) {
       // older history but excluding conclusions from a later service year.
       latest: data.designacoes.filter(d => d.territorio_id === t.id && d.data_conclusao && d.data_conclusao <= end).map(d => d.data_conclusao).sort().at(-1) || '',
       assignments: assignments.filter(d => d.territorio_id === t.id).sort((a, b) => a.data_designacao.localeCompare(b.data_designacao) || a.id - b.id).map(d => ({
-        name: d.responsavel_nome || names.get(d.publicador_id) || 'Responsável não informado', start: d.data_designacao, end: d.data_conclusao || ''
+        name: d.responsavel_nome || names.get(d.publicador_id) || 'Responsável não informado', start: d.data_designacao, end: d.data_conclusao || '', transferDate: d.data_transferencia || ''
       }))
     })) };
 }
@@ -22,7 +22,7 @@ export function territoryHistoryReport(data, serviceYear) {
 export function territoryHistoryYears(data, today) {
   const current = fieldServiceYear(today);
   return [...new Set([current, ...data.designacoes.flatMap(d => {
-    const first = fieldServiceYear(d.data_designacao), last = Math.max(first, d.data_conclusao ? fieldServiceYear(d.data_conclusao) : current);
+    const first = fieldServiceYear(d.data_designacao), last = Math.max(first, (d.data_conclusao || d.data_transferencia) ? fieldServiceYear(d.data_conclusao || d.data_transferencia) : current);
     return Array.from({ length: last - first + 1 }, (_, index) => first + index);
   })])].sort((a, b) => b - a);
 }
@@ -87,7 +87,7 @@ export function writeTerritoryHistoryPdf(doc, data, serviceYear) {
           const x = firstSlot + slot * slotWidth, entry = entries[slot];
           cell(names[slot]?.slice(nameOffset, nameOffset + take) || '', x, y, slotWidth, nameHeight, { size: 7 });
           cell(entry ? dateLabel(entry.start) : '', x, y + nameHeight, slotWidth / 2, 4.5, { size: 6.5 });
-          cell(entry ? dateLabel(entry.end) || 'Pendente' : '', x + slotWidth / 2, y + nameHeight, slotWidth / 2, 4.5, { size: 6.5 });
+          cell(entry ? dateLabel(entry.end) || (entry.transferDate ? `Transf. ${dateLabel(entry.transferDate)}` : 'Pendente') : '', x + slotWidth / 2, y + nameHeight, slotWidth / 2, 4.5, { size: entry?.transferDate ? 5 : 6.5 });
         }
         y += rowHeight; nameOffset += take;
       }
@@ -97,7 +97,7 @@ export function writeTerritoryHistoryPdf(doc, data, serviceYear) {
   const pages = doc.getNumberOfPages();
   for (let page = 1; page <= pages; page++) {
     doc.setPage(page); font(7);
-    doc.text('FDS = fim de semana | Datas de entrega e conclusão conforme o histórico registrado.', margin, height - 8);
+    doc.text('FDS = fim de semana | Transf. = transferência sem conclusão | Datas conforme o histórico registrado.', margin, height - 8);
     doc.text(`${page} / ${pages}`, width - margin, height - 8, { align: 'right' });
   }
   return doc;

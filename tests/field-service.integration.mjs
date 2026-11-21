@@ -13,6 +13,12 @@ try {
   client = await pool.connect();
   await client.query('BEGIN');
   await client.query('SELECT pg_advisory_xact_lock(73428191)');
+  const singleLeaderMigration = (await readFile(new URL('../scripts/sql/adicionar-dirigente-unico-campo.sql', import.meta.url), 'utf8')).replace(/^BEGIN;\s*/i, '').replace(/COMMIT;\s*$/i, '');
+  await client.query(singleLeaderMigration);
+  await client.query(singleLeaderMigration);
+  const transferMigration = (await readFile(new URL('../scripts/sql/adicionar-transferencias-campo.sql', import.meta.url), 'utf8')).replace(/^BEGIN;\s*/i, '').replace(/COMMIT;\s*$/i, '');
+  await client.query(transferMigration);
+  await client.query(transferMigration);
   const publisher = (await client.query('SELECT id FROM publicadores ORDER BY id LIMIT 1')).rows[0];
   assert.ok(publisher, 'Precisa de um publicador para testar as referências.');
   const suffix = Date.now();
@@ -99,14 +105,149 @@ try {
   assert.equal((await client.query("SELECT COUNT(*)::int AS total FROM campo_saidas WHERE data = '2198-12-10' AND horario = '04:13'")).rows[0].total, 0);
   await mutateFieldService(client, { entity: 'saidas', action: 'delete', id: batchOuting.id });
   assert.equal((await client.query('SELECT COUNT(*)::int AS total FROM campo_saida_resultados WHERE id = ANY($1::int[]) AND saida_id IS NULL', [concluded.ids])).rows[0].total, 4);
+  assert.equal((await client.query('SELECT COUNT(*)::int AS total FROM campo_designacoes WHERE territorio_id = ANY($1::int[]) AND data_conclusao = $2', [batchTerritories, '2198-11-03'])).rows[0].total, 4);
+  await mutateFieldService(client, { entity: 'saidas', action: 'delete', id: mixed.id });
+  assert.equal((await client.query('SELECT COUNT(*)::int AS total FROM campo_designacoes WHERE territorio_id = $1 AND data_conclusao IS NULL', [batchTerritories[4]])).rows[0].total, 1);
+
+  const cancelRecord = { data: '2198-11-05', horario: '04:13', modalidade: 'territorio', territorios: [batchTerritories[5]], dirigente_publicador_id: publisher.id };
+  const cancelled = await mutateFieldService(client, { entity: 'saidas', action: 'save', registrar_entrega: true, record: cancelRecord });
+  const cancellation = await mutateFieldService(client, { entity: 'saidas', action: 'delete', id: cancelled.id });
+  assert.equal(cancellation.entregas_anteriores_removidas.length, 1);
+  assert.equal((await client.query('SELECT COUNT(*)::int AS total FROM campo_designacoes WHERE territorio_id = $1', [batchTerritories[5]])).rows[0].total, 0);
+  // Reproduces an orphan left by the old deletion path, then repairs it twice.
+  const orphan = await mutateFieldService(client, { entity: 'saidas', action: 'save', registrar_entrega: true, record: cancelRecord });
+  await client.query('DELETE FROM campo_saidas WHERE id = $1', [orphan.id]);
+  const cleanupMigration = (await readFile(new URL('../scripts/sql/corrigir-entregas-saidas-excluidas.sql', import.meta.url), 'utf8')).replace(/^BEGIN;\s*/i, '').replace(/COMMIT;\s*$/i, '');
+  const beforeCleanup = await readFieldService(client);
+  await client.query(cleanupMigration);
+  const afterCleanup = await readFieldService(client);
+  const removed = beforeCleanup.designacoes.filter(d => !afterCleanup.designacoes.some(row => row.id === d.id));
+  assert.ok(removed.some(d => d.observacoes === `Entrega registrada pela saída ${orphan.id}.`));
+  assert.ok(removed.every(d => !d.data_conclusao && !beforeCleanup.resultados.some(r => r.designacao_id === d.id)));
+  assert.ok(afterCleanup.designacoes.some(d => d.territorio_id === batchTerritories[4] && !d.data_conclusao));
+  assert.equal(afterCleanup.designacoes.filter(d => batchTerritories.slice(0, 4).includes(d.territorio_id) && d.data_conclusao === '2198-11-03').length, 4);
+  const cleanupAudit = (await client.query("SELECT details FROM auditoria_logs WHERE action = 'campo_entregas_orfas_corrigidas' ORDER BY id DESC LIMIT 1")).rows[0];
+  assert.ok(cleanupAudit.details.entregas_anteriores_removidas.some(d => d.observacoes === `Entrega registrada pela saída ${orphan.id}.`));
+  await client.query(cleanupMigration);
+  assert.deepEqual((await readFieldService(client)).designacoes, afterCleanup.designacoes);
   // New migration is repeatable, including old weekend preferences.
   const planningMigration = (await readFile(new URL('../scripts/sql/adicionar-planejamento-campo.sql', import.meta.url), 'utf8')).replace(/^BEGIN;\s*/i, '').replace(/COMMIT;\s*$/i, '');
   await client.query(planningMigration);
   await client.query(planningMigration);
+  // Shared consideration is saved ahead of time, then territories are assigned
+  // independently to each group on that outing without changing map ownership.
+  const groups = (await client.query('SELECT id FROM grupos WHERE COALESCE(ativo, TRUE) ORDER BY id LIMIT 2')).rows.map(g => g.id);
+  assert.equal(groups.length, 2, 'Precisa de dois grupos ativos para testar o dirigente único.');
+  const secondPublisher = (await client.query('SELECT id FROM publicadores WHERE id <> $1 ORDER BY id LIMIT 1', [publisher.id])).rows[0];
+  assert.ok(secondPublisher, 'Precisa de dois publicadores para testar a responsabilidade e a transferência.');
+  await client.query('UPDATE publicadores SET grupo_id = $2 WHERE id = $1', [publisher.id, groups[0]]);
+  await client.query('UPDATE grupos SET superintendente_id = $2 WHERE id = $1', [groups[1], secondPublisher.id]);
+  const groupTerritories = [];
+  for (const offset of [7, 8]) groupTerritories.push((await mutateFieldService(client, { entity: 'territorios', action: 'save', record: { numero: number + offset } })).id);
+  const weekend = new Date('2199-12-01T12:00:00Z');
+  weekend.setUTCDate(weekend.getUTCDate() + (6 - weekend.getUTCDay() + 7) % 7);
+  const sharedRecord = { data: weekend.toISOString().slice(0, 10), horario: '04:19', modalidade: 'territorio', grupos: groups,
+    territorios: [], dirigente_publicador_id: publisher.id };
+  const shared = await mutateFieldService(client, { entity: 'saidas', action: 'save', record: sharedRecord });
+  const pendingShared = (await readFieldService(client)).saidas.find(s => s.id === shared.id);
+  assert.equal(pendingShared.dirigente_unico, true);
+  assert.deepEqual(pendingShared.territorios_por_grupo, {});
+  const mapping = { [groups[0]]: [groupTerritories[0]], [groups[1]]: [groupTerritories[1]] };
+  await mutateFieldService(client, { entity: 'saidas', action: 'save', record: { ...pendingShared, territorios_por_grupo: mapping } });
+  const savedShared = (await readFieldService(client)).saidas.find(s => s.id === shared.id);
+  assert.deepEqual(savedShared.territorios_por_grupo, mapping);
+  assert.deepEqual(savedShared.territorios, groupTerritories);
+  assert.equal(savedShared.dirigente_publicador_id, publisher.id);
+  assert.ok((await readFieldService(client)).territorios.filter(t => groupTerritories.includes(t.id)).every(t => t.mapa_grupo_id === null));
+  await mutateFieldService(client, { entity: 'saidas', action: 'result', id: shared.id, data: sharedRecord.data,
+    resultados: groupTerritories.map(territorio_id => ({ territorio_id, resultado: 'concluido' })) });
+  const sharedDeliveries = (await readFieldService(client)).designacoes;
+  assert.deepEqual(groupTerritories.map(id => sharedDeliveries.find(d => d.territorio_id === id)?.publicador_id),
+    [publisher.id, secondPublisher.id]);
+  const nextWeekend = new Date(weekend);
+  nextWeekend.setUTCDate(nextWeekend.getUTCDate() + 7);
+  const sharedHandover = await mutateFieldService(client, { entity: 'saidas', action: 'save', registrar_entrega: true, record: {
+    ...sharedRecord, data: nextWeekend.toISOString().slice(0, 10), territorios_por_grupo: mapping
+  } });
+  const handoverRows = (await readFieldService(client)).designacoes.filter(d => d.observacoes === `Entrega registrada pela saída ${sharedHandover.id}.`);
+  assert.deepEqual(groupTerritories.map(id => handoverRows.find(d => d.territorio_id === id)?.publicador_id),
+    [publisher.id, secondPublisher.id]);
+  await assert.rejects(mutateFieldService(client, { entity: 'saidas', action: 'save', record: { ...savedShared,
+    territorios_por_grupo: { [groups[0]]: [groupTerritories[1]], [groups[1]]: [groupTerritories[0]] } } }), /já tem resultados/);
+  const separate = await mutateFieldService(client, { entity: 'saidas', action: 'save', record: { ...sharedRecord, data: '2199-12-20', dirigente_unico: false } });
+  assert.equal((await readFieldService(client)).saidas.find(s => s.id === separate.id).dirigente_unico, false);
+  console.log('Dirigente único aprovado: padrão marcado, territórios por grupo definidos depois, JSONB persistido e resultados preservados.');
+  const continuationTerritory = await mutateFieldService(client, { entity: 'territorios', action: 'save', record: { numero: number + 9 } });
+  const continuationDate = weeks => {
+    const date = new Date(weekend);
+    date.setUTCDate(date.getUTCDate() + weeks * 7);
+    return date.toISOString().slice(0, 10);
+  };
+  const firstOuting = await mutateFieldService(client, { entity: 'saidas', action: 'save', registrar_entrega: true, record: {
+    data: continuationDate(4), horario: '04:23', modalidade: 'territorio', territorios: [continuationTerritory.id], dirigente_publicador_id: publisher.id
+  } });
+  await mutateFieldService(client, { entity: 'saidas', action: 'result', id: firstOuting.id, data: continuationDate(4),
+    resultados: [{ territorio_id: continuationTerritory.id, resultado: 'parcial', observacoes: 'Faltam as quadras 3 e 4.' }] });
+  const originalDelivery = (await readFieldService(client)).designacoes.find(d => d.territorio_id === continuationTerritory.id);
+  const nextRecord = { data: continuationDate(5), horario: '04:23', modalidade: 'territorio', territorios: [continuationTerritory.id], dirigente_publicador_id: secondPublisher.id };
+  const nextOuting = await mutateFieldService(client, { entity: 'saidas', action: 'save', record: nextRecord });
+  assert.equal((await readFieldService(client)).designacoes.filter(d => d.territorio_id === continuationTerritory.id).length, 1);
+  const transferred = await mutateFieldService(client, { entity: 'saidas', action: 'save', registrar_entrega: true,
+    transferencias: { [continuationTerritory.id]: originalDelivery.id }, record: { ...nextRecord, id: nextOuting.id } });
+  assert.equal(transferred.transferencias.length, 1);
+  let continuationState = await readFieldService(client);
+  const secondDelivery = continuationState.designacoes.find(d => d.designacao_anterior_id === originalDelivery.id);
+  assert.equal(secondDelivery.orientacoes_continuacao, 'Faltam as quadras 3 e 4.');
+  assert.equal(secondDelivery.publicador_id, secondPublisher.id);
+  assert.equal(continuationState.designacoes.find(d => d.id === originalDelivery.id).data_transferencia, continuationDate(5));
+  assert.equal(continuationState.designacoes.find(d => d.id === originalDelivery.id).data_conclusao, null);
+  assert.equal(continuationState.territorios.find(t => t.id === continuationTerritory.id).ultima_conclusao, null);
+  assert.equal(continuationState.resultados.find(r => r.designacao_id === originalDelivery.id).observacoes, 'Faltam as quadras 3 e 4.');
+  await assert.rejects(mutateFieldService(client, { entity: 'designacoes', action: 'complete', id: originalDelivery.id, data_conclusao: continuationDate(5) }), /transferida/);
+  await assert.rejects(mutateFieldService(client, { entity: 'designacoes', action: 'transfer', id: originalDelivery.id, publicador_id: publisher.id, data_transferencia: continuationDate(6) }), /transferida/);
+  // A failure while creating the next responsibility must restore the old one.
+  await client.query('SAVEPOINT failed_transfer');
+  await assert.rejects(mutateFieldService(client, { entity: 'designacoes', action: 'transfer', id: secondDelivery.id,
+    publicador_id: 2147483647, data_transferencia: continuationDate(6) }));
+  await client.query('ROLLBACK TO SAVEPOINT failed_transfer');
+  assert.equal((await readFieldService(client)).designacoes.find(d => d.id === secondDelivery.id).data_transferencia, null);
+  await mutateFieldService(client, { entity: 'saidas', action: 'result', id: nextOuting.id, data: continuationDate(5),
+    resultados: [{ territorio_id: continuationTerritory.id, resultado: 'parcial', observacoes: 'Agora falta apenas a quadra 4.' }] });
+  const third = await mutateFieldService(client, { entity: 'designacoes', action: 'transfer', id: secondDelivery.id,
+    publicador_id: publisher.id, data_transferencia: continuationDate(6), observacoes: 'Continuação na semana seguinte.' });
+  assert.equal(third.transferencia.orientacoes_continuacao, 'Agora falta apenas a quadra 4.');
+  await mutateFieldService(client, { entity: 'designacoes', action: 'complete', id: third.id, data_conclusao: continuationDate(6) });
+  continuationState = await readFieldService(client);
+  const chain = continuationState.designacoes.filter(d => d.territorio_id === continuationTerritory.id);
+  assert.equal(chain.length, 3);
+  assert.equal(chain.filter(d => d.data_conclusao).length, 1);
+  assert.equal(continuationState.territorios.find(t => t.id === continuationTerritory.id).ultima_conclusao, continuationDate(6));
+  await mutateFieldService(client, { entity: 'saidas', action: 'delete', id: firstOuting.id });
+  await mutateFieldService(client, { entity: 'saidas', action: 'delete', id: nextOuting.id });
+  await client.query(cleanupMigration);
+  assert.equal((await readFieldService(client)).designacoes.filter(d => d.territorio_id === continuationTerritory.id).length, 3);
+  console.log('Transferências aprovadas: três responsáveis, parciais preservados, rollback, exclusão segura e apenas uma conclusão real.');
+  const resultTransferTerritory = await mutateFieldService(client, { entity: 'territorios', action: 'save', record: { numero: number + 10 } });
+  const resultTransferOld = await mutateFieldService(client, { entity: 'designacoes', action: 'save', record: {
+    territorio_id: resultTransferTerritory.id, publicador_id: publisher.id, data_designacao: continuationDate(7), observacoes: 'Falta a rua de trás.'
+  } });
+  const resultTransferOuting = await mutateFieldService(client, { entity: 'saidas', action: 'save', record: {
+    data: continuationDate(8), horario: '04:24', modalidade: 'territorio', territorios: [resultTransferTerritory.id], dirigente_publicador_id: secondPublisher.id
+  } });
+  await assert.rejects(mutateFieldService(client, { entity: 'saidas', action: 'result', id: resultTransferOuting.id, data: continuationDate(8),
+    resultados: [{ territorio_id: resultTransferTerritory.id, resultado: 'concluido' }] }), /já está designado/);
+  const resultTransfer = await mutateFieldService(client, { entity: 'saidas', action: 'result', id: resultTransferOuting.id, data: continuationDate(8),
+    resultados: [{ territorio_id: resultTransferTerritory.id, resultado: 'concluido', transferir_de: resultTransferOld.id }] });
+  assert.equal(resultTransfer.transferencias.length, 1);
+  const resultTransferState = await readFieldService(client);
+  const resultTransferNew = resultTransferState.designacoes.find(d => d.designacao_anterior_id === resultTransferOld.id);
+  assert.equal(resultTransferNew.data_conclusao, continuationDate(8));
+  assert.equal(resultTransferNew.orientacoes_continuacao, 'Falta a rua de trás.');
+  assert.equal(resultTransferState.designacoes.find(d => d.id === resultTransferOld.id).data_conclusao, null);
   console.log('Planejamento aprovado: quatro conclusões, resultados parciais, importação sem duplicidade, geração em lote e rollback.');
   console.log('Integração aprovada: seleção direta, recorrência, conflitos, histórico e migração dos dirigentes existentes.');
 } catch (error) {
-  console.error('Falha na integração:', error.code || error.message);
+  console.error('Falha na integração:', error.code || error.message, error.detail || '');
   process.exitCode = 1;
 } finally {
   if (client) { await client.query('ROLLBACK'); client.release(); }

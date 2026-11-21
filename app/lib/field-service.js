@@ -1,12 +1,41 @@
 export const FIELD_MODES = { territorio: 'Território', cartas: 'Cartas', revisitas: 'Revisitas e estudos' };
 
+export function isWeekendOuting(outing) {
+  return [0, 6].includes(new Date(`${outing.data}T12:00:00Z`).getUTCDay());
+}
+
+export function usesSingleFieldLeader(outing) {
+  return isWeekendOuting(outing) && outing.modalidade === 'territorio' && outing.dirigente_unico !== false;
+}
+
 export function usesGroupTerritories(outing) {
   return outing.modalidade === 'territorio' && outing.grupos?.length > 0
-    && [0, 6].includes(new Date(`${outing.data}T12:00:00Z`).getUTCDay());
+    && isWeekendOuting(outing);
 }
 
 export function isTerritoryAllowedForOuting(territory, outing) {
-  return !usesGroupTerritories(outing) || outing.grupos.some(id => Number(id) === Number(territory.mapa_grupo_id));
+  return !usesGroupTerritories(outing) || territory.mapa_grupo_id == null
+    || outing.grupos.some(id => Number(id) === Number(territory.mapa_grupo_id));
+}
+
+export function assignmentContinuationNotes(assignment, results = []) {
+  const latest = results.filter(row => row.designacao_id === assignment.id && row.observacoes
+    && ['parcial', 'nao_trabalhado'].includes(row.resultado))
+    .sort((a, b) => b.data.localeCompare(a.data) || b.id - a.id)[0];
+  return latest?.observacoes || assignment.orientacoes_continuacao
+    || (!/^Entrega registrada pela saída \d+\.$/.test(assignment.observacoes || '') ? assignment.observacoes : '') || '';
+}
+
+export function fieldOutingTerritorySummary(outing, data) {
+  const numbers = selected => selected.map(id => data.territorios.find(t => t.id === id)?.numero ?? '?').join(', ');
+  const mapping = outing.territorios_por_grupo || {};
+  if (!usesSingleFieldLeader(outing) || !outing.grupos?.length
+    || (outing.dirigente_unico === undefined && !Object.keys(mapping).length)) return numbers(outing.territorios || []);
+  const assigned = Object.values(mapping).flat();
+  const lines = outing.grupos.map(id => `${data.grupos.find(g => g.id === id)?.nome || 'Grupo removido'}: ${numbers(mapping[id] || []) || 'A definir'}`);
+  const unassigned = (outing.territorios || []).filter(id => !assigned.includes(id));
+  if (unassigned.length) lines.push(`Sem grupo na saída: ${numbers(unassigned)}`);
+  return lines.join('\n');
 }
 
 export function fieldMapUrl(value) {
@@ -77,7 +106,28 @@ export function validateFieldRecord(entity, input) {
     const horario = text(input.horario, 40, true);
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(horario) && horario !== 'Pós reunião') throw new Error('Informe um horário válido ou selecione Pós reunião.');
     if (!Object.hasOwn(FIELD_MODES, input.modalidade)) throw new Error('Modalidade inválida.');
-    return { id, data, horario, dirigente_publicador_id: fieldId(input.dirigente_publicador_id, true), dirigente_id: null, local_id: fieldId(input.local_id, true), grupos: ids(input.grupos), territorios: input.modalidade === 'territorio' ? ids(input.territorios) : [], modalidade: input.modalidade, observacoes: text(input.observacoes), semanas: id ? 1 : Number(input.semanas ?? 1) };
+    if (input.dirigente_unico !== undefined && typeof input.dirigente_unico !== 'boolean') throw new Error('Opção de dirigente único inválida.');
+    const grupos = ids(input.grupos);
+    const mapping = input.territorios_por_grupo ?? {};
+    if (typeof mapping !== 'object' || Array.isArray(mapping) || !mapping) throw new Error('Territórios por grupo inválidos.');
+    const territoriosPorGrupo = {};
+    const assigned = new Set();
+    if (usesSingleFieldLeader({ ...input, data })) {
+      for (const key of Object.keys(mapping).sort((a, b) => Number(a) - Number(b))) {
+        const groupId = fieldId(key);
+        if (!grupos.includes(groupId)) throw new Error('Escolha apenas grupos participantes desta saída.');
+        const selected = ids(mapping[key]).sort((a, b) => a - b);
+        for (const territory of selected) {
+          if (assigned.has(territory)) throw new Error('Cada território deve ser designado a apenas um grupo nesta saída.');
+          assigned.add(territory);
+        }
+        if (selected.length) territoriosPorGrupo[groupId] = selected;
+      }
+    }
+    const territorios = input.modalidade === 'territorio' ? ids([...ids(input.territorios), ...assigned]) : [];
+    return { id, data, horario, dirigente_publicador_id: fieldId(input.dirigente_publicador_id, true), dirigente_id: null, local_id: fieldId(input.local_id, true), grupos, territorios,
+      dirigente_unico: input.dirigente_unico !== false, territorios_por_grupo: territoriosPorGrupo,
+      modalidade: input.modalidade, observacoes: text(input.observacoes), semanas: id ? 1 : Number(input.semanas ?? 1) };
   }
   if (entity === 'designacoes') {
     const data_designacao = fieldDate(input.data_designacao);
@@ -89,13 +139,15 @@ export function validateFieldRecord(entity, input) {
 }
 export function isFieldOutingCompleted(outing, assignments = [], results = []) {
   if (outing.modalidade !== 'territorio' || !outing.territorios?.length) return false;
+  if (usesSingleFieldLeader(outing) && Object.keys(outing.territorios_por_grupo || {}).length
+    && outing.grupos.some(id => !outing.territorios_por_grupo[id]?.length)) return false;
   const outingResults = results.filter(result => result.saida_id === outing.id);
   const marker = `Entrega registrada pela saída ${outing.id}.`;
   return outing.territorios.every(territoryId => {
     const result = outingResults.find(item => item.territorio_id === territoryId);
     if (result?.resultado === 'concluido') return true;
     return assignments.some(assignment => assignment.territorio_id === territoryId
-      && assignment.data_conclusao
+      && (assignment.data_conclusao || assignment.data_transferencia)
       && (assignment.observacoes === marker || (result?.designacao_id && assignment.id === result.designacao_id)));
   });
 }

@@ -34,6 +34,26 @@ test('service-year choices include intervening years of long or pending assignme
   assert.deepEqual(years, [2027, 2026, 2025, 2024]);
 });
 
+test('transfers preserve both responsible people and never count as a conclusion', () => {
+  const state = { ...data, designacoes: [
+    { id: 10, territorio_id: 1, responsavel_nome: 'Junior', data_designacao: '2026-11-14', data_conclusao: null, data_transferencia: '2026-11-21' },
+    { id: 11, territorio_id: 1, responsavel_nome: 'Paulo', data_designacao: '2026-11-21', data_conclusao: null, designacao_anterior_id: 10 },
+  ] };
+  const report = territoryHistoryReport(state, 2027);
+  assert.equal(report.territories[0].latest, '');
+  assert.deepEqual(report.territories[0].assignments.map(d => d.name), ['Junior', 'Paulo']);
+  assert.equal(report.territories[0].assignments[0].transferDate, '2026-11-21');
+  assert.equal(report.territories[0].assignments[0].end, '');
+  const doc = new jsPDF({ orientation: 'landscape', format: 'a4' });
+  const texts = [], text = doc.text.bind(doc);
+  doc.text = (value, ...args) => { texts.push(value); return text(value, ...args); };
+  writeTerritoryHistoryPdf(doc, state, 2027);
+  assert.ok(texts.some(value => String(value).includes('Transf. 21/11/2026')));
+  assert.ok(texts.some(value => String(value) === 'Pendente'));
+  const later = territoryHistoryReport({ ...state, designacoes: [state.designacoes[0]] }, 2028);
+  assert.equal(later.count, 0);
+});
+
 test('PDF keeps all assignments beyond five slots, and wraps very long names within page margins', () => {
   const state = { ...data, designacoes: Array.from({ length: 13 }, (_, i) => ({ id: i + 1, territorio_id: 1, responsavel_nome: `Pessoa ${i + 1} ` + (i === 12 ? 'Nome extenso '.repeat(150) : ''), data_designacao: '2026-10-01', data_conclusao: null })) };
   const doc = new jsPDF({ orientation: 'landscape', format: 'a4' });

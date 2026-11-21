@@ -2,11 +2,45 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadModule, loadRoute } from './helpers/load-source.mjs';
 
-const { fieldId, fieldDate, fieldServiceYear, weeklyDates, validateFieldRecord, isFieldOutingCompleted } = await loadModule('../../app/lib/field-service.js');
+const { fieldId, fieldDate, fieldServiceYear, weeklyDates, validateFieldRecord, isFieldOutingCompleted, usesGroupTerritories, isTerritoryAllowedForOuting } = await loadModule('../../app/lib/field-service.js');
 const { mutateFieldService, readFieldService } = await loadModule('../../app/lib/field-service-server.js');
 const { canAccessRoute } = await loadModule('../../app/lib/route-access.js');
 const { prepareFieldMap, saveFieldMap } = await loadModule('../../app/lib/field-map.js');
 const outing = overrides => ({ data: '2026-10-17', horario: '08:30', modalidade: 'territorio', grupos: [1], territorios: [3], ...overrides });
+
+test('weekend shared leader defaults on and allows assigning distinct territories per group later', () => {
+  const pending = validateFieldRecord('saidas', outing({ grupos: [1, 2], territorios: [] }));
+  assert.equal(pending.dirigente_unico, true);
+  assert.deepEqual(pending.territorios_por_grupo, {});
+  const record = validateFieldRecord('saidas', { ...pending, territorios_por_grupo: { 1: [3], 2: [4, 5] } });
+  assert.deepEqual(record.territorios, [3, 4, 5]);
+  assert.deepEqual(record.territorios_por_grupo, { 1: [3], 2: [4, 5] });
+  for (const mapping of [{ 1: [3], 2: [3] }, { 9: [3] }, [], 'invalid', { 1: '3' }]) {
+    assert.throws(() => validateFieldRecord('saidas', { ...pending, territorios_por_grupo: mapping }));
+  }
+  assert.throws(() => validateFieldRecord('saidas', { ...pending, dirigente_unico: 'true' }));
+  const separate = validateFieldRecord('saidas', { ...record, dirigente_unico: false });
+  assert.equal(separate.dirigente_unico, false);
+  assert.deepEqual(separate.territorios_por_grupo, {});
+  assert.deepEqual(separate.territorios, [3, 4, 5]);
+  const weekday = validateFieldRecord('saidas', { ...record, data: '2026-10-19' });
+  assert.deepEqual(weekday.territorios_por_grupo, {});
+});
+
+test('a territory already owned on the map cannot be assigned to another participating group', async () => {
+  const fixture = serviceFixture();
+  await assert.rejects(mutateFieldService(fixture.client, { entity: 'saidas', action: 'save', record: outing({
+    grupos: [1, 2], territorios_por_grupo: { 2: [3] },
+  }) }), /pertence a outro grupo/);
+  assert.ok(!fixture.calls.some(call => call.sql.startsWith('INSERT')));
+});
+
+test('shared outings with a group still awaiting territories remain on the agenda', () => {
+  const row = outing({ id: 1, dirigente_unico: true, grupos: [1, 2], territorios_por_grupo: { 1: [3] } });
+  const results = [{ saida_id: 1, territorio_id: 3, resultado: 'concluido' }];
+  assert.equal(isFieldOutingCompleted(row, [], results), false);
+  assert.equal(isFieldOutingCompleted({ ...row, grupos: [1] }, [], results), true);
+});
 
 test('agenda hides only outings whose own territories have all been completed', () => {
   const row = outing({ id: 10, territorios: [3, 4] });
@@ -127,9 +161,9 @@ test('recurring outings are planned separately from territory handovers and conc
   assert.ok(!fixture.calls.some(call => /(?:INSERT INTO|UPDATE) campo_designacoes/.test(call.sql)));
 });
 
-test('manual weekend outings reject foreign or unmapped territories before writing', async () => {
+test('manual weekend outings reject territories owned by other groups before writing', async () => {
   for (const date of ['2026-10-17', '2026-10-18']) {
-    for (const owner of [2, null]) {
+    for (const owner of [2, 3]) {
       const fixture = serviceFixture();
       const originalQuery = fixture.client.query;
       fixture.client.query = async (sql, params) => sql.startsWith('SELECT id, mapa_grupo_id')
@@ -137,6 +171,23 @@ test('manual weekend outings reject foreign or unmapped territories before writi
       await assert.rejects(mutateFieldService(fixture.client, { entity: 'saidas', action: 'save', record: outing({ data: date }) }), /vinculados no mapa/);
       assert.ok(!fixture.calls.some(call => call.sql.startsWith('INSERT')));
     }
+  }
+});
+
+test('unmapped territories remain generic until their group is defined', async () => {
+  for (const date of ['2026-11-21', '2026-11-22']) {
+    const record = outing({ data: date, grupos: [1], territorios: [3] });
+    assert.equal(usesGroupTerritories(record), true);
+    assert.equal(isTerritoryAllowedForOuting({ mapa_grupo_id: null }, record), true);
+    assert.equal(isTerritoryAllowedForOuting({}, record), true);
+    assert.equal(isTerritoryAllowedForOuting({ mapa_grupo_id: 1 }, record), true);
+    assert.equal(isTerritoryAllowedForOuting({ mapa_grupo_id: 2 }, record), false);
+    const fixture = serviceFixture();
+    const original = fixture.client.query;
+    fixture.client.query = async (sql, params) => sql.startsWith('SELECT id, mapa_grupo_id')
+      ? { rows: [{ id: 3, mapa_grupo_id: null }] } : original(sql, params);
+    await mutateFieldService(fixture.client, { entity: 'saidas', action: 'save', record });
+    assert.ok(fixture.calls.some(call => call.sql.startsWith('INSERT INTO campo_saidas')));
   }
 });
 
@@ -202,7 +253,7 @@ function routeFixture({ allowed = true, auditFails = false, failSecond = false }
   const route = loadRoute('../../app/api/admin/servico-campo/route.js', {
     Pool: class { async connect() { return fixture.client; } }, authorizeRequest: async () => allowed ? null : { status: 403 },
     readFieldService, mutateFieldService, prepareFieldMap, saveFieldMap, getUserIdFromRequest: () => 2,
-    registerAuditLog: async () => { fixture.calls.push({ sql: 'AUDIT' }); if (auditFails) throw new Error('Audit failed'); }
+    registerAuditLog: async (_client, entry) => { fixture.calls.push({ sql: 'AUDIT', entry }); if (auditFails) throw new Error('Audit failed'); }
   });
   return { ...fixture, route };
 }
@@ -233,11 +284,35 @@ test('a failed recurring batch rolls back all outings; invalid payloads do not c
   assert.ok(!invalid.calls.some(call => call.sql.startsWith('INSERT')));
 });
 
-test('deleting a planned outing preserves handover history and master records cannot be deleted', async () => {
+test('deleting an outing removes only its unused pending deliveries and returns them for audit', async () => {
   const fixture = serviceFixture();
-  await mutateFieldService(fixture.client, { action: 'delete', entity: 'saidas', id: 1 });
-  assert.ok(!fixture.calls.some(call => call.sql.includes('campo_designacoes')));
+  const result = await mutateFieldService(fixture.client, { action: 'delete', entity: 'saidas', id: 1 });
+  const cleanup = fixture.calls.find(call => call.sql.startsWith('DELETE FROM campo_designacoes'));
+  assert.deepEqual(cleanup.params, ['Entrega registrada pela saída 1.']);
+  assert.match(cleanup.sql, /data_conclusao IS NULL/);
+  assert.match(cleanup.sql, /NOT EXISTS .*campo_saida_resultados r WHERE r.designacao_id = d.id/);
+  assert.equal(result.entregas_anteriores_removidas.length, 1);
+  assert.ok(fixture.calls.indexOf(cleanup) > fixture.calls.findIndex(call => call.sql.startsWith('DELETE FROM campo_saidas')));
   await assert.rejects(mutateFieldService(fixture.client, { action: 'delete', entity: 'territorios', id: 1 }), /Desative/);
+});
+
+test('deleting a missing outing does not remove any deliveries', async () => {
+  const calls = [];
+  const client = { query: async sql => { calls.push(sql); return { rows: [] }; } };
+  await assert.rejects(mutateFieldService(client, { action: 'delete', entity: 'saidas', id: 99 }), error => error.status === 404);
+  assert.ok(!calls.some(sql => sql.includes('campo_designacoes')));
+});
+
+test('deletion cleanup is audited and rolls back with the outing if the audit fails', async () => {
+  for (const auditFails of [false, true]) {
+    const fixture = routeFixture({ auditFails });
+    const response = await fixture.route.POST({ json: async () => ({ action: 'delete', entity: 'saidas', id: 1 }) });
+    assert.equal(response.status, auditFails ? 500 : 200);
+    assert.ok(fixture.calls.some(call => call.sql.startsWith('DELETE FROM campo_designacoes')));
+    assert.equal(fixture.calls.at(-2).sql, 'AUDIT');
+    assert.equal(fixture.calls.at(-2).entry.details.entregas_anteriores_removidas.length, 1);
+    assert.equal(fixture.calls.at(-1).sql, auditFails ? 'ROLLBACK' : 'COMMIT');
+  }
 });
 
 test('territory and uploaded PDF save together and an audit failure rolls back both', async () => {

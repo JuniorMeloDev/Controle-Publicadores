@@ -1,4 +1,4 @@
-import { FIELD_MODES, fieldMapUrl } from './field-service.js';
+import { FIELD_MODES, fieldMapUrl, usesSingleFieldLeader, fieldOutingTerritorySummary, assignmentContinuationNotes } from './field-service.js';
 
 const safeUrl = value => { try { return fieldMapUrl(value); } catch { return ''; } };
 export const fieldWhatsAppUrl = message => `https://api.whatsapp.com/send/?text=${encodeURIComponent(message)}`;
@@ -34,7 +34,15 @@ export function buildFieldOutingMessage(outing, data, publicMapUrls = {}) {
   if (location?.endereco) lines.push(location.endereco);
   if (safeUrl(location?.mapa_url)) lines.push(`Google Maps da consideração: ${safeUrl(location.mapa_url)}`);
   lines.push('', `\u{1F4CB} *Modalidade:* ${FIELD_MODES[outing.modalidade] || outing.modalidade}`);
-  for (const territory of territories) lines.push('', buildTerritoryMessage(territory, publicMapUrls[territory.id] || ''));
+  if (usesSingleFieldLeader(outing) && outing.grupos.length) {
+    lines.push('', '*DIRIGENTE ÚNICO · TERRITÓRIOS POR GRUPO*', fieldOutingTerritorySummary(outing, data));
+  }
+  for (const territory of territories) {
+    lines.push('', buildTerritoryMessage(territory, publicMapUrls[territory.id] || ''));
+    const current = (data.designacoes || []).find(d => d.territorio_id === territory.id && !d.data_conclusao && !d.data_transferencia);
+    const notes = current ? assignmentContinuationNotes(current, data.resultados) : '';
+    if (notes) lines.push(`*CONTINUAÇÃO — O QUE FALTA TRABALHAR:*\n${notes}`);
+  }
   if (outing.observacoes) lines.push('', `\u{1F4E3} *ORIENTAÇÕES DA SAÍDA*\n${outing.observacoes}`);
   return lines.join('\n');
 }

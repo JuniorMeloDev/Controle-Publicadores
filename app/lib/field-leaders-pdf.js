@@ -1,4 +1,4 @@
-import { FIELD_MODES } from './field-service.js';
+import { FIELD_MODES, fieldOutingTerritorySummary } from './field-service.js';
 
 export function fieldLeadersReport(data, year, month) {
   const y = Number(year), m = Number(month);
@@ -9,7 +9,7 @@ export function fieldLeadersReport(data, year, month) {
     date: row.data, weekday: new Intl.DateTimeFormat('pt-BR', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${row.data}T12:00:00Z`)),
     time: row.horario, leader: findName('publicadores', row.dirigente_publicador_id), leaderId: row.dirigente_publicador_id,
     place: findName('locais', row.local_id), groups: row.grupos.length ? row.grupos.map(id => findName('grupos', id, 'Grupo removido')).join(', ') : 'Congregação',
-    territories: row.modalidade !== 'territorio' ? FIELD_MODES[row.modalidade] || 'A definir' : row.territorios.map(id => data.territorios.find(t => t.id === id)?.numero ?? '?').join(', ') || 'A definir'
+    territories: row.modalidade !== 'territorio' ? FIELD_MODES[row.modalidade] || 'A definir' : fieldOutingTerritorySummary(row, data) || 'A definir'
   }));
   const label = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${prefix}-01T12:00:00Z`));
   return { year: y, month: m, prefix, label: label[0].toUpperCase() + label.slice(1), rows,

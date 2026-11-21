@@ -8,6 +8,22 @@ const territory = { id: 3, numero: 12, descricao: 'Bairro de teste', referencias
 const data = { territorios: [territory, { id: 4, numero: 15 }], publicadores: [{ id: 1, nome: 'Dirigente de teste' }], grupos: [{ id: 2, nome: 'Grupo de teste' }], locais: [{ id: 5, nome: 'Salão do Reino', endereco: 'Rua de teste, 10', mapa_url: 'https://maps.google.com/?q=consideracao' }] };
 const outing = { data: '2026-10-17', horario: '08:30', dirigente_publicador_id: 1, local_id: 5, grupos: [2], territorios: [3, 4], modalidade: 'territorio', observacoes: 'Levar o mapa atualizado' };
 
+test('shared outing messages distinguish each group territory and groups awaiting assignment', () => {
+  const sharedData = { ...data, grupos: [{ id: 2, nome: 'Opala' }, { id: 7, nome: 'Rubi' }, { id: 8, nome: 'Turqueza' }] };
+  const message = buildFieldOutingMessage({ ...outing, dirigente_unico: true, grupos: [2, 7, 8], territorios_por_grupo: { 2: [3], 7: [4] } }, sharedData);
+  assert.ok(message.includes('DIRIGENTE ÚNICO'));
+  assert.ok(message.includes('Opala: 12\nRubi: 15\nTurqueza: A definir'));
+  assert.equal((message.match(/\*Dirigente:\*/g) || []).length, 1);
+});
+
+test('outing sharing includes inherited work that the next responsible person must continue', () => {
+  const message = buildFieldOutingMessage(outing, { ...data, designacoes: [
+    { id: 10, territorio_id: 3, publicador_id: 1, data_conclusao: null, data_transferencia: null, orientacoes_continuacao: 'Faltam as quadras 3 e 4.' },
+  ] });
+  assert.ok(message.includes('CONTINUAÇÃO — O QUE FALTA TRABALHAR'));
+  assert.ok(message.includes('Faltam as quadras 3 e 4.'));
+});
+
 test('territory links and references validate and round-trip without requiring a PDF', () => {
   const record = validateFieldRecord('territorios', territory);
   assert.equal(record.mapa_url, territory.mapa_url);

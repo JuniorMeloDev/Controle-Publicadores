@@ -1,5 +1,7 @@
 import { fieldId, fieldDate, validateFieldRecord, weeklyDates, usesGroupTerritories, isTerritoryAllowedForOuting } from './field-service.js';
 import { mutateFieldBatch } from './field-service-batch.js';
+import { transferFieldAssignment } from './field-service-transfer.js';
+import { fieldTerritoryGroup, fieldTerritoryResponsible } from './field-territory-responsibility.js';
 
 const tables = { locais: 'campo_locais', territorios: 'campo_territorios', saidas: 'campo_saidas', designacoes: 'campo_designacoes' };
 export function fieldError(message, status = 400) { return Object.assign(new Error(message), { status }); }
@@ -14,7 +16,7 @@ export async function readFieldService(client) {
   result.territorios = (await client.query(`SELECT t.*, (SELECT MAX(d.data_conclusao)::text FROM campo_designacoes d WHERE d.territorio_id = t.id) AS ultima_conclusao
     FROM campo_territorios t ORDER BY numero`)).rows;
   result.saidas = (await client.query('SELECT s.*, s.data::text AS data FROM campo_saidas s ORDER BY s.data, s.horario, s.id')).rows;
-  result.designacoes = (await client.query(`SELECT d.*, d.data_designacao::text AS data_designacao, d.data_conclusao::text AS data_conclusao
+  result.designacoes = (await client.query(`SELECT d.*, d.data_designacao::text AS data_designacao, d.data_conclusao::text AS data_conclusao, d.data_transferencia::text AS data_transferencia
     FROM campo_designacoes d ORDER BY d.data_designacao DESC, d.id DESC`)).rows;
   result.mapas = (await client.query('SELECT chave, territorio_id, nome, tamanho, atualizado_em FROM campo_mapas ORDER BY chave')).rows;
   result.resultados = (await client.query('SELECT *, data::text AS data FROM campo_saida_resultados ORDER BY campo_saida_resultados.data DESC, id DESC')).rows;
@@ -31,21 +33,33 @@ export async function mutateFieldService(client, body) {
   if (body && ['result', 'batch', 'import'].includes(body.action)) return mutateFieldBatch(client, body, mutateFieldService);
   if (!body || !Object.hasOwn(tables, body.entity)) throw fieldError('Cadastro inválido.');
   const table = tables[body.entity];
-  if (!['save', 'delete', 'complete'].includes(body.action)) throw fieldError('Ação inválida.');
+  if (!['save', 'delete', 'complete', 'transfer'].includes(body.action)) throw fieldError('Ação inválida.');
   // Serializes writes, including recurring batches and checks for concurrent assignments.
   await client.query('SELECT pg_advisory_xact_lock(73428191)');
+  if (body.action === 'transfer') {
+    if (body.entity !== 'designacoes') throw fieldError('Registro inválido.');
+    return transferFieldAssignment(client, body, mutateFieldService);
+  }
   if (body.action === 'delete' || body.action === 'complete') {
     const id = fieldId(body.id);
     if (body.action === 'delete') {
       if (body.entity !== 'saidas') throw fieldError('Desative o cadastro para preservar o histórico.');
       const deleted = await client.query('DELETE FROM campo_saidas WHERE id = $1 RETURNING id', [id]);
       if (!deleted.rows.length) throw fieldError('Saída não encontrada.', 404);
-      return { id, ids: [id] };
+      // Cancel only unused deliveries created by this outing. Recorded work,
+      // including partial results whose outing was detached by the delete, stays.
+      const deliveries = await client.query(`DELETE FROM campo_designacoes d
+        WHERE d.observacoes = $1 AND d.data_conclusao IS NULL AND d.data_transferencia IS NULL
+          AND d.designacao_anterior_id IS NULL
+          AND NOT EXISTS (SELECT 1 FROM campo_saida_resultados r WHERE r.designacao_id = d.id)
+        RETURNING d.*`, [`Entrega registrada pela saída ${id}.`]);
+      return { id, ids: [id], entregas_anteriores_removidas: deliveries.rows };
     }
     if (body.entity !== 'designacoes') throw fieldError('Registro inválido.');
     const record = (await client.query('SELECT *, data_designacao::text AS data_designacao FROM campo_designacoes WHERE id = $1 FOR UPDATE', [id])).rows[0];
     if (!record) throw fieldError('Designação não encontrada.', 404);
     if (record.data_conclusao) throw fieldError('Esta designação já foi concluída.', 409);
+    if (record.data_transferencia) throw fieldError('Esta entrega foi transferida. Registre a conclusão na entrega do responsável atual.', 409);
     const date = fieldDate(body.data_conclusao);
     if (date < record.data_designacao) throw fieldError('A conclusão não pode ser anterior à designação.');
     await client.query('UPDATE campo_designacoes SET data_conclusao = $2 WHERE id = $1', [id, date]);
@@ -66,12 +80,19 @@ export async function mutateFieldService(client, body) {
     if (body.entity === 'saidas') {
       const recorded = await client.query('SELECT id FROM campo_saida_resultados WHERE saida_id = $1', [record.id]);
       if (recorded.rows.length && (record.data !== String(old.data).slice(0, 10) || record.dirigente_publicador_id !== old.dirigente_publicador_id
+        || record.dirigente_unico !== (old.dirigente_unico !== false)
+        || JSON.stringify(record.territorios_por_grupo) !== JSON.stringify(old.territorios_por_grupo || {})
         || JSON.stringify([...record.territorios].sort((a, b) => a - b)) !== JSON.stringify([...old.territorios].sort((a, b) => a - b)))) {
         throw fieldError('Esta saída já tem resultados. Preserve sua data, dirigente e territórios para manter o histórico.', 409);
       }
       // Exact system-generated source marker also recognizes deliveries already saved.
       linkedDeliveries = (await client.query('SELECT *, data_designacao::text AS data_designacao FROM campo_designacoes WHERE observacoes = $1 FOR UPDATE',
         [`Entrega registrada pela saída ${record.id}.`])).rows;
+      if (linkedDeliveries.some(row => row.data_transferencia || row.designacao_anterior_id)
+        && (record.data !== String(old.data).slice(0, 10) || record.dirigente_publicador_id !== old.dirigente_publicador_id
+          || JSON.stringify([...record.territorios].sort((a, b) => a - b)) !== JSON.stringify([...old.territorios].sort((a, b) => a - b)))) {
+        throw fieldError('Esta saída tem transferências. Preserve a data, o dirigente e os territórios para manter o histórico.', 409);
+      }
     }
   }
   if (record.grupos) await reference(client, 'grupos', record.grupos, old.grupos || []);
@@ -83,16 +104,26 @@ export async function mutateFieldService(client, body) {
   if (body.entity === 'saidas' && usesGroupTerritories(record) && record.territorios.length) {
     const territories = (await client.query('SELECT id, mapa_grupo_id FROM campo_territorios WHERE id = ANY($1::int[]) FOR SHARE', [record.territorios])).rows;
     if (record.territorios.some(id => !territories.some(t => t.id === id && isTerritoryAllowedForOuting(t, record)))) {
-      throw fieldError('No fim de semana, escolha apenas territórios vinculados no mapa aos grupos desta saída. Confira os grupos e os territórios selecionados.');
+      throw fieldError('No fim de semana, escolha territórios vinculados no mapa aos grupos desta saída ou ainda sem grupo definido. Confira os grupos e os territórios selecionados.');
+    }
+    for (const [groupId, selected] of Object.entries(record.territorios_por_grupo)) {
+      if (selected.some(id => !territories.some(t => t.id === id && isTerritoryAllowedForOuting(t, { ...record, grupos: [Number(groupId)] })))) {
+        throw fieldError('Um território pertence a outro grupo no mapa. Confira os territórios de cada grupo.');
+      }
     }
   }
   if (body.entity === 'designacoes') {
     // History is append-only. Corrections require a separately audited workflow.
     if (record.id) throw fieldError('Use Registrar conclusão para atualizar uma designação.');
+    if (body.transferir_de != null) {
+      if (record.data_conclusao) throw fieldError('Transfira a entrega pendente antes de registrar a conclusão.');
+      return transferFieldAssignment(client, { id: body.transferir_de, territorio_id: record.territorio_id,
+        publicador_id: record.publicador_id, data_transferencia: record.data_designacao, observacoes: record.observacoes }, mutateFieldService);
+    }
     const overlap = await client.query(`SELECT id FROM campo_designacoes WHERE territorio_id = $1
-      AND (data_conclusao IS NULL OR data_conclusao > $2::date)
+      AND (COALESCE(data_conclusao, data_transferencia) IS NULL OR COALESCE(data_conclusao, data_transferencia) > $2::date)
       AND ($3::date IS NULL OR data_designacao < $3::date)`, [record.territorio_id, record.data_designacao, record.data_conclusao]);
-    if (overlap.rows.length) throw fieldError('Este território já está designado nesse período. Registre a conclusão antes de designá-lo novamente.', 409);
+    if (overlap.rows.length) throw fieldError('Este território já está designado nesse período. Transfira a pendência ao novo dirigente ou registre a conclusão.', 409);
   }
   const dates = body.entity === 'saidas' ? weeklyDates(record.data, record.semanas) : [null];
   const created = [];
@@ -114,29 +145,40 @@ export async function mutateFieldService(client, body) {
     created.push((await client.query(sql, values)).rows[0].id);
   }
   const syncDeliveries = body.entity === 'saidas' && linkedDeliveries.length > 0;
-  const deliveryChanges = [];
+  const deliveryChanges = [], transfers = [];
   if (handover || syncDeliveries) {
     // Same transaction and advisory lock as the outing. One handover per territory,
     // starting on the first date even when the outing repeats weekly.
     const targets = record.modalidade === 'territorio' && record.dirigente_publicador_id ? record.territorios : [];
-    const completed = linkedDeliveries.filter(row => row.data_conclusao);
+    const completed = linkedDeliveries.filter(row => row.data_conclusao || row.data_transferencia);
     const retained = new Set(completed.map(row => row.territorio_id));
-    for (const delivery of linkedDeliveries.filter(row => !row.data_conclusao)) {
-      if (targets.includes(delivery.territorio_id) && delivery.publicador_id === record.dirigente_publicador_id
+    const responsibilityContextUnchanged = record.dirigente_publicador_id === old.dirigente_publicador_id;
+    const firstOuting = { ...record, data: handoverDate || record.data };
+    const responsible = new Map();
+    for (const delivery of linkedDeliveries.filter(row => !row.data_conclusao && !row.data_transferencia)) {
+      const territoryId = delivery.territorio_id;
+      if (targets.includes(territoryId)) {
+        const sameGroup = fieldTerritoryGroup(firstOuting, territoryId) === fieldTerritoryGroup(old, territoryId);
+        const keepResponsible = responsibilityContextUnchanged && sameGroup;
+        responsible.set(territoryId, keepResponsible ? delivery.publicador_id : await fieldTerritoryResponsible(client, firstOuting, territoryId));
+      }
+      if (targets.includes(territoryId) && delivery.publicador_id === responsible.get(territoryId)
         && String(delivery.data_designacao).slice(0, 10) === record.data) {
         retained.add(delivery.territorio_id);
       } else {
+        if (delivery.designacao_anterior_id) throw fieldError('Esta saída recebeu uma transferência. Preserve a data, o dirigente e os territórios para manter o histórico.', 409);
         await client.query('DELETE FROM campo_designacoes WHERE id = $1 AND data_conclusao IS NULL', [delivery.id]);
         deliveryChanges.push(delivery);
       }
     }
     for (const territorioId of targets.filter(id => !retained.has(id))) {
-      await mutateFieldService(client, { entity: 'designacoes', action: 'save', record: {
-        territorio_id: territorioId, publicador_id: record.dirigente_publicador_id,
+      const createdDelivery = await mutateFieldService(client, { entity: 'designacoes', action: 'save', transferir_de: body.transferencias?.[territorioId], record: {
+        territorio_id: territorioId, publicador_id: responsible.get(territorioId) ?? await fieldTerritoryResponsible(client, firstOuting, territorioId),
         data_designacao: handoverDate || record.data, observacoes: `Entrega registrada pela saída ${created[0]}.`
       } });
+      if (createdDelivery.transferencia) transfers.push(createdDelivery.transferencia);
     }
   }
-  return { id: created[0], ids: created, ...(handover ? { entregas: record.territorios.length } : {}),
+  return { id: created[0], ids: created, transferencias: transfers, ...(handover ? { entregas: record.territorios.length } : {}),
     ...(syncDeliveries ? { entregas_sincronizadas: true, entregas_anteriores_removidas: deliveryChanges } : {}) };
 }

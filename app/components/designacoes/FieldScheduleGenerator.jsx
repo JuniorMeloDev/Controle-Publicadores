@@ -6,7 +6,7 @@ import { generateFieldSchedule, TERRITORY_PERIODS, territoryPeriod } from '@/app
 import { BatchField, FieldBatchDialog, fieldControl, saveFieldBatch } from './FieldBatchDialog';
 
 const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-const newRule = () => ({ dia: 6, horario: '08:30', quantidade: 4, grupos: [], local_id: '' });
+const newRule = () => ({ dia: 6, horario: '08:30', quantidade: 4, grupos: [], local_id: '', dirigente_unico: true });
 const alignedFields = 'grid items-start gap-3 [&>label]:min-w-0 [&>label]:content-start [&_input]:h-11 [&_select]:h-11 sm:[&>label]:row-span-3 sm:[&>label]:grid-rows-subgrid';
 
 export function FieldScheduleGenerator({ data, onClose, onSaved }) {
@@ -39,11 +39,12 @@ export function FieldScheduleGenerator({ data, onClose, onSaved }) {
         }}><option value="">A definir</option>{data.locais.filter(l => l.ativo).map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}</select></BatchField>
       </div>
       <fieldset><legend className="mb-2 text-sm">Grupos (nenhum = congregação)</legend><div className="flex flex-wrap gap-3">{data.grupos.filter(g => g.ativo).map(g => <label key={g.id} className="flex items-center gap-1 text-sm"><input type="checkbox" checked={rule.grupos.includes(g.id)} onChange={e => changeRule(index, { grupos: e.target.checked ? [...rule.grupos, g.id] : rule.grupos.filter(id => id !== g.id) })} />{g.nome}</label>)}</div></fieldset>
+      {[0, 6].includes(rule.dia) && <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-purple-600" checked={rule.dirigente_unico !== false} onChange={event => changeRule(index, { dirigente_unico: event.target.checked })} />Dirigente Único</label>}
       <Button type="button" variant="outline" disabled={config.regras.length === 1} onClick={() => change({ regras: config.regras.filter((_, i) => i !== index) })}>Remover horário</Button>
     </div>)}<Button type="button" variant="outline" disabled={config.regras.length >= 21} onClick={() => change({ regras: [...config.regras, newRule()] })}>Adicionar horário</Button></div>
     <details className="rounded-lg border border-gray-200 p-3"><summary className="cursor-pointer font-medium">Territórios durante a semana e no fim de semana</summary><div className="mt-3 grid gap-3 sm:grid-cols-2">{data.territorios.filter(t => t.ativo).map(t => <BatchField key={t.id} label={`Território ${t.numero}`}><select className={fieldControl} value={periods[t.id]} onChange={e => { setPeriods(current => ({ ...current, [t.id]: e.target.value })); setPreview(null); }}>{Object.entries(TERRITORY_PERIODS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></BatchField>)}</div></details>
     <p className="text-sm text-gray-500">Territórios entregues e ainda não concluídos ficam fora da sugestão. O intervalo para repetir considera as conclusões e as saídas já planejadas. Se a quantidade disponível for menor que a pedida, você verá um aviso.</p>
-    <p className="text-sm text-gray-500">No sábado e no domingo, as sugestões usam apenas os territórios vinculados no mapa aos grupos selecionados. Adicione um horário para cada grupo, mesmo que saiam na mesma hora. Sem grupos selecionados, a saída é da congregação e pode usar territórios de qualquer grupo.</p>
+    <p className="text-sm text-gray-500">No sábado e no domingo, as sugestões usam os territórios dos grupos selecionados e os que ainda estão sem grupo no mapa. Territórios sem grupo ficam disponíveis para qualquer grupo; ao definir o grupo responsável, passam a ser sugeridos apenas para ele. Com Dirigente Único, selecione os grupos juntos e distribua os territórios ao editar cada saída. Para dirigentes separados, adicione um horário para cada grupo, mesmo que saiam na mesma hora. Sem grupos selecionados, a saída é da congregação e pode usar territórios de qualquer grupo.</p>
     <p className="text-sm text-gray-500">As opções de uso durante a semana ou no fim de semana serão salvas no cadastro dos territórios ao salvar a programação.</p>
     <Button type="button" variant="outline" onClick={() => { try { setError(''); setPreview(generateFieldSchedule(data, { ...config, periodos: periods })); } catch (err) { setError(err.message); } }}>Sugerir territórios e conferir saídas</Button>
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}

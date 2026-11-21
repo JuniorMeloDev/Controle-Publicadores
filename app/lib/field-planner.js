@@ -22,7 +22,7 @@ export function generateFieldSchedule(snapshot, config) {
   const interval = Number(config.intervalo ?? 14);
   if (!Number.isInteger(interval) || interval < 1 || interval > 365) throw new Error('O intervalo deve ser de 1 a 365 dias.');
   const periods = config.periodos || {};
-  const blocked = new Set(snapshot.designacoes.filter(d => !d.data_conclusao).map(d => d.territorio_id));
+  const blocked = new Set(snapshot.designacoes.filter(d => !d.data_conclusao && !d.data_transferencia).map(d => d.territorio_id));
   const territories = snapshot.territorios.filter(t => t.ativo && !blocked.has(t.id));
   const planned = [...snapshot.saidas];
   const rows = [], warnings = [];
@@ -44,7 +44,7 @@ export function generateFieldSchedule(snapshot, config) {
         return last(a).localeCompare(last(b)) || a.numero - b.numero;
       });
       const record = { data: date, horario: rule.horario, modalidade: 'territorio', local_id: rule.local_id,
-        grupos: rule.grupos, territorios: candidates.slice(0, rule.quantidade).map(t => t.id), dirigente_publicador_id: null, observacoes: '' };
+        grupos: rule.grupos, territorios: candidates.slice(0, rule.quantidade).map(t => t.id), dirigente_unico: rule.dirigente_unico, territorios_por_grupo: {}, dirigente_publicador_id: null, observacoes: '' };
       if (record.territorios.length < rule.quantidade) warnings.push(`${formatDateBR(date)} ${rule.horario}: ${record.territorios.length} de ${rule.quantidade} territórios disponíveis.`);
       rows.push(record); planned.push(record);
       if (rows.length > 200) throw new Error('Gere no máximo 200 saídas por vez.');
