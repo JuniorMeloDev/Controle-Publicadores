@@ -90,25 +90,32 @@ test('email skips unknown recipients and escapes all HTML from names and assignm
 
 function serviceFixture(dependencies = {}) {
     const source = readFileSync(new URL('../app/lib/alert-service.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
-    const context = vm.createContext({ ...alerts, ...visits, ...calendar, ...dependencies });
+    const context = vm.createContext({ ...alerts, ...visits, ...calendar, readFieldNotifications: async () => [], ...dependencies });
     vm.runInContext(source + '\nglobalThis.result = { getPersonalNotifications, getActiveAssignments, deliverReminders };', context);
     return context.result;
 }
 
 test('personal notifications bind identity to queries and preserve persisted read state', async () => {
     const queries = [];
-    const service = serviceFixture({ getPublisherAssignments: async (_client, options) => {
-        assert.equal(options.publisherId, 990001); return assignments.filter(a => a.publicador_id === 990001);
-    } });
+    const service = serviceFixture({
+        getPublisherAssignments: async (_client, options) => {
+            assert.equal(options.publisherId, 990001); return assignments.filter(a => a.publicador_id === 990001);
+        },
+        readFieldNotifications: async (_client, id) => {
+            assert.equal(id, 990001);
+            return [{ id: 'campo-saida:1', title: 'Serviço de Campo' }];
+        },
+    });
     const notificationId = buildNotifications({ assignments, settings: defaults, today })[0].id;
     const client = { query: async (sql, values) => {
         queries.push({ sql, values });
-        if (sql.includes('SELECT notificacao_id')) return { rows: [{ notificacao_id: notificationId }] };
+        if (sql.includes('SELECT notificacao_id')) return { rows: [{ notificacao_id: notificationId }, { notificacao_id: 'campo-saida:1' }] };
         if (sql.includes('SELECT p.id')) { assert.deepEqual([...values], [990001, 'Dezembro', 2030]); return { rows: [] }; }
         return { rows: [] };
     } };
     const result = await service.getPersonalNotifications(client, 990001, today);
-    assert.equal(result.length, 3); assert.equal(result.find(n => n.id === notificationId).read, true);
+    assert.equal(result.length, 4); assert.equal(result.find(n => n.id === notificationId).read, true);
+    assert.equal(result.find(n => n.id === 'campo-saida:1').read, true);
     assert.ok(result.every(n => !n.id.includes('990104')));
     const reportQuery = queries.find(q => q.sql.includes('relatorios_mensais')).sql;
     assert.match(reportQuery, /participou_ministerio = TRUE OR r.horas IS NOT NULL OR r.estudos_biblicos IS NOT NULL/);

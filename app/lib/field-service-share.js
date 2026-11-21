@@ -1,4 +1,4 @@
-import { FIELD_MODES, fieldMapUrl, usesSingleFieldLeader, fieldOutingTerritorySummary, assignmentContinuationNotes } from './field-service.js';
+import { FIELD_MODES, fieldMapUrl, usesSingleFieldLeader, assignmentContinuationNotes } from './field-service.js';
 
 const safeUrl = value => { try { return fieldMapUrl(value); } catch { return ''; } };
 export const fieldWhatsAppUrl = message => `https://api.whatsapp.com/send/?text=${encodeURIComponent(message)}`;
@@ -18,10 +18,7 @@ export function buildFieldOutingMessage(outing, data, publicMapUrls = {}) {
   const territories = outing.modalidade === 'territorio'
     ? outing.territorios.map(id => data.territorios.find(row => row.id === id)).filter(Boolean)
     : [];
-  const previewMapUrl = territories.map(territory => publicMapUrls[territory.id]).find(Boolean)
-    || territories.map(territory => safeUrl(territory.mapa_url)).find(Boolean);
   const lines = [
-    ...(previewMapUrl ? [previewMapUrl, ''] : []),
     '\u{1F33F} *SERVIÇO DE CAMPO*',
     `\u{1F4C5} *Data:* ${outing.data.slice(0, 10).split('-').reverse().join('/')}`,
     `\u{1F552} *Horário:* ${outing.horario}`,
@@ -34,14 +31,27 @@ export function buildFieldOutingMessage(outing, data, publicMapUrls = {}) {
   if (location?.endereco) lines.push(location.endereco);
   if (safeUrl(location?.mapa_url)) lines.push(`Google Maps da consideração: ${safeUrl(location.mapa_url)}`);
   lines.push('', `\u{1F4CB} *Modalidade:* ${FIELD_MODES[outing.modalidade] || outing.modalidade}`);
-  if (usesSingleFieldLeader(outing) && outing.grupos.length) {
-    lines.push('', '*DIRIGENTE ÚNICO · TERRITÓRIOS POR GRUPO*', fieldOutingTerritorySummary(outing, data));
-  }
-  for (const territory of territories) {
-    lines.push('', buildTerritoryMessage(territory, publicMapUrls[territory.id] || ''));
+  const territoryMessage = territory => {
+    const message = buildTerritoryMessage(territory, publicMapUrls[territory.id] || '');
     const current = (data.designacoes || []).find(d => d.territorio_id === territory.id && !d.data_conclusao && !d.data_transferencia);
     const notes = current ? assignmentContinuationNotes(current, data.resultados) : '';
-    if (notes) lines.push(`*CONTINUAÇÃO — O QUE FALTA TRABALHAR:*\n${notes}`);
+    return notes ? `${message}\n*CONTINUAÇÃO — O QUE FALTA TRABALHAR:*\n${notes}` : message;
+  };
+  if (usesSingleFieldLeader(outing) && outing.grupos.length) {
+    const remaining = new Map(territories.map(territory => [territory.id, territory]));
+    outing.grupos.forEach((groupId, index) => {
+      const assigned = [];
+      for (const id of outing.territorios_por_grupo?.[groupId] || []) {
+        const territory = remaining.get(id);
+        if (!territory) continue;
+        assigned.push(territoryMessage(territory));
+        remaining.delete(id);
+      }
+      lines.push('', `*${groups[index]}*`, assigned.length ? assigned.join('\n\n') : 'Territórios a definir');
+    });
+    if (remaining.size) lines.push('', '*Sem grupo na saída*', [...remaining.values()].map(territoryMessage).join('\n\n'));
+  } else {
+    for (const territory of territories) lines.push('', territoryMessage(territory));
   }
   if (outing.observacoes) lines.push('', `\u{1F4E3} *ORIENTAÇÕES DA SAÍDA*\n${outing.observacoes}`);
   return lines.join('\n');

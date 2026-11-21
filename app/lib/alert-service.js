@@ -2,6 +2,7 @@ import { getPublisherAssignments } from './publisher-assignments';
 import { findVisitInWeek, getVisitTuesday } from './meeting-visits';
 import { meetingCancellation } from './meeting-calendar';
 import { DEFAULT_ALERT_SETTINGS, dateKey, previousReportPeriod, buildNotifications } from './alerts';
+import { readFieldNotifications } from './field-notifications';
 
 export async function ensureAlertTables(client) {
     await client.query(`
@@ -78,6 +79,7 @@ export async function getPersonalNotifications(client, publisherId, today) {
         reportPending = report.rows.length > 0;
     }
     const notifications = buildNotifications({ assignments, settings, today, reportPending });
+    notifications.unshift(...await readFieldNotifications(client, publisherId));
     const { rows: read } = await client.query('SELECT notificacao_id FROM alertas_lidos WHERE publicador_id = $1', [publisherId]);
     const readIds = new Set(read.map(row => row.notificacao_id));
     return notifications.map(n => ({ ...n, read: readIds.has(n.id) }));

@@ -11,8 +11,10 @@ const outing = { data: '2026-10-17', horario: '08:30', dirigente_publicador_id: 
 test('shared outing messages distinguish each group territory and groups awaiting assignment', () => {
   const sharedData = { ...data, grupos: [{ id: 2, nome: 'Opala' }, { id: 7, nome: 'Rubi' }, { id: 8, nome: 'Turqueza' }] };
   const message = buildFieldOutingMessage({ ...outing, dirigente_unico: true, grupos: [2, 7, 8], territorios_por_grupo: { 2: [3], 7: [4] } }, sharedData);
-  assert.ok(message.includes('DIRIGENTE ÚNICO'));
-  assert.ok(message.includes('Opala: 12\nRubi: 15\nTurqueza: A definir'));
+  assert.ok(message.includes('*Opala*\n🧭 *TERRITÓRIO 12*'));
+  assert.ok(message.includes('*Rubi*\n🧭 *TERRITÓRIO 15*'));
+  assert.ok(message.includes('*Turqueza*\nTerritórios a definir'));
+  assert.equal(message.split('*TERRITÓRIO 12*').length, 2);
   assert.equal((message.match(/\*Dirigente:\*/g) || []).length, 1);
 });
 
@@ -36,14 +38,15 @@ test('outing sharing distinguishes the consideration location from the preaching
   for (const value of ['🌿 *SERVIÇO DE CAMPO*', '📅 *Data:* 17/10/2026', '🕒 *Horário:* 08:30', '*Dirigente:* Dirigente de teste', '*Grupos:* Grupo de teste', '*LOCAL DA CONSIDERAÇÃO*', '*Salão do Reino*', '*ENDEREÇO DO TERRITÓRIO (GOOGLE MAPS):*\nhttps://maps.app.goo.gl/teste', '*TERRITÓRIO 12*', '*TERRITÓRIO 15*', 'Quadra junto à escola', 'ORIENTAÇÕES DA SAÍDA', 'Levar o mapa atualizado']) assert.ok(message.includes(value));
   assert.ok(message.includes('Rua de teste, 10'));
   assert.ok(message.includes('maps.google.com/?q=consideracao'));
-  assert.ok(message.startsWith('https://maps.app.goo.gl/teste\n\n'));
+  assert.ok(message.startsWith('🌿 *SERVIÇO DE CAMPO*'));
   assert.equal(decodeURIComponent(fieldWhatsAppUrl(message).split('?text=')[1]), message);
   assert.ok(!message.includes('/api/admin/'));
 });
-test('a public interactive map link is placed first for WhatsApp and included with its territory', () => {
+test('a public interactive map link appears only with its territory', () => {
   const previewUrl = 'https://example.test/mapa-territorio/opaque-token';
   const message = buildFieldOutingMessage(outing, data, { 3: previewUrl });
-  assert.ok(message.startsWith(`${previewUrl}\n\n`));
+  assert.ok(message.startsWith('🌿 *SERVIÇO DE CAMPO*'));
+  assert.equal(message.split(previewUrl).length, 2);
   assert.ok(message.includes(`*MAPA DO TERRITÓRIO:*\n${previewUrl}`));
   assert.ok(message.includes('ENDEREÇO DO TERRITÓRIO (GOOGLE MAPS)'));
 });

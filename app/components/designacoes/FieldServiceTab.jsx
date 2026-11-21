@@ -1,6 +1,5 @@
 'use client';
 
-import { formatDateForFile } from '@/app/lib/date-format';
 import { cloneElement, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Plus, Pencil, Loader2, MapPin, CheckCircle2 } from 'lucide-react';
 import { DesignationRowActions } from './DesignationRowActions';
@@ -84,6 +83,7 @@ export function FieldServiceTab() {
   const [shareFeedback, setShareFeedback] = useState('');
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [pendingNotification, setPendingNotification] = useState(null);
   const [groupFilter, setGroupFilter] = useState('');
   const [historyYear, setHistoryYear] = useState(today().slice(0, 4));
   const [historyMonth, setHistoryMonth] = useState(() => today().slice(5, 7));
@@ -189,6 +189,13 @@ export function FieldServiceTab() {
   }
   const openShare = message => { setShareMessage(message); setShareFeedback(''); };
   const batchSaved = async message => { setFeedback(message); await refresh(undefined, true); };
+  async function notifyOuting() {
+    const result = await api({ action: 'notify', entity: 'saidas', id: pendingNotification.id });
+    setFeedback(result.notificacoes
+      ? `Notificação salva para ${result.notificacoes} publicador(es).`
+      : 'A notificação desta saída já está atualizada para os publicadores.');
+    window.dispatchEvent(new Event('alertas-atualizados'));
+  }
   async function copyMessage() {
     try { await navigator.clipboard.writeText(shareMessage); setShareFeedback('Mensagem copiada.'); }
     catch { setShareFeedback('Selecione o texto acima e copie a mensagem.'); }
@@ -233,7 +240,7 @@ export function FieldServiceTab() {
           <div className="text-sm text-gray-500 break-words">{groupsLabel(row.grupos)} · {name('locais', row.local_id) || 'Local a definir'}</div><div className="text-sm text-purple-700">{FIELD_MODES[row.modalidade]}{row.territorios.length ? `: ${territoryLabel(row.territorios)}` : ''}</div>
           {(data.resultados || []).filter(result => result.saida_id === row.id).map(result => <p key={result.id} className="text-sm text-gray-600">Território {data.territorios.find(t => t.id === result.territorio_id)?.numero}: {FIELD_RESULTS[result.resultado]} · {displayDate(result.data)}{result.observacoes && ` — ${result.observacoes}`}</p>)}
           {usesSingleFieldLeader(row) && row.grupos.length > 0 && <p className="whitespace-pre-line text-sm text-gray-600">Dirigente único{String.fromCharCode(10)}{fieldOutingTerritorySummary(row, data)}</p>}
-          {row.observacoes && <p className="text-sm text-gray-600 whitespace-pre-wrap break-words">{row.observacoes}</p>}</div><div className="flex flex-wrap gap-2">{canEdit && row.modalidade === 'territorio' && row.territorios.length > 0 && <Button type="button" variant="outline" size="sm" onClick={() => setResultOuting(row)}>Registrar resultado</Button>}{buttons('saidas', row)}<DesignationRowActions label={`Saída de ${displayDate(row.data)} ${row.horario}`} message={buildFieldOutingMessage(row, data)} filename={`campo-${formatDateForFile(row.data)}-${row.id}`} canPdf={isAllowed(permissions, 'designacoes_pdf', 'actions')} onWhatsApp={() => shareOuting(row)} onDelete={canEdit ? () => setPendingDelete(row) : undefined} /></div></article>) : <p className="p-10 text-center text-sm text-gray-500">Nenhuma saída neste período. Escolha um publicador e um local para começar a programação.</p>)}
+          {row.observacoes && <p className="text-sm text-gray-600 whitespace-pre-wrap break-words">{row.observacoes}</p>}</div><div className="flex flex-wrap gap-2">{canEdit && row.modalidade === 'territorio' && row.territorios.length > 0 && <Button type="button" variant="outline" size="sm" onClick={() => setResultOuting(row)}>Registrar resultado</Button>}{buttons('saidas', row)}<DesignationRowActions label={`Saída de ${displayDate(row.data)} ${row.horario}`} showPdf={false} onNotify={canEdit ? () => setPendingNotification(row) : undefined} onWhatsApp={() => shareOuting(row)} onDelete={canEdit ? () => setPendingDelete(row) : undefined} /></div></article>) : <p className="p-10 text-center text-sm text-gray-500">Nenhuma saída neste período. Escolha um publicador e um local para começar a programação.</p>)}
         {['locais', 'territorios'].includes(section) && (data[section].filter(row => showInactive || row.ativo).length ? data[section].filter(row => showInactive || row.ativo).map(row => <article key={row.id} className="p-4 flex flex-col sm:flex-row gap-3"><div className="min-w-0 flex-1 space-y-1">
           <div className="font-semibold text-gray-900">{row.nome || `Território ${row.numero}`}{!row.ativo && <span className="ml-2 text-xs text-gray-500">Inativo</span>}</div>
           {section === 'locais' && <><p className="text-sm text-gray-600 break-words">{row.endereco || 'Endereço a cadastrar'}</p><p className="text-sm text-gray-500">{groupsLabel(row.grupos)}</p>{row.mapa_url && /^https?:\/\//i.test(row.mapa_url) && <a href={row.mapa_url} target="_blank" rel="noopener noreferrer" className="inline-flex gap-1 items-center text-sm text-purple-700 underline"><MapPin className="w-4 h-4" />Abrir mapa</a>}{row.observacoes && <p className="text-sm text-gray-600 whitespace-pre-wrap break-words">{row.observacoes}</p>}</>}
@@ -245,6 +252,9 @@ export function FieldServiceTab() {
     {batchDialog === 'schedule' && <FieldScheduleGenerator data={data} onClose={() => setBatchDialog(null)} onSaved={batchSaved} />}
     {resultOuting && <FieldOutingResults outing={resultOuting} data={data} onClose={() => setResultOuting(null)} onSaved={batchSaved} />}
     {transferAssignment && <FieldAssignmentTransfer assignment={transferAssignment} data={data} onClose={() => setTransferAssignment(null)} onSaved={batchSaved} />}
+    {pendingNotification && <ConfirmationDialog title="Enviar notificação da saída?" confirmLabel="Enviar"
+      description={`Saída de ${displayDate(pendingNotification.data)} às ${pendingNotification.horario}. A notificação será salva no sino dos publicadores de ${groupsLabel(pendingNotification.grupos)}, com os territórios do grupo de cada um e os links dos mapas disponíveis.`}
+      onConfirm={notifyOuting} onCancel={() => setPendingNotification(null)} />}
     <TerritoryMapDetails territory={data.territorios.find(row => row.id === mapTerritoryId)} maps={data.mapas} canEdit={canEdit} onEdit={row => openEditor('territorios', row)} onShare={openShare} publicMapUrl={typeof window !== 'undefined' && mapTerritoryId ? territoryUrls()[mapTerritoryId] || '' : ''} onSaved={() => refresh(undefined, true)} onClose={() => setMapTerritoryId(null)} />
     {pendingDelete && <ConfirmationDialog destructive title="Excluir saída de campo?" confirmLabel="Excluir" description={`A saída de ${displayDate(pendingDelete.data)} às ${pendingDelete.horario} será excluída, junto com as entregas pendentes criadas por ela que não tenham resultados nem transferências. Conclusões, resultados e transferências registrados serão preservados.`} onConfirm={remove} onCancel={() => setPendingDelete(null)} />}
     <Dialog open={shareMessage !== null} onOpenChange={open => { if (!open) setShareMessage(null); }}><DialogContent className="w-[calc(100%-2rem)] max-w-xl max-h-[90dvh] overflow-y-auto bg-white text-gray-900"><DialogHeader><DialogTitle>Compartilhar serviço de campo</DialogTitle><DialogDescription>Confira a mensagem e escolha como compartilhar. Os links do Google Maps podem ser abertos pelos publicadores.</DialogDescription></DialogHeader><Field label="Mensagem"><textarea className={controlClass} rows={12} value={shareMessage || ''} onChange={e => setShareMessage(e.target.value)} /></Field>{shareFeedback && <p role="status" className="text-sm text-gray-600">{shareFeedback}</p>}<DialogFooter className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={copyMessage}>Copiar mensagem</Button><a className="inline-flex items-center justify-center rounded-md bg-purple-600 hover:bg-purple-700 px-4 py-2 text-sm font-medium text-white" href={fieldWhatsAppUrl(shareMessage || '')} target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a></DialogFooter></DialogContent></Dialog>

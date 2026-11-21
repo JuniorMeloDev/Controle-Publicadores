@@ -1,10 +1,10 @@
 'use client';
 import { useState } from 'react';
-import { MessageCircle, FileText, Trash2, Loader2, ContactRound } from 'lucide-react';
+import { Bell, MessageCircle, FileText, Trash2, Loader2, ContactRound } from 'lucide-react';
 import { writeDesignationPdf } from '@/app/lib/designation-share';
 import { whatsAppShareUrl, copyWhatsAppMessage } from '@/app/lib/whatsapp-share';
 
-export function DesignationRowActions({ label, message = '', filename = 'designacao', onDelete, onWhatsApp, onPdf, onStudentSlips, buildPdf, disabled = false, canPdf = true }) {
+export function DesignationRowActions({ label, message = '', filename = 'designacao', onDelete, onWhatsApp, onPdf, onNotify, onStudentSlips, buildPdf, disabled = false, canPdf = true, showPdf = true }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [shareFeedback, setShareFeedback] = useState('');
@@ -31,8 +31,10 @@ export function DesignationRowActions({ label, message = '', filename = 'designa
         className={`${base} border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100`}><MessageCircle size={16} /></button>
       {onStudentSlips && <button type="button" onClick={onStudentSlips} disabled={disabled || !canPdf} title="Baixar designações dos estudantes (S-89)" aria-label={`Baixar S-89 de ${label}`}
         className={`${base} border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100`}><ContactRound size={16} /></button>}
-      <button type="button" onClick={onPdf || pdf} disabled={disabled || busy || !canPdf} title="Gerar PDF" aria-label={`Gerar PDF de ${label}`}
-        className={`${base} border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200`}>{busy ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}</button>
+      {showPdf && <button type="button" onClick={onPdf || pdf} disabled={disabled || busy || !canPdf} title="Gerar PDF" aria-label={`Gerar PDF de ${label}`}
+        className={`${base} border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200`}>{busy ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}</button>}
+      {onNotify && <button type="button" onClick={onNotify} disabled={disabled} title="Enviar notificação" aria-label={`Enviar notificação de ${label}`}
+        className={`${base} border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100`}><Bell size={16} /></button>}
       {onDelete && <button type="button" onClick={onDelete} disabled={disabled} title="Excluir designações" aria-label={`Excluir ${label}`}
         className={`${base} border-red-200 bg-red-50 text-red-600 hover:bg-red-100`}><Trash2 size={16} /></button>}
     </div>

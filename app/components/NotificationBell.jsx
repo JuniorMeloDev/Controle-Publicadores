@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Bell, CheckCheck, Calendar, ClipboardList, SprayCan, RefreshCw } from 'lucide-react';
+import { Bell, CheckCheck, Calendar, ClipboardList, MapPin, SprayCan, RefreshCw } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/app/components/ui/dialog';
 import { isAllowed } from '@/app/lib/access-control';
@@ -69,7 +69,7 @@ export function NotificationBell({ userId, permissions }) {
         <DialogContent className="bg-white text-gray-900 w-[calc(100%_-_2rem)] max-w-xl rounded-xl">
             <DialogHeader>
                 <DialogTitle className="flex gap-2 items-center"><Bell className="w-5 h-5 text-purple-600" /> Suas notificações</DialogTitle>
-                <DialogDescription>Designações, limpeza e relatório mensal, conforme os alertas da congregação.</DialogDescription>
+                <DialogDescription>Designações, serviço de campo, limpeza e relatório mensal.</DialogDescription>
             </DialogHeader>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-sm">
                 <span className="text-gray-500">{data.unread} não lidas</span>
@@ -82,15 +82,16 @@ export function NotificationBell({ userId, permissions }) {
             {sessionExpired && <Link href="/" onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700">Entrar novamente</Link>}
             <div className="max-h-[60vh] overflow-y-auto space-y-2">
                 {loading ? <p className="text-center py-8 text-gray-500">Carregando notificações...</p> : !data.notifications.length && !error ? <p className="text-center py-8 text-gray-500">Nenhum alerta no momento.</p> : data.notifications.map(n => {
-                    const Icon = n.category === 'limpeza' ? SprayCan : n.category === 'relatorio' ? ClipboardList : Calendar;
-                    const canOpen = n.category === 'relatorio' || isAllowed(permissions, 'designacoes', 'pages');
+                    const Icon = n.category === 'campo' ? MapPin : n.category === 'limpeza' ? SprayCan : n.category === 'relatorio' ? ClipboardList : Calendar;
+                    const canOpen = n.href && (n.category === 'relatorio' || isAllowed(permissions, 'designacoes', 'pages'));
                     return <div key={n.id} className={`p-3 rounded-lg border flex gap-3 ${n.read ? 'bg-white border-gray-200' : n.overdue ? 'bg-red-50 border-red-200' : 'bg-purple-50 border-purple-100'}`}>
                         <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${n.overdue ? 'text-red-600' : 'text-purple-600'}`} />
                         <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm">{n.title}</p>
                             <p className="text-xs text-gray-600 mt-1">{n.detail}</p>
                             <p className="text-xs text-gray-500 mt-1">{n.date.split('-').reverse().join('/')}</p>
-                            <div className="flex gap-3 mt-2 text-xs">
+                            <div className="flex flex-wrap gap-3 mt-2 text-xs">
+                                {n.links?.map(link => <a key={link.label} href={link.href} target="_blank" rel="noopener noreferrer" className="text-purple-700 hover:underline">{link.label}</a>)}
                                 {canOpen && <Link className="text-purple-700 hover:underline" href={n.href} onClick={() => setOpen(false)}>{n.category === 'relatorio' ? 'Enviar relatório' : 'Ver programação'}</Link>}
                                 {!n.read && <button className="text-gray-600 hover:underline" disabled={marking} onClick={() => markRead([n.id])}>Marcar como lida</button>}
                             </div>

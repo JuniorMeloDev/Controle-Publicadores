@@ -2,6 +2,7 @@ import { fieldId, fieldDate, validateFieldRecord, weeklyDates, usesGroupTerritor
 import { mutateFieldBatch } from './field-service-batch.js';
 import { transferFieldAssignment } from './field-service-transfer.js';
 import { fieldTerritoryGroup, fieldTerritoryResponsible } from './field-territory-responsibility.js';
+import { sendFieldNotifications } from './field-notifications.js';
 
 const tables = { locais: 'campo_locais', territorios: 'campo_territorios', saidas: 'campo_saidas', designacoes: 'campo_designacoes' };
 export function fieldError(message, status = 400) { return Object.assign(new Error(message), { status }); }
@@ -33,9 +34,13 @@ export async function mutateFieldService(client, body) {
   if (body && ['result', 'batch', 'import'].includes(body.action)) return mutateFieldBatch(client, body, mutateFieldService);
   if (!body || !Object.hasOwn(tables, body.entity)) throw fieldError('Cadastro inválido.');
   const table = tables[body.entity];
-  if (!['save', 'delete', 'complete', 'transfer'].includes(body.action)) throw fieldError('Ação inválida.');
+  if (!['save', 'delete', 'complete', 'transfer', 'notify'].includes(body.action)) throw fieldError('Ação inválida.');
   // Serializes writes, including recurring batches and checks for concurrent assignments.
   await client.query('SELECT pg_advisory_xact_lock(73428191)');
+  if (body.action === 'notify') {
+    if (body.entity !== 'saidas') throw fieldError('Registro inválido.');
+    return sendFieldNotifications(client, body.id);
+  }
   if (body.action === 'transfer') {
     if (body.entity !== 'designacoes') throw fieldError('Registro inválido.');
     return transferFieldAssignment(client, body, mutateFieldService);
