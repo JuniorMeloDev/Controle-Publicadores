@@ -44,10 +44,28 @@ export const boardRoleSql = `(m.publico = 'todos'
   OR (m.publico = 'anciaos' AND 'anciao' = ANY(p.privilegios))
   OR (m.publico = 'anciaos_servos' AND p.privilegios && ARRAY['anciao', 'servo_ministerial']::varchar[]))`;
 export const boardAudienceSql = `(m.grupo_id IS NULL OR m.grupo_id = p.grupo_id) AND ${boardRoleSql}`;
-const boardVisibilitySql = `${boardAudienceSql}
-  AND m.inicio <= ${boardTodaySql}
-  AND (m.fim IS NULL OR m.fim >= ${boardTodaySql})
+export const boardPublicationPeriodSql = `m.inicio <= ${boardTodaySql}
+  AND (m.fim IS NULL OR m.fim >= ${boardTodaySql})`;
+const boardVisibilitySql = `${boardAudienceSql} AND ${boardPublicationPeriodSql}
   AND (m.tipo <> 'saida' OR (m.data + m.horario::time) >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo'))`;
+
+export async function readBoardNotifications(client, userId) {
+  try {
+    const { rows } = await client.query(`SELECT m.id, m.titulo, m.inicio::text AS data, l.lido_em IS NOT NULL AS lido
+      FROM mural_congregacao m JOIN publicadores p ON p.id = $1
+      LEFT JOIN mural_leituras l ON l.publicacao_id = m.id AND l.publicador_id = p.id
+      WHERE m.tipo = 'anuncio' AND ${boardAudienceSql} AND ${boardPublicationPeriodSql}
+      ORDER BY m.fixado DESC, m.criado_em DESC`, [userId]);
+    return rows.map(post => ({
+      id: `mural-${post.id}`, category: 'mural', title: post.titulo, detail: 'Mural da congregação',
+      date: post.data, href: `/admin/dashboard#aviso-mural-${post.id}`, read: post.lido,
+    }));
+  } catch (error) {
+    // The dashboard initializes the board when it is first used.
+    if (error.code === '42P01' || error.code === '42703') return [];
+    throw error;
+  }
+}
 
 export async function getVisiblePosts(client, userId) {
   const result = await client.query(`SELECT m.id, m.tipo, m.titulo, m.mensagem,

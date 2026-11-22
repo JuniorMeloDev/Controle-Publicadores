@@ -1,5 +1,16 @@
-import { boardAudienceSql, boardTodaySql } from './congregation-board-server.js';
+import { boardAudienceSql, boardPublicationPeriodSql, boardTodaySql } from './congregation-board-server.js';
 import { deliverPushRows, fieldPushVapid } from './field-push.js';
+
+const subscribedDeviceSql = 's.chave_vapid = $2 AND (s.expira_em IS NULL OR s.expira_em > NOW())';
+
+export async function readBoardPushAvailability(db, postId, publicKey) {
+  const { rows: [post] } = await db.query(`SELECT EXISTS (
+    SELECT 1 FROM web_push_inscricoes s JOIN publicadores p ON p.id = s.publicador_id
+    WHERE ${boardAudienceSql} AND ${subscribedDeviceSql}
+  ) AS subscribed FROM mural_congregacao m
+  WHERE m.id = $1 AND m.tipo = 'anuncio' AND ${boardPublicationPeriodSql}`, [postId, publicKey]);
+  return post?.subscribed;
+}
 
 export async function deliverBoardPushes(db, { postId = null, vapid = fieldPushVapid(), send } = {}) {
   if (!vapid) return null;
@@ -15,7 +26,7 @@ export async function deliverBoardPushes(db, { postId = null, vapid = fieldPushV
   JOIN publicadores p ON p.id = s.publicador_id
   WHERE m.tipo = 'anuncio' AND ${boardAudienceSql}
     AND (m.fim IS NULL OR m.fim >= ${boardTodaySql})
-    AND s.chave_vapid = $2 AND (s.expira_em IS NULL OR s.expira_em > NOW())`, [postId, vapid.publicKey]);
+    AND ${subscribedDeviceSql}`, [postId, vapid.publicKey]);
   return deliverPushRows(db, rows, row => ({
     payload: { boardId: row.aviso_id },
     topic: `mural-${row.aviso_id}`,

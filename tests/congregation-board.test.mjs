@@ -3,9 +3,9 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { loadModule, loadRoute } from './helpers/load-source.mjs';
-import { deliverBoardPushes } from '../app/lib/board-push.js';
+import { deliverBoardPushes, readBoardPushAvailability } from '../app/lib/board-push.js';
 import { BOARD_AUDIENCES } from '../app/lib/board-audiences.js';
-import { boardGroupAvailableSql, boardRoleSql, getVisiblePosts } from '../app/lib/congregation-board-server.js';
+import { boardGroupAvailableSql, boardRoleSql, getVisiblePosts, readBoardNotifications } from '../app/lib/congregation-board-server.js';
 
 const { isCalendarDate } = await loadModule('../../app/lib/meeting-calendar.js');
 const source = readFileSync(new URL('../app/lib/congregation-board.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
@@ -53,7 +53,7 @@ test('role audiences are explicit and cannot be mixed with a field group', () =>
   assert.throws(() => validateBoardPost({ ...valid, publico: 'constructor' }), /Público inválido/);
 });
 
-function fixture({ vapid = null, auditFails = false, deniedUpdate = false } = {}) {
+function fixture({ vapid = null, auditFails = false, deniedUpdate = false, subscribed } = {}) {
   let userId = 10;
   let access = { user: { privilegios: [] } };
   let posts = [{ id: 1, tipo: 'anuncio' }];
@@ -76,6 +76,7 @@ function fixture({ vapid = null, auditFails = false, deniedUpdate = false } = {}
       calls.push({ audit: input });
     },
     fieldPushVapid: () => vapid,
+    readBoardPushAvailability: async () => subscribed,
     boardGroupAvailableSql, boardRoleSql,
     after: callback => { calls.push({ after: true }); jobs.push(callback); },
     deliverBoardPushes: async (_pool, options) => calls.push({ push: options }),
@@ -172,6 +173,41 @@ test('board delivery claims published announcements atomically and sends only a 
     send: async (_device, data, options) => sent.push([JSON.parse(data), options.topic]),
   });
   assert.deepEqual(sent, [[{ boardId: '7' }, 'mural-7']]);
+});
+
+test('an active announcement is saved even when its audience has no subscribed devices', async () => {
+  const f = fixture({ vapid: { publicKey: 'test-key' }, subscribed: false }); f.access({ isSuperAdmin: true });
+  const result = await f.route.POST(request({ ...valid, action: 'save', publico: 'anciaos_servos' }));
+  assert.equal(result.status, 200);
+  assert.match(result.body.message, /Nenhum aparelho desse público/);
+  assert.ok(f.calls.some(call => call.sql === 'COMMIT'));
+  assert.equal(f.jobs.length, 1);
+
+  const db = { query: async (sql, params) => {
+    assert.ok(sql.includes(boardRoleSql));
+    assert.match(sql, /m.grupo_id = p.grupo_id/);
+    assert.match(sql, /s.chave_vapid = \$2[\s\S]+m.inicio <=/);
+    assert.deepEqual(params, [7, 'test-key']);
+    return { rows: [{ subscribed: false }] };
+  } };
+  assert.equal(await readBoardPushAvailability(db, 7, 'test-key'), false);
+});
+
+test('bell lists active announcements for the same board audience and respects reading confirmations', async () => {
+  const db = { query: async (sql, params) => {
+    assert.ok(sql.includes(boardRoleSql));
+    assert.match(sql, /m.tipo = 'anuncio'[\s\S]+m.grupo_id = p.grupo_id[\s\S]+m.inicio <=[\s\S]+m.fim >=/);
+    assert.match(sql, /l.publicador_id = p.id/);
+    assert.deepEqual(params, [10]);
+    return { rows: [{ id: 7, titulo: 'Anúncio', data: '2026-11-22', lido: true }] };
+  } };
+  const [notice] = await readBoardNotifications(db, 10);
+  assert.equal(notice.id, 'mural-7');
+  assert.equal(notice.href, '/admin/dashboard#aviso-mural-7');
+  assert.equal(notice.read, true);
+  assert.deepEqual(await readBoardNotifications({
+    query: async () => { throw Object.assign(new Error(), { code: '42P01' }); },
+  }, 10), []);
 });
 
 test('scheduled board delivery accepts only the authorized scheduler', async () => {

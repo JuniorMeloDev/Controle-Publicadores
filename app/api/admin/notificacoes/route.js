@@ -13,7 +13,7 @@ async function handle(request, markRead) {
     if (!userId) return NextResponse.json({ message: 'Não autorizado.' }, { status: 401 });
     const client = await pool.connect();
     try {
-        const notifications = await getBellNotifications(client, userId, todayInBrazil());
+        const notifications = await getBellNotifications(client, userId, todayInBrazil(), { includeBoard: true });
         if (markRead) {
             const body = await request.json();
             if (!Array.isArray(body.ids) || body.ids.length > 500 || body.ids.some(id => typeof id !== 'string')) {

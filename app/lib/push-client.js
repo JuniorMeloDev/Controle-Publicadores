@@ -36,7 +36,7 @@ export function applicationServerKey(publicKey) {
   return Uint8Array.from(atob(base64), char => char.charCodeAt(0));
 }
 
-export async function clearDevicePush({ registration, general = false, unsubscribe = false } = {}) {
+export async function clearDevicePush({ registration, general = false, includeGeneral = false, unsubscribe = false } = {}) {
   if (!('serviceWorker' in navigator)) return;
   try {
     const worker = registration || await navigator.serviceWorker.getRegistration('/');
@@ -44,7 +44,8 @@ export async function clearDevicePush({ registration, general = false, unsubscri
     await Promise.allSettled([
       unsubscribe && worker.pushManager?.getSubscription().then(subscription => subscription?.unsubscribe()),
       worker.getNotifications?.().then(notifications => {
-        const prefixes = general ? ['geral-'] : ['campo-', 'alerta-', 'mural-'];
+        const prefixes = general && !includeGeneral ? ['geral-'] : ['campo-', 'alerta-', 'mural-'];
+        if (includeGeneral) prefixes.push('geral-');
         notifications.filter(item => prefixes.some(prefix => item.tag.startsWith(prefix))).forEach(item => item.close());
       }),
     ]);

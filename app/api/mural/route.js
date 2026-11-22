@@ -6,7 +6,7 @@ import { boardGroupAvailableSql, boardRoleSql, ensureBoardTables, getVisiblePost
 import { registerAuditLog } from '@/app/lib/audit-log';
 import { prepareAttachment } from '@/app/lib/board-attachment';
 import { fieldPushVapid } from '@/app/lib/field-push';
-import { deliverBoardPushes } from '@/app/lib/board-push';
+import { deliverBoardPushes, readBoardPushAvailability } from '@/app/lib/board-push';
 
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 export const dynamic = 'force-dynamic';
@@ -117,11 +117,24 @@ export async function POST(req) {
     }
     await registerAuditLog(client, { userId, action: body.action === 'delete' ? 'mural_excluido' : 'mural_salvo', entity: 'mural', entityId: savedId });
     await client.query('COMMIT'); transaction = false;
+    let message = body.action === 'delete' ? 'Publicação excluída.' : 'Publicação salva.';
+    if (post?.tipo === 'anuncio' && body.id == null) {
+      if (!vapid) message = 'Anúncio salvo. As notificações no aparelho estão indisponíveis.';
+      else {
+        try {
+          if (await readBoardPushAvailability(client, savedId, vapid.publicKey) === false) {
+            message = 'Anúncio publicado no Mural e no sininho. Nenhum aparelho desse público está inscrito para receber a notificação.';
+          }
+        } catch (error) {
+          console.error('Falha ao consultar aparelhos do mural:', error.code || error.name);
+        }
+      }
+    }
     if (vapid) after(async () => {
       try { await deliverBoardPushes(pool, { postId: savedId, vapid }); }
       catch (error) { console.error('Falha ao enviar avisos do mural:', error.code || error.name); }
     });
-    return reply({ message: body.action === 'delete' ? 'Publicação excluída.' : 'Publicação salva.', id: savedId });
+    return reply({ message, id: savedId });
   } catch { if (transaction) await client.query('ROLLBACK'); return reply({ message: 'Não foi possível salvar a publicação.' }, 500); }
   finally { client?.release(); }
 }

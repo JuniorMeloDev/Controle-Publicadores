@@ -7,7 +7,7 @@ import { deliverFieldPushes, deliverGeneralPushes, deliverPushRows } from '../ap
 import { handleDevicePush } from '../app/lib/device-push-api.js';
 import { canAccessRoute } from '../app/lib/route-access.js';
 import { boardNoticeFromHash, fieldNoticeFromHash, notificationFromHash } from '../app/lib/push-client.js';
-import { isPushId, parsePushSubscription, PUSH_DEVICE_COOKIE } from '../app/lib/push-subscriptions.js';
+import { isPushId, parsePushSubscription, PUSH_DEVICE_COOKIE, PUSH_LOGIN_COOKIE } from '../app/lib/push-subscriptions.js';
 import { loadRoute } from './helpers/load-source.mjs';
 
 const deviceId = 'f80c2365-2ceb-45c5-ac79-cf22b8607cbf';
@@ -75,6 +75,48 @@ test('guests can opt in to general pushes with a same-origin request and no publ
   assert.deepEqual(calls[0].params.slice(0, 4), [deviceId, null, true, endpoint('guest')]);
   assert.equal((await route.DELETE(request)).status, 200);
   assert.match(calls[1].sql, /SET avisos_gerais = FALSE WHERE aparelho_id = \$1/);
+});
+
+test('the authenticated bell can enable and disable both notification types for the same device', async () => {
+  const calls = [];
+  const db = { async query(sql, params) {
+    calls.push({ sql, params });
+    return { rows: [{ endpoint: endpoint('existing'), chave_vapid: vapid.publicKey, avisos_gerais: true, campo: false }] };
+  } };
+  const options = { db, userId: 101, vapid };
+  const request = { url: origin, headers, cookies: { get: () => ({ value: deviceId }) },
+    json: async () => ({ userId: 101, includeGeneral: true, publicKey: vapid.publicKey,
+      subscription: { endpoint: endpoint('existing'), keys } }) };
+  const status = await (await handleDevicePush(request, 'GET', options)).json();
+  assert.equal(status.generalEnabled, true);
+  assert.equal(status.personalizedEnabled, false);
+  assert.equal((await handleDevicePush(request, 'PUT', options)).status, 200);
+  assert.deepEqual(calls[1].params.slice(0, 4), [deviceId, 101, false, endpoint('existing')]);
+  assert.equal(calls[1].params[7], true);
+  assert.match(calls[1].sql, /WHEN NOT \$3 THEN EXCLUDED.publicador_id/);
+  assert.equal((await handleDevicePush(request, 'DELETE', options)).status, 200);
+  assert.match(calls[2].sql, /SET publicador_id = NULL, avisos_gerais = FALSE\s+WHERE aparelho_id = \$1 AND publicador_id = \$2/);
+  assert.equal((await handleDevicePush({ ...request, json: async () => ({ userId: 102, includeGeneral: true }) }, 'DELETE', options)).status, 409);
+  assert.equal(calls.length, 3);
+});
+
+test('the login opt-in cookie is scoped to its device and is cleared when notifications are disabled', async () => {
+  const calls = [];
+  const options = { db: { async query(sql, params) { calls.push({ sql, params }); return { rows: [] }; } }, userId: null, general: true, vapid };
+  const request = { url: origin, headers,
+    cookies: { get: key => key === PUSH_DEVICE_COOKIE || key === PUSH_LOGIN_COOKIE ? { value: deviceId } : undefined },
+    json: async () => ({ userId: null, enableOnLogin: true, publicKey: vapid.publicKey, subscription: { endpoint: endpoint('guest'), keys } }),
+  };
+  const activated = await handleDevicePush(request, 'PUT', options);
+  assert.equal(activated.status, 200);
+  assert.equal(activated.cookies.get(PUSH_LOGIN_COOKIE)?.value, deviceId);
+  assert.equal(activated.cookies.get(PUSH_LOGIN_COOKIE)?.httpOnly, true);
+  assert.equal(calls[0].params[1], null);
+  const status = await (await handleDevicePush(request, 'GET', options)).json();
+  assert.equal(status.enabledOnLogin, true);
+  const disabled = await handleDevicePush(request, 'DELETE', options);
+  assert.match(disabled.headers.get('set-cookie'), new RegExp(`${PUSH_LOGIN_COOKIE}=;`));
+  assert.match(calls.at(-1).sql, /SET avisos_gerais = FALSE, publicador_id = NULL WHERE aparelho_id = \$1/);
 });
 
 test('Agenda schedules push only for notifications changed by the committed transaction', async () => {

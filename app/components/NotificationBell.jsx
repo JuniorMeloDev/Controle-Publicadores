@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Bell, CheckCheck, Calendar, ClipboardList, MapPin, SprayCan, RefreshCw } from 'lucide-react';
+import { Bell, CheckCheck, Calendar, ClipboardList, MapPin, Megaphone, SprayCan, RefreshCw } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/app/components/ui/dialog';
 import { isAllowed } from '@/app/lib/access-control';
 import { requestNotifications } from '@/app/lib/notification-client';
 import { notificationFromHash } from '@/app/lib/push-client';
 import { DevicePushControl } from '@/app/components/DevicePushControl';
+
+const refreshEvents = ['focus', 'designacoes-atualizadas', 'alertas-atualizados', 'mural:changed'];
+const noticeIcons = { campo: MapPin, limpeza: SprayCan, relatorio: ClipboardList, mural: Megaphone };
+const noticeLinks = { relatorio: 'Enviar relatório', mural: 'Abrir anúncio' };
 
 export function NotificationBell({ userId, permissions }) {
     const [open, setOpen] = useState(false);
@@ -52,11 +56,11 @@ export function NotificationBell({ userId, permissions }) {
         };
         if (!openNotice()) refresh();
         const timer = setInterval(refresh, 60000);
-        for (const event of ['focus', 'designacoes-atualizadas', 'alertas-atualizados']) window.addEventListener(event, refresh);
+        for (const event of refreshEvents) window.addEventListener(event, refresh);
         window.addEventListener('hashchange', openNotice);
         return () => {
             controller.abort(); clearInterval(timer);
-            for (const event of ['focus', 'designacoes-atualizadas', 'alertas-atualizados']) window.removeEventListener(event, refresh);
+            for (const event of refreshEvents) window.removeEventListener(event, refresh);
             window.removeEventListener('hashchange', openNotice);
         };
     }, [load, userId]);
@@ -91,7 +95,7 @@ export function NotificationBell({ userId, permissions }) {
         <DialogContent className="bg-white text-gray-900 w-[calc(100%_-_2rem)] max-w-xl max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-xl">
             <DialogHeader>
                 <DialogTitle className="flex gap-2 items-center"><Bell className="w-5 h-5 text-purple-600" /> Suas notificações</DialogTitle>
-                <DialogDescription>Designações, serviço de campo, limpeza e relatório mensal.</DialogDescription>
+                <DialogDescription>Anúncios do mural, designações, serviço de campo, limpeza e relatório mensal.</DialogDescription>
             </DialogHeader>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-sm">
                 <span className="text-gray-500">{data.unread} não lidas</span>
@@ -105,8 +109,8 @@ export function NotificationBell({ userId, permissions }) {
             {targetId && <Button variant="ghost" size="sm" className="justify-self-start" onClick={clearNotice}>Ver todas as notificações</Button>}
             <div className="max-h-[60vh] overflow-y-auto space-y-2">
                 {loading ? <p className="text-center py-8 text-gray-500">Carregando notificações...</p> : !visibleNotices.length && !error ? <p className="text-center py-8 text-gray-500">{targetId ? 'Este aviso não está disponível para a conta atual.' : 'Nenhum alerta no momento.'}</p> : visibleNotices.map(n => {
-                    const Icon = n.category === 'campo' ? MapPin : n.category === 'limpeza' ? SprayCan : n.category === 'relatorio' ? ClipboardList : Calendar;
-                    const canOpen = n.href && (n.category === 'relatorio' || isAllowed(permissions, 'designacoes', 'pages'));
+                    const Icon = noticeIcons[n.category] || Calendar;
+                    const canOpen = n.href && (noticeLinks[n.category] || isAllowed(permissions, 'designacoes', 'pages'));
                     return <div key={n.id} className={`p-3 rounded-lg border flex gap-3 ${n.read ? 'bg-white border-gray-200' : n.overdue ? 'bg-red-50 border-red-200' : 'bg-purple-50 border-purple-100'}`}>
                         <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${n.overdue ? 'text-red-600' : 'text-purple-600'}`} />
                         <div className="flex-1 min-w-0">
@@ -115,7 +119,9 @@ export function NotificationBell({ userId, permissions }) {
                             <p className="text-xs text-gray-500 mt-1">{n.date.split('-').reverse().join('/')}</p>
                             <div className="flex flex-wrap gap-3 mt-2 text-xs">
                                 {n.links?.map(link => <a key={link.label} href={link.href} target="_blank" rel="noopener noreferrer" className="text-purple-700 hover:underline">{link.label}</a>)}
-                                {canOpen && <Link className="text-purple-700 hover:underline" href={n.href} onClick={() => setOpen(false)}>{n.category === 'relatorio' ? 'Enviar relatório' : 'Ver programação'}</Link>}
+                                {canOpen && (n.category === 'mural'
+                                    ? <a className="text-purple-700 hover:underline" href={n.href} onClick={() => setOpen(false)}>Abrir anúncio</a>
+                                    : <Link className="text-purple-700 hover:underline" href={n.href} onClick={() => setOpen(false)}>{noticeLinks[n.category] || 'Ver programação'}</Link>)}
                                 {!n.read && <button className="text-gray-600 hover:underline" disabled={marking} onClick={() => markRead([n.id])}>Marcar como lida</button>}
                             </div>
                         </div>
@@ -124,8 +130,7 @@ export function NotificationBell({ userId, permissions }) {
                 })}
             </div>
             {!sessionExpired && userId && <div className="flex flex-wrap gap-2">
-                <DevicePushControl userId={userId} />
-                <DevicePushControl userId={userId} general />
+                <DevicePushControl userId={userId} combined />
             </div>}
             <Link className="text-sm text-purple-700 hover:underline" href={isAllowed(permissions, 'configuracoes', 'pages') ? '/admin/configuracoes#alertas' : '/admin/configuracoes/preferencias'} onClick={event => {
                 if (window.location.pathname === '/admin/configuracoes' && isAllowed(permissions, 'configuracoes', 'pages')) {

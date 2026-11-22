@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { serialize, parse } from 'cookie';
-import { pushDeviceId, revokePushDevice, PUSH_DEVICE_COOKIE } from '../app/lib/push-subscriptions.js';
+import { linkLoginDevicePush, pushDeviceId, pushEnabledOnLogin, revokePushDevice, PUSH_DEVICE_COOKIE, PUSH_LOGIN_COOKIE } from '../app/lib/push-subscriptions.js';
 
 const secret = 'fictional-login-session-test-secret';
 const password = 'fictional-password';
@@ -15,8 +15,8 @@ const source = readFileSync(new URL('../app/api/login/route.js', import.meta.url
 
 function loginRoute(onRevoke = async () => ({ rowCount: 0 })) {
   const context = vm.createContext({
-    process: { env: { JWT_SECRET: secret, NODE_ENV: 'production' } },
-    console, bcrypt, jwt, serialize, pushDeviceId, revokePushDevice,
+    process: { env: { JWT_SECRET: secret, NODE_ENV: 'production', VAPID_PUBLIC_KEY: 'test-key' } },
+    console, bcrypt, jwt, serialize, linkLoginDevicePush, pushDeviceId, pushEnabledOnLogin, revokePushDevice,
     Pool: class {
       async connect() {
         return {
@@ -67,4 +67,22 @@ test('login revokes the current device only if it belongs to a different publish
   });
   assert.equal(response.status, 200);
   assert.equal(response.body.pushRevoked, true);
+});
+
+test('login links an opted-in device only to the successfully authenticated account', async () => {
+  const deviceId = 'f80c2365-2ceb-45c5-ac79-cf22b8607cbf';
+  const updates = [];
+  const login = loginRoute(async (sql, params) => { updates.push({ sql, params }); return { rowCount: 1 }; });
+  const submit = (choice, senha = password) => login({
+    cookies: { get: key => ({ value: key === PUSH_DEVICE_COOKIE ? deviceId : key === PUSH_LOGIN_COOKIE ? choice : undefined }) },
+    json: async () => ({ email: 'ficticio@example.com', senha, userId: 456 }),
+  });
+  assert.equal((await submit(deviceId, 'incorrect')).status, 401);
+  assert.equal(updates.length, 0);
+  assert.equal((await submit('another-device')).status, 200);
+  assert.equal(updates.length, 1);
+  assert.equal((await submit(deviceId)).status, 200);
+  assert.equal(updates.length, 3);
+  assert.deepEqual(updates[2].params, [deviceId, 990001, 'test-key']);
+  assert.match(updates[2].sql, /AND avisos_gerais AND chave_vapid = \$3[\s\S]+expira_em > NOW\(\)/);
 });

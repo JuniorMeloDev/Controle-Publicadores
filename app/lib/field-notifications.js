@@ -72,10 +72,11 @@ export async function sendFieldNotifications(client, outingId) {
   return { id, ids: [id], destinatarios: recipients.length, notificacoes: saved.rowCount, pushIds: saved.rows.map(row => row.id) };
 }
 
-export async function readFieldNotifications(client, publisherId) {
+export async function readFieldNotifications(client, publisherId, today) {
   try {
     const { rows } = await client.query(`SELECT id, data::text AS date, conteudo FROM campo_saida_notificacoes
-      WHERE publicador_id = $1 ORDER BY data DESC, id DESC`, [publisherId]);
+      WHERE publicador_id = $1 AND data >= $2::date
+      ORDER BY data DESC, id DESC`, [publisherId, today]);
     return rows.map(row => ({ ...row.conteudo, id: `campo-saida:${row.id}`, date: row.date, category: 'campo' }));
   } catch (error) {
     if (error.code === '42P01') return [];

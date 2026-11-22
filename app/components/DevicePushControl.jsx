@@ -8,9 +8,12 @@ import { applicationServerKey, clearDevicePush, requestDevicePush, supportsDevic
 const subscribeToSupport = () => () => {};
 const serverSupport = () => null;
 
-export function DevicePushControl({ userId = null, general = false, inviteOnEntry = false }) {
+export function DevicePushControl({ userId = null, general = false, combined = false, inviteOnEntry = false }) {
+  const sessionUserId = userId === null ? null : Number(userId);
+  const enableOnLogin = inviteOnEntry && general && sessionUserId === null;
   const supported = useSyncExternalStore(subscribeToSupport, supportsDevicePush, serverSupport);
-  const [device, setDevice] = useState(null);
+  const [loadedDevice, setDevice] = useState(null);
+  const device = loadedDevice?.userId === sessionUserId ? loadedDevice : null;
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -28,8 +31,10 @@ export function DevicePushControl({ userId = null, general = false, inviteOnEntr
         ]);
         const subscription = await registration?.pushManager.getSubscription();
         if (controller.signal.aborted) return;
-        if (status.userId !== userId) throw new Error('Sua conta mudou. Atualize a página e tente novamente.');
-        setDevice({ ...status, registration, subscription });
+        if (status.userId !== sessionUserId) throw new Error('Sua conta mudou. Atualize a página e tente novamente.');
+        const enabled = combined ? status.personalizedEnabled && status.generalEnabled
+          : enableOnLogin ? status.enabled && status.enabledOnLogin : status.enabled;
+        setDevice({ ...status, enabled, registration, subscription });
       } catch (error) {
         if (!controller.signal.aborted) setMessage(error.message);
       }
@@ -44,19 +49,20 @@ export function DevicePushControl({ userId = null, general = false, inviteOnEntr
       window.removeEventListener('focus', load);
       window.removeEventListener('device-push:updated', load);
     };
-  }, [general, userId, revision]);
+  }, [combined, enableOnLogin, general, sessionUserId, revision]);
 
   async function toggle() {
     if (busy || !device) return;
     setBusy(true);
     setMessage('');
     try {
+      const account = { userId: sessionUserId, ...(combined && { includeGeneral: true }), ...(enableOnLogin && { enableOnLogin: true }) };
       if (device.enabled) {
-        await requestDevicePush(general, 'DELETE', { userId });
-        await clearDevicePush({ registration: device.registration, general });
+        await requestDevicePush(general, 'DELETE', account);
+        await clearDevicePush({ registration: device.registration, general, includeGeneral: combined || enableOnLogin });
         setInviteDismissed(true);
         setDevice(current => ({ ...current, enabled: false }));
-        setMessage(general ? 'Avisos gerais desativados.' : 'Notificações personalizadas desativadas.');
+        setMessage(combined || enableOnLogin ? 'Notificações desativadas neste aparelho.' : general ? 'Avisos gerais desativados.' : 'Notificações personalizadas desativadas.');
         window.dispatchEvent(new Event('device-push:updated'));
         return;
       }
@@ -76,10 +82,11 @@ export function DevicePushControl({ userId = null, general = false, inviteOnEntr
         if (subscription) await subscription.unsubscribe();
         subscription = await manager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
       }
-      await requestDevicePush(general, 'PUT', { userId, publicKey: device.publicKey, subscription: subscription.toJSON() });
+      await requestDevicePush(general, 'PUT', { ...account, publicKey: device.publicKey, subscription: subscription.toJSON() });
       setInviteDismissed(true);
       setDevice(current => ({ ...current, enabled: true, endpoint: subscription.endpoint, subscriptionKey: device.publicKey, subscription }));
-      setMessage(general ? 'Avisos gerais ativados.' : 'Notificações personalizadas ativadas.');
+      setMessage(enableOnLogin ? 'Notificações ativadas. Entre na sua conta para receber seus avisos neste aparelho.'
+        : combined ? 'Notificações ativadas neste aparelho.' : general ? 'Avisos gerais ativados.' : 'Notificações personalizadas ativadas.');
       window.dispatchEvent(new Event('device-push:updated'));
     } catch (error) {
       setMessage(error.message || 'Não foi possível atualizar as notificações neste aparelho.');
@@ -94,10 +101,10 @@ export function DevicePushControl({ userId = null, general = false, inviteOnEntr
   const inactive = device?.enabled && (device.subscription?.endpoint !== device.endpoint
     || device.subscriptionKey !== device.publicKey || Notification.permission !== 'granted');
   const inviteOpen = inviteOnEntry && general && supported && available && !device.enabled && !inviteDismissed;
+  const label = combined || enableOnLogin ? 'notificações' : general ? 'avisos gerais' : 'notificações personalizadas';
   return <div className="space-y-1 text-sm">
     {supported ? <Button ref={settingsButton} type="button" variant="outline" size="sm" disabled={busy || (!device?.enabled && !available)} onClick={toggle}>
-      {device?.enabled ? (general ? 'Desativar avisos gerais' : 'Desativar notificações personalizadas')
-        : (general ? 'Ativar avisos gerais' : 'Ativar notificações personalizadas')}
+      {device?.enabled ? `Desativar ${label}` : `Ativar ${label}`}
     </Button> : <p className="text-gray-600">Notificações no aparelho indisponíveis neste navegador. No iPhone ou iPad, abra o app pela Tela de Início.</p>}
     {message ? <p role="status" className="text-gray-600">{message}</p>
       : supported && Notification.permission === 'denied' ? <p className="text-gray-600">Permissão bloqueada nas configurações do navegador ou do aparelho.</p>
@@ -111,13 +118,13 @@ export function DevicePushControl({ userId = null, general = false, inviteOnEntr
           (settingsButton.current?.disabled ? document.getElementById('email') : settingsButton.current)?.focus();
         }}>
         <DialogHeader>
-          <DialogTitle className="pr-5">Quer receber avisos gerais?</DialogTitle>
-          <DialogDescription>Receba os avisos da congregação neste aparelho, mesmo com o site fechado.</DialogDescription>
+          <DialogTitle className="pr-5">Quer receber notificações?</DialogTitle>
+          <DialogDescription>Receba avisos neste aparelho, mesmo com o site fechado. Depois de entrar, você também recebe os avisos da sua conta.</DialogDescription>
         </DialogHeader>
         {message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => setInviteDismissed(true)}>Agora não</Button>
-          <Button type="button" disabled={busy} onClick={toggle}>{busy ? 'Ativando…' : 'Ativar avisos gerais'}</Button>
+          <Button type="button" disabled={busy} onClick={toggle}>{busy ? 'Ativando…' : 'Ativar notificações'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>}

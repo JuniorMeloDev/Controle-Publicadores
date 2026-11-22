@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs'; // Para comparar senhas
 import jwt from 'jsonwebtoken'; // Para criar o token de sessão
 import { serialize } from 'cookie'; // Para criar o cookie
-import { pushDeviceId, revokePushDevice } from '@/app/lib/push-subscriptions';
+import { linkLoginDevicePush, pushDeviceId, pushEnabledOnLogin, revokePushDevice } from '@/app/lib/push-subscriptions';
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
@@ -43,7 +43,12 @@ export async function POST(req) {
     if (!senhaCorreta) {
       return NextResponse.json({ message: 'Email ou senha inválidos.' }, { status: 401 }); // ALTERADO: Mensagem
     }
-    const pushRevoked = await revokePushDevice(client, pushDeviceId(req), user.id);
+    const deviceId = pushDeviceId(req);
+    const pushRevoked = await revokePushDevice(client, deviceId, user.id);
+    if (pushEnabledOnLogin(req, deviceId)) {
+      try { await linkLoginDevicePush(client, deviceId, user.id, process.env.VAPID_PUBLIC_KEY); }
+      catch (error) { console.error('Falha ao vincular notificações no login:', error.code || error.name); }
+    }
 
     // 5. LOGIN BEM-SUCEDIDO! Criar a sessão.
     // Criamos um "token" (um crachá digital)

@@ -3,6 +3,7 @@ import { findVisitInWeek, getVisitTuesday } from './meeting-visits';
 import { meetingCancellation } from './meeting-calendar';
 import { DEFAULT_ALERT_SETTINGS, dateKey, previousReportPeriod, buildNotifications } from './alerts';
 import { readFieldNotifications } from './field-notifications';
+import { readBoardNotifications } from './congregation-board-server';
 
 export async function ensureAlertTables(client) {
     await client.query(`
@@ -79,11 +80,12 @@ export async function getPersonalNotifications(client, publisherId, today, optio
         reportPending = report.rows.length > 0;
     }
     const notifications = buildNotifications({ assignments, settings, today, reportPending });
-    if (options.includeField !== false) notifications.unshift(...await readFieldNotifications(client, publisherId));
+    if (options.includeField !== false) notifications.unshift(...await readFieldNotifications(client, publisherId, today));
+    if (options.includeBoard) notifications.unshift(...await readBoardNotifications(client, publisherId));
     notifications.unshift(...(options.refusals || []));
     const { rows: read } = await client.query('SELECT notificacao_id FROM alertas_lidos WHERE publicador_id = $1', [publisherId]);
     const readIds = new Set(read.map(row => row.notificacao_id));
-    return notifications.map(n => ({ ...n, read: readIds.has(n.id) }));
+    return notifications.map(n => ({ ...n, read: n.read === true || readIds.has(n.id) }));
 }
 
 export async function deliverReminders(client, reminders, sendMail) {

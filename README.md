@@ -435,9 +435,11 @@ de planejamento integram o backup.
 
 Em **Serviço de Campo → Agenda → Enviar notificação**, o app salva no sino o
 aviso de cada publicador, com os territórios de seu grupo e os mapas disponíveis.
-Na tela de login, qualquer visitante pode escolher **Ativar avisos gerais**.
-Depois de entrar, o publicador pode controlar os avisos gerais e as
-notificações personalizadas separadamente em **Suas notificações**. O navegador
+O aviso fica no sininho até o fim do dia da saída, no horário de Brasília.
+Na tela de login e no modal de convite, **Ativar notificações** ativa os avisos
+da congregação no aparelho e vincula os avisos da conta ao entrar. No sininho,
+o mesmo botão ativa os dois tipos. As preferências podem ser controladas
+separadamente em **Configurações → Alertas**. O navegador
 pede permissão ao clicar na opção de ativar, caso ainda não esteja concedida.
 Sair da conta desvincula as notificações personalizadas e mantém os avisos
 gerais que foram ativados nesse navegador.
@@ -453,7 +455,8 @@ texto. O conteúdo também aparece na tela bloqueada, conforme as configuraçõe
 do aparelho.
 
 Em **Mural da congregação → Nova publicação → Anúncio**, salvar uma publicação
-já visível inicia o envio imediatamente após a gravação. O push vai para os
+já visível adiciona o anúncio ao sininho do público escolhido e inicia o envio
+ao aparelho após a gravação. O push vai para os
 aparelhos com notificações personalizadas ativadas dentro do público escolhido
 no formulário. **Anciãos** e **Anciãos e Servos Ministeriais** restringem a
 leitura, os anexos e o push aos privilégios escolhidos. A lista de grupos do

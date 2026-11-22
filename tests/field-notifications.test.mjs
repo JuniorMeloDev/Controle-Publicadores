@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fieldNotificationContent, sendFieldNotifications } from '../app/lib/field-notifications.js';
+import { fieldNotificationContent, readFieldNotifications, sendFieldNotifications } from '../app/lib/field-notifications.js';
 
 const outing = {
   data: '2026-11-21', horario: '08:30', modalidade: 'territorio', dirigente_unico: true,
@@ -23,6 +23,17 @@ test('each group receives only its territories and map links', () => {
   assert.deepEqual(rubi.links.map(link => link.href), ['/mapa-territorio/publico-26']);
   const common = fieldNotificationContent({ ...outing, grupos: [] }, null, territories);
   assert.equal(common.detail, 'Territórios 6, 12, 26 · 08:30');
+});
+
+test('the bell only queries field notices dated today or later', async () => {
+  const client = { query: async (sql, params) => {
+    assert.match(sql, /WHERE publicador_id = \$1 AND data >= \$2::date/);
+    assert.deepEqual(params, [10, '2026-11-22']);
+    return { rows: [{ id: 1, date: '2026-11-22', conteudo: { title: 'Serviço de Campo' } }] };
+  } };
+  assert.deepEqual(await readFieldNotifications(client, 10, '2026-11-22'), [
+    { id: 'campo-saida:1', date: '2026-11-22', title: 'Serviço de Campo', category: 'campo' },
+  ]);
 });
 
 test('an incomplete group distribution cannot broadcast the common list by accident', async () => {

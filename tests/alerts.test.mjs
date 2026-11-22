@@ -101,8 +101,9 @@ test('personal notifications bind identity to queries and preserve persisted rea
         getPublisherAssignments: async (_client, options) => {
             assert.equal(options.publisherId, 990001); return assignments.filter(a => a.publicador_id === 990001);
         },
-        readFieldNotifications: async (_client, id) => {
+        readFieldNotifications: async (_client, id, date) => {
             assert.equal(id, 990001);
+            assert.equal(date, today);
             return [{ id: 'campo-saida:1', title: 'Serviço de Campo' }];
         },
     });
