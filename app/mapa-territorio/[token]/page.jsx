@@ -22,12 +22,12 @@ export default async function SharedTerritoryMap({ params }) {
   const { token } = await params;
   const result = await findTerritory(token);
   if (!result) notFound();
-  const { imagem_chave: _key, imagem_hash: _hash, ...territory } = result;
-  if (territoryMapDisplay(territory) !== 'original') return <TerritoryMapCard territory={territory} congregation={process.env.NEXT_PUBLIC_NOME_CONGREGACAO || 'Praia dos Corais'} />;
+  const { imagem_chave: _key, imagem_hash: _hash, id: _id, ...territory } = result;
+  if (territoryMapDisplay(territory) !== 'original') return <TerritoryMapCard key={token} token={token} territory={territory} congregation={process.env.NEXT_PUBLIC_NOME_CONGREGACAO || 'Praia dos Corais'} />;
   let info;
   const client = await pool.connect();
   try { info = await preparedSchematicInfo(client, result.imagem_chave, result.imagem_hash); }
   catch { return <main className="mx-auto max-w-xl space-y-3 p-8 text-gray-900"><h1 className="text-xl font-bold">Território {result.numero}</h1><p>O cartão está sendo atualizado. Solicite a atualização do mapa ao responsável pelos territórios.</p></main>; }
   finally { client.release(); }
-  return <TerritoryMapCard territory={territory} image={{ src: `/api/mapa-territorio/${token}/esquema`, width: info.width, height: info.height }} congregation={process.env.NEXT_PUBLIC_NOME_CONGREGACAO || 'Praia dos Corais'} />;
+  return <TerritoryMapCard key={token} token={token} territory={territory} image={{ src: `/api/mapa-territorio/${token}/esquema`, width: info.width, height: info.height }} congregation={process.env.NEXT_PUBLIC_NOME_CONGREGACAO || 'Praia dos Corais'} />;
 }

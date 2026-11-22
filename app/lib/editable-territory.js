@@ -1,4 +1,6 @@
 ﻿const error = message => { throw new Error(message); };
+export const TERRITORY_ROAD_WIDTH = 27;
+
 export function automaticReferenceGroups(landmarks) {
   const groups=[];
   for(const marker of landmarks.filter(item=>item.id.startsWith('osm-point-'))){

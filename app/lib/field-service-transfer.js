@@ -22,7 +22,8 @@ export async function transferFieldAssignment(client, input, mutate) {
     territorio_id: previous.territorio_id, publicador_id: publisherId, data_designacao: date,
     observacoes: input.observacoes || ''
   } });
-  await client.query('UPDATE campo_designacoes SET designacao_anterior_id = $2, orientacoes_continuacao = $3 WHERE id = $1', [next.id, id, notes]);
+  await client.query(`UPDATE campo_designacoes SET designacao_anterior_id = $2, orientacoes_continuacao = $3,
+    quadras_concluidas = (SELECT quadras_concluidas FROM campo_designacoes WHERE id = $2) WHERE id = $1`, [next.id, id, notes]);
   return { ...next, transferencia: { designacao_anterior_id: id, designacao_id: next.id,
     territorio_id: previous.territorio_id, responsavel_anterior_id: previous.publicador_id,
     publicador_id: publisherId, data: date, orientacoes_continuacao: notes } };

@@ -5,6 +5,9 @@ import { readFile } from 'node:fs/promises';
 import { saveFieldMap } from '../app/lib/field-map.js';
 import { mutateFieldService, readFieldService } from '../app/lib/field-service-server.js';
 import { generateFieldSchedule } from '../app/lib/field-planner.js';
+import { readTerritoryProgress, saveTerritoryProgress } from '../app/lib/territory-progress-server.js';
+import { isFieldOutingCompleted } from '../app/lib/field-service.js';
+import { readFieldOutingBlocks } from '../app/lib/field-service-batch.js';
 
 nextEnv.loadEnvConfig(process.cwd());
 const pool = new pg.Pool({ connectionString: process.env.POSTGRES_URL });
@@ -19,6 +22,9 @@ try {
   const transferMigration = (await readFile(new URL('../scripts/sql/adicionar-transferencias-campo.sql', import.meta.url), 'utf8')).replace(/^BEGIN;\s*/i, '').replace(/COMMIT;\s*$/i, '');
   await client.query(transferMigration);
   await client.query(transferMigration);
+  const blocksMigration = (await readFile(new URL('../scripts/sql/adicionar-progresso-quadras.sql', import.meta.url), 'utf8')).replace(/^BEGIN;\s*/i, '').replace(/COMMIT;\s*$/i, '');
+  await client.query(blocksMigration);
+  await client.query(blocksMigration);
   const publisher = (await client.query('SELECT id FROM publicadores ORDER BY id LIMIT 1')).rows[0];
   assert.ok(publisher, 'Precisa de um publicador para testar as referências.');
   const suffix = Date.now();
@@ -244,6 +250,84 @@ try {
   assert.equal(resultTransferNew.data_conclusao, continuationDate(8));
   assert.equal(resultTransferNew.orientacoes_continuacao, 'Falta a rua de trás.');
   assert.equal(resultTransferState.designacoes.find(d => d.id === resultTransferOld.id).data_conclusao, null);
+  const progressDelivery = await mutateFieldService(client, { entity: 'territorios', action: 'save', record: { numero: number + 11 } });
+  const progressTerritory = { id: progressDelivery.id, mapa_layout: {
+    outline: [[100, 100], [400, 100], [400, 400], [100, 400]],
+    roads: [{ points: [[250, 100], [250, 400]] }, { points: [[100, 250], [400, 250]] }],
+    landmarks: [
+      { id: 'osm-point-one', name: 'Referência 1', position: [350, 175] },
+      { id: 'osm-point-two', name: 'Referência 2', position: [350, 325] },
+    ],
+  }};
+  const firstDate = '2199-12-17', nextDate = '2199-12-18', newCycleDate = '2199-12-19';
+  await client.query('UPDATE campo_territorios SET mapa_layout = $2 WHERE id = $1',
+    [progressTerritory.id, JSON.stringify(progressTerritory.mapa_layout)]);
+  const leader = { id: publisher.id, privilegios: [] };
+  const ordinaryPublisher = { id: secondPublisher.id, privilegios: [] };
+  const progressOuting = { horario: '04:35', modalidade: 'territorio', territorios: [progressTerritory.id] };
+  const firstProgressOuting = await mutateFieldService(client, { entity: 'saidas', action: 'save', record: {
+    ...progressOuting, data: firstDate, dirigente_publicador_id: leader.id,
+  } });
+  const initial = await readTerritoryProgress(client, progressTerritory, leader, firstDate);
+  assert.equal(initial.state.canEdit, true);
+  assert.equal(initial.state.blocks.length, 4);
+  const completed = initial.state.blocks.filter(block => block.referenceNumbers.length).map(block => block.id);
+  assert.equal(completed.length, 2);
+  const firstMarked = completed.slice(0, 1);
+  const save = { action: 'save', completed: firstMarked, version: initial.state.version };
+  for (const viewer of [null, ordinaryPublisher]) {
+    const context = await readTerritoryProgress(client, progressTerritory, viewer, firstDate);
+    await assert.rejects(saveTerritoryProgress(client, progressTerritory, viewer, save, context), { status: 403 });
+  }
+  const progress = await saveTerritoryProgress(client, progressTerritory, leader, save, initial);
+  const savedProgress = await readTerritoryProgress(client, progressTerritory, leader, firstDate);
+  assert.deepEqual(savedProgress.state.completed, firstMarked);
+  assert.equal(savedProgress.state.completedOn, null);
+  await assert.rejects(saveTerritoryProgress(client, progressTerritory, leader, save, savedProgress), { status: 409 });
+  const blockOptions = (await readFieldOutingBlocks(client, firstProgressOuting.id))[progressTerritory.id];
+  assert.deepEqual(blockOptions.completed, firstMarked);
+  assert.deepEqual(blockOptions.layout, progressTerritory.mapa_layout);
+  assert.deepEqual(blockOptions.blocks, initial.state.blocks);
+  const partialResult = { entity: 'saidas', action: 'result', id: firstProgressOuting.id, data: firstDate, resultados: [{
+    territorio_id: progressTerritory.id, resultado: 'parcial', quadras_concluidas: completed, quadras_anteriores: firstMarked,
+  }] };
+  await assert.rejects(mutateFieldService(client, { ...partialResult,
+    resultados: [{ ...partialResult.resultados[0], quadras_anteriores: [] }],
+  }), { status: 409 });
+  const partialSaved = await mutateFieldService(client, partialResult);
+  const { rows: [partialRecord] } = await client.query('SELECT observacoes FROM campo_saida_resultados WHERE id = $1', [partialSaved.ids[0]]);
+  const pendingNumbers = initial.state.blocks.flatMap((block, index) => completed.includes(block.id) ? [] : [index + 1]);
+  assert.equal(partialRecord.observacoes, `Quadras pendentes: ${pendingNumbers.join(', ')}.`);
+  assert.deepEqual((await readTerritoryProgress(client, progressTerritory, leader, firstDate)).state.completed, completed);
+  await mutateFieldService(client, { entity: 'designacoes', action: 'transfer', id: progress.id,
+    publicador_id: ordinaryPublisher.id, data_transferencia: nextDate });
+  const nextProgressOuting = await mutateFieldService(client, { entity: 'saidas', action: 'save', record: {
+    ...progressOuting, data: nextDate, dirigente_publicador_id: ordinaryPublisher.id,
+  } });
+  const continued = await readTerritoryProgress(client, progressTerritory, ordinaryPublisher, nextDate);
+  assert.deepEqual(continued.state.completed, completed);
+  assert.equal(continued.state.canEdit, true);
+  assert.equal((await readTerritoryProgress(client, progressTerritory, leader, nextDate)).state.canEdit, false);
+  for (const role of ['anciao', 'servo_ministerial']) {
+    assert.equal((await readTerritoryProgress(client, progressTerritory, { ...leader, privilegios: [role] }, nextDate)).state.canEdit, true);
+  }
+  const mapConclusion = await saveTerritoryProgress(client, progressTerritory, ordinaryPublisher, {
+    action: 'complete', version: continued.state.version,
+  }, continued);
+  const after = await readTerritoryProgress(client, progressTerritory, null, nextDate);
+  assert.equal(after.state.completedOn, nextDate);
+  assert.equal(after.state.completed.length, 4);
+  const progressSnapshot = await readFieldService(client);
+  assert.equal(progressSnapshot.designacoes.find(row => row.id === mapConclusion.id).data_conclusao, nextDate);
+  assert.equal(isFieldOutingCompleted(progressSnapshot.saidas.find(row => row.id === nextProgressOuting.id),
+    progressSnapshot.designacoes, progressSnapshot.resultados), true);
+  await mutateFieldService(client, { entity: 'saidas', action: 'save', record: {
+    ...progressOuting, data: newCycleDate, dirigente_publicador_id: leader.id,
+  } });
+  const newCycle = await readTerritoryProgress(client, progressTerritory, leader, newCycleDate);
+  assert.equal(newCycle.state.canEdit, true);
+  assert.deepEqual(newCycle.state.completed, []);
+  console.log('Quadras verificadas: acesso restrito, marcação parcial, transferência, conclusão no Histórico e novo ciclo.');
   console.log('Planejamento aprovado: quatro conclusões, resultados parciais, importação sem duplicidade, geração em lote e rollback.');
   console.log('Integração aprovada: seleção direta, recorrência, conflitos, histórico e migração dos dirigentes existentes.');
 } catch (error) {

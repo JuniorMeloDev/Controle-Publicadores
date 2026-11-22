@@ -137,17 +137,31 @@ export function validateFieldRecord(entity, input) {
   }
   throw new Error('Cadastro inválido.');
 }
+export function fieldOutingResults(outing, assignments = [], results = []) {
+  const outingResults = new Map(results.filter(result => result.saida_id === outing.id)
+    .map(result => [result.territorio_id, result]));
+  const marker = `Entrega registrada pela saída ${outing.id}.`;
+  const linkedAssignments = assignments.filter(assignment => (assignment.data_conclusao || assignment.data_transferencia)
+    && (assignment.observacoes === marker
+      || (assignment.id != null && outingResults.get(assignment.territorio_id)?.designacao_id === assignment.id)));
+
+  return (outing.territorios || []).flatMap(territoryId => {
+    const result = outingResults.get(territoryId);
+    if (result?.resultado === 'concluido') return [result];
+    const linked = linkedAssignments.filter(assignment => assignment.territorio_id === territoryId);
+    const completion = linked.find(assignment => assignment.data_conclusao);
+    if (completion) return [{ territorio_id: territoryId, resultado: 'concluido', data: completion.data_conclusao }];
+    const transfer = linked.find(assignment => assignment.data_transferencia);
+    if (transfer) return [{ territorio_id: territoryId, resultado: 'transferido', data: transfer.data_transferencia }];
+    return result ? [result] : [];
+  });
+}
+
 export function isFieldOutingCompleted(outing, assignments = [], results = []) {
   if (outing.modalidade !== 'territorio' || !outing.territorios?.length) return false;
   if (usesSingleFieldLeader(outing) && Object.keys(outing.territorios_por_grupo || {}).length
     && outing.grupos.some(id => !outing.territorios_por_grupo[id]?.length)) return false;
-  const outingResults = results.filter(result => result.saida_id === outing.id);
-  const marker = `Entrega registrada pela saída ${outing.id}.`;
-  return outing.territorios.every(territoryId => {
-    const result = outingResults.find(item => item.territorio_id === territoryId);
-    if (result?.resultado === 'concluido') return true;
-    return assignments.some(assignment => assignment.territorio_id === territoryId
-      && (assignment.data_conclusao || assignment.data_transferencia)
-      && (assignment.observacoes === marker || (result?.designacao_id && assignment.id === result.designacao_id)));
-  });
+  const statuses = fieldOutingResults(outing, assignments, results);
+  return statuses.length === outing.territorios.length
+    && statuses.every(({ resultado }) => resultado === 'concluido' || resultado === 'transferido');
 }

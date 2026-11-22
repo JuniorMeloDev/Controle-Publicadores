@@ -36,3 +36,15 @@ test('public image returns PNG only for an active prepared map and never caches 
   const response=await GET({}, {params:Promise.resolve({token:'a'.repeat(43)})});
   assert.equal(response.status,200);assert.equal(response.headers['Content-Type'],'image/png');assert.equal(response.headers['Cache-Control'],'private, no-store');assert.equal(response.body,image);
 });
+
+test('shared map progress rejects unauthenticated and cross-origin edits before opening a transaction', async () => {
+  let connects = 0;
+  const { POST } = loadRoute('../../app/api/mapa-territorio/[token]/progresso/route.js', {
+    Pool: class { async connect() { connects++; throw new Error('Unexpected connection'); } },
+    getUserIdFromRequest: request => request.userId,
+  });
+  const request = { url: 'https://example.test/api/mapa-territorio/token/progresso', headers: { get: () => 'https://other.test' } };
+  assert.equal((await POST(request, {})).status, 401);
+  assert.equal((await POST({ ...request, userId: 1 }, {})).status, 403);
+  assert.equal(connects, 0);
+});

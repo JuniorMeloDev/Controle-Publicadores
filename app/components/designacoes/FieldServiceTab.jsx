@@ -24,7 +24,7 @@ import { TerritoryBoundaryEditor } from './TerritoryBoundaryEditor';
 import { CongregationSchematic } from './CongregationSchematic';
 import { usePermissions } from '@/app/components/PermissionsContext';
 import { isAllowed } from '@/app/lib/access-control';
-import { FIELD_MODES, isFieldOutingCompleted, usesGroupTerritories, isTerritoryAllowedForOuting, isWeekendOuting, usesSingleFieldLeader, fieldOutingTerritorySummary } from '@/app/lib/field-service';
+import { FIELD_MODES, fieldOutingResults, isFieldOutingCompleted, usesGroupTerritories, isTerritoryAllowedForOuting, isWeekendOuting, usesSingleFieldLeader, fieldOutingTerritorySummary } from '@/app/lib/field-service';
 import { useDesignationPeriod } from './DesignationPeriodContext';
 import { DesignationPeriodFilters, designationToolbarClass, designationListHeaderClass } from './DesignationLayout';
 
@@ -35,6 +35,53 @@ const controlClass = 'w-full min-w-0 rounded-md border border-gray-300 bg-white 
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 const displayDate = date => date ? date.slice(0, 10).split('-').reverse().join('/') : '—';
 const blankData = { saidas: [], locais: [], territorios: [], designacoes: [], publicadores: [], grupos: [], mapas: [], resultados: [] };
+
+export function FieldAgendaCard({ outing, data, groups, children }) {
+  const leader = data.publicadores.find(row => row.id === outing.dirigente_publicador_id)?.nome;
+  const location = data.locais.find(row => row.id === outing.local_id)?.nome;
+  const territoryNumber = id => data.territorios.find(row => row.id === id)?.numero ?? '?';
+  const results = fieldOutingResults(outing, data.designacoes, data.resultados);
+  const groupSummary = usesSingleFieldLeader(outing) && outing.grupos.length
+    ? fieldOutingTerritorySummary(outing, data).split('\n').filter(Boolean) : [];
+  const hasGroupSummary = groupSummary.length > 0;
+  const sideBySide = hasGroupSummary || results.length > 0;
+
+  return <article className="@container space-y-3 p-4">
+    <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h4 className="font-semibold text-gray-900">{displayDate(outing.data)} · {outing.horario}</h4>
+        <p className="text-sm text-gray-700 [overflow-wrap:anywhere]">{leader || 'Dirigente a definir'}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">{children}</div>
+    </header>
+    <div className={`grid gap-x-5 gap-y-3 text-sm ${sideBySide ? '@2xl:grid-cols-2' : ''} ${hasGroupSummary && results.length ? '@5xl:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,2fr)]' : ''}`}>
+      <div className={`min-w-0 [overflow-wrap:anywhere] ${sideBySide ? 'space-y-1' : 'flex flex-wrap items-baseline gap-x-3 gap-y-1'}`}>
+        <p className="font-medium text-gray-900">{location || 'Local a definir'}</p>
+        <p className="text-gray-600">{groups}</p>
+        <p className="text-purple-700">{FIELD_MODES[outing.modalidade]}{outing.territorios.length > 0 && ` · ${outing.territorios.map(territoryNumber).join(', ')}`}</p>
+      </div>
+      {hasGroupSummary && <div className="min-w-0 space-y-1">
+        <h5 className="font-medium text-gray-900">Dirigente único</h5>
+        <ul className="flex flex-wrap gap-x-3 gap-y-1 text-gray-600 [overflow-wrap:anywhere]">
+          {groupSummary.map((line, index) => <li key={index} className="max-w-full">{line}</li>)}
+        </ul>
+      </div>}
+      {results.length > 0 && <div className={`min-w-0 space-y-1 ${hasGroupSummary ? '@2xl:col-span-2 @5xl:col-span-1' : ''}`}>
+        <h5 className="font-medium text-gray-900">Resultados dos territórios</h5>
+        <ul className={`grid gap-x-4 gap-y-1.5 ${hasGroupSummary ? '@2xl:grid-cols-2' : '@4xl:grid-cols-2'}`}>
+          {results.map(result => <li key={result.territorio_id} className="min-w-0 text-gray-600 [overflow-wrap:anywhere]">
+            <p className="flex flex-wrap items-baseline gap-x-2">
+              <span className="font-medium text-gray-900">Território {territoryNumber(result.territorio_id)}</span>
+              <span>{result.resultado === 'transferido' ? 'Transferido' : FIELD_RESULTS[result.resultado]} · {displayDate(result.data)}</span>
+            </p>
+            {result.observacoes && <p className="whitespace-pre-wrap">{result.observacoes}</p>}
+          </li>)}
+        </ul>
+      </div>}
+    </div>
+    {outing.observacoes && <p className="whitespace-pre-wrap text-sm text-gray-600 [overflow-wrap:anywhere]">{outing.observacoes}</p>}
+  </article>;
+}
 
 function defaults(entity) {
   if (entity === 'saidas') return { data: today(), horario: '08:30', dirigente_publicador_id: '', local_id: '', grupos: [], territorios: [], dirigente_unico: true, territorios_por_grupo: {}, modalidade: 'territorio', observacoes: '', semanas: 1 };
@@ -109,7 +156,6 @@ export function FieldServiceTab() {
 
   const name = (entity, id) => data[entity].find(row => row.id === Number(id))?.nome;
   const groupsLabel = groups => groups.length ? groups.map(id => name('grupos', id) || 'Grupo removido').join(', ') : 'Congregação';
-  const territoryLabel = ids => ids.map(id => data.territorios.find(row => row.id === id)?.numero ?? '?').join(', ');
   const territoryUrls = () => Object.fromEntries(data.territorios.filter(t => t.ativo && t.mapa_share_token && (t.limites || data.mapas.some(map => map.territorio_id === t.id)))
     .map(t => [t.id, new URL(`/mapa-territorio/${t.mapa_share_token}`, window.location.origin).toString()]));
   function shareOuting(row) { openShare(buildFieldOutingMessage(row, data, territoryUrls())); }
@@ -184,7 +230,7 @@ export function FieldServiceTab() {
   }
   async function remove() {
     await api({ action: 'delete', entity: 'saidas', id: pendingDelete.id });
-    setFeedback('Saída excluída. Entregas pendentes sem resultados nem transferências foram removidas. O histórico de trabalho e transferências foi preservado.');
+    setFeedback('Saída excluída. Entregas pendentes sem resultados, transferências ou quadras concluídas foram removidas.');
     await refresh();
   }
   const openShare = message => { setShareMessage(message); setShareFeedback(''); };
@@ -235,12 +281,16 @@ export function FieldServiceTab() {
             : <label className="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />Mostrar inativos</label>}
       </div>
       {loading ? <div role="status" aria-label="Carregando Serviço de Campo" className="p-10"><Loader2 className="mx-auto h-7 w-7 animate-spin text-purple-600" /></div> : error ? <p className="p-6 text-sm text-gray-500">Atualize os dados para continuar.</p> : <div className="divide-y divide-gray-100">
-        {section === 'saidas' && (agenda.length ? agenda.map(row => <article key={row.id} className="p-4 flex flex-col sm:flex-row gap-3 sm:items-start"><div className="min-w-0 flex-1 space-y-1">
-          <div className="font-semibold text-gray-900">{displayDate(row.data)} · {row.horario}</div><div className="text-sm text-gray-700">{name('publicadores', row.dirigente_publicador_id) || 'Dirigente a definir'}</div>
-          <div className="text-sm text-gray-500 break-words">{groupsLabel(row.grupos)} · {name('locais', row.local_id) || 'Local a definir'}</div><div className="text-sm text-purple-700">{FIELD_MODES[row.modalidade]}{row.territorios.length ? `: ${territoryLabel(row.territorios)}` : ''}</div>
-          {(data.resultados || []).filter(result => result.saida_id === row.id).map(result => <p key={result.id} className="text-sm text-gray-600">Território {data.territorios.find(t => t.id === result.territorio_id)?.numero}: {FIELD_RESULTS[result.resultado]} · {displayDate(result.data)}{result.observacoes && ` — ${result.observacoes}`}</p>)}
-          {usesSingleFieldLeader(row) && row.grupos.length > 0 && <p className="whitespace-pre-line text-sm text-gray-600">Dirigente único{String.fromCharCode(10)}{fieldOutingTerritorySummary(row, data)}</p>}
-          {row.observacoes && <p className="text-sm text-gray-600 whitespace-pre-wrap break-words">{row.observacoes}</p>}</div><div className="flex flex-wrap gap-2">{canEdit && row.modalidade === 'territorio' && row.territorios.length > 0 && <Button type="button" variant="outline" size="sm" onClick={() => setResultOuting(row)}>Registrar resultado</Button>}{buttons('saidas', row)}<DesignationRowActions label={`Saída de ${displayDate(row.data)} ${row.horario}`} showPdf={false} onNotify={canEdit ? () => setPendingNotification(row) : undefined} onWhatsApp={() => shareOuting(row)} onDelete={canEdit ? () => setPendingDelete(row) : undefined} /></div></article>) : <p className="p-10 text-center text-sm text-gray-500">Nenhuma saída neste período. Escolha um publicador e um local para começar a programação.</p>)}
+        {section === 'saidas' && (agenda.length ? agenda.map(row =>
+          <FieldAgendaCard key={row.id} outing={row} data={data} groups={groupsLabel(row.grupos)}>
+            {canEdit && row.modalidade === 'territorio' && row.territorios.length > 0 &&
+              <Button type="button" variant="outline" size="sm" onClick={() => setResultOuting(row)}>Registrar resultado</Button>}
+            {buttons('saidas', row)}
+            <DesignationRowActions label={`Saída de ${displayDate(row.data)} ${row.horario}`} showPdf={false}
+              onNotify={canEdit ? () => setPendingNotification(row) : undefined} onWhatsApp={() => shareOuting(row)}
+              onDelete={canEdit ? () => setPendingDelete(row) : undefined} />
+          </FieldAgendaCard>
+        ) : <p className="p-10 text-center text-sm text-gray-500">Nenhuma saída neste período. Escolha um publicador e um local para começar a programação.</p>)}
         {['locais', 'territorios'].includes(section) && (data[section].filter(row => showInactive || row.ativo).length ? data[section].filter(row => showInactive || row.ativo).map(row => <article key={row.id} className="p-4 flex flex-col sm:flex-row gap-3"><div className="min-w-0 flex-1 space-y-1">
           <div className="font-semibold text-gray-900">{row.nome || `Território ${row.numero}`}{!row.ativo && <span className="ml-2 text-xs text-gray-500">Inativo</span>}</div>
           {section === 'locais' && <><p className="text-sm text-gray-600 break-words">{row.endereco || 'Endereço a cadastrar'}</p><p className="text-sm text-gray-500">{groupsLabel(row.grupos)}</p>{row.mapa_url && /^https?:\/\//i.test(row.mapa_url) && <a href={row.mapa_url} target="_blank" rel="noopener noreferrer" className="inline-flex gap-1 items-center text-sm text-purple-700 underline"><MapPin className="w-4 h-4" />Abrir mapa</a>}{row.observacoes && <p className="text-sm text-gray-600 whitespace-pre-wrap break-words">{row.observacoes}</p>}</>}
@@ -256,7 +306,7 @@ export function FieldServiceTab() {
         description={`Saída de ${displayDate(pendingNotification.data)} às ${pendingNotification.horario}. O sino dos publicadores de ${groupsLabel(pendingNotification.grupos)} mostrará os territórios de cada grupo e os links dos mapas disponíveis. Os aparelhos com notificações ativadas receberão um aviso.`}
       onConfirm={notifyOuting} onCancel={() => setPendingNotification(null)} />}
     <TerritoryMapDetails territory={data.territorios.find(row => row.id === mapTerritoryId)} maps={data.mapas} canEdit={canEdit} onEdit={row => openEditor('territorios', row)} onShare={openShare} publicMapUrl={typeof window !== 'undefined' && mapTerritoryId ? territoryUrls()[mapTerritoryId] || '' : ''} onSaved={() => refresh(undefined, true)} onClose={() => setMapTerritoryId(null)} />
-    {pendingDelete && <ConfirmationDialog destructive title="Excluir saída de campo?" confirmLabel="Excluir" description={`A saída de ${displayDate(pendingDelete.data)} às ${pendingDelete.horario} será excluída, junto com as entregas pendentes criadas por ela que não tenham resultados nem transferências. Conclusões, resultados e transferências registrados serão preservados.`} onConfirm={remove} onCancel={() => setPendingDelete(null)} />}
+    {pendingDelete && <ConfirmationDialog destructive title="Excluir saída de campo?" confirmLabel="Excluir" description={`A saída de ${displayDate(pendingDelete.data)} às ${pendingDelete.horario} será excluída junto com suas entregas pendentes sem resultados, transferências ou quadras concluídas.`} onConfirm={remove} onCancel={() => setPendingDelete(null)} />}
     <Dialog open={shareMessage !== null} onOpenChange={open => { if (!open) setShareMessage(null); }}><DialogContent className="w-[calc(100%-2rem)] max-w-xl max-h-[90dvh] overflow-y-auto bg-white text-gray-900"><DialogHeader><DialogTitle>Compartilhar serviço de campo</DialogTitle><DialogDescription>Confira a mensagem e escolha como compartilhar. Os links do Google Maps podem ser abertos pelos publicadores.</DialogDescription></DialogHeader><Field label="Mensagem"><textarea className={controlClass} rows={12} value={shareMessage || ''} onChange={e => setShareMessage(e.target.value)} /></Field>{shareFeedback && <p role="status" className="text-sm text-gray-600">{shareFeedback}</p>}<DialogFooter className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={copyMessage}>Copiar mensagem</Button><a className="inline-flex items-center justify-center rounded-md bg-purple-600 hover:bg-purple-700 px-4 py-2 text-sm font-medium text-white" href={fieldWhatsAppUrl(shareMessage || '')} target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a></DialogFooter></DialogContent></Dialog>
     <Dialog open={Boolean(editor)} onOpenChange={open => { if (!open && !saving.current && !recentTerritoryId) setEditor(null); }}><DialogContent className="w-[calc(100%-2rem)] max-w-2xl max-h-[90dvh] overflow-y-auto bg-white text-gray-900" onEscapeKeyDown={event => { if (recentTerritoryId) { event.preventDefault(); setRecentTerritoryId(null); } else if (busy) event.preventDefault(); }} onInteractOutside={event => { if (busy || recentTerritoryId) event.preventDefault(); }}>
       <DialogHeader><DialogTitle>{editor?.entity === 'complete' ? 'Registrar conclusão' : `${editor?.id ? 'Editar' : 'Cadastrar'} ${titles[editor?.entity] || ''}`}</DialogTitle><DialogDescription>{editor?.entity === 'saidas' ? 'Escolha o dirigente, os grupos e o local da consideração. Sem grupos selecionados, a saída é da congregação.' : editor?.entity === 'designacoes' ? 'Registre a entrega do território ao responsável. A conclusão será registrada separadamente.' : 'Preencha os dados abaixo. Desative cadastros para preservar o histórico.'}</DialogDescription></DialogHeader>
@@ -272,7 +322,7 @@ export function FieldServiceTab() {
         {editor?.entity === 'saidas' && form.modalidade === 'territorio' && <div className="rounded-lg border border-purple-200 p-3 space-y-2">
           <label className="flex items-start gap-2 text-sm font-medium"><input type="checkbox" checked={registerHandover} onChange={event => setRegisterHandover(event.target.checked)} />Registrar entrega dos territórios aos responsáveis ao salvar</label>
           {selectedPending.map(assignment => <PendingTerritoryNotice key={assignment.id} assignment={assignment} data={data}><label className="flex items-start gap-2"><input type="checkbox" className="mt-1 accent-purple-600" disabled={!registerHandover} checked={confirmedTransfers[assignment.territorio_id] === assignment.id} onChange={event => setConfirmedTransfers(current => ({ ...current, [assignment.territorio_id]: event.target.checked ? assignment.id : undefined }))} />Transferir esta pendência para o responsável pelo território nesta saída ao registrar a entrega.</label>{!registerHandover && <p>Marque registrar entrega para efetivar a transferência. Apenas planejar a saída preserva o responsável atual.</p>}</PendingTerritoryNotice>)}
-          <p className="text-xs text-gray-500">A entrega usa a data da saída (a primeira, se houver repetição). Escolha um dirigente e os territórios. Ao editar, as entregas pendentes desta saída acompanham as alterações, mesmo sem marcar esta opção novamente. Excluir a saída remove suas entregas pendentes sem resultados nem transferências. Conclusões, resultados e transferências registrados são preservados.</p>
+          <p className="text-xs text-gray-500">A entrega usa a data da saída (a primeira, se houver repetição). Escolha um dirigente e os territórios. Ao editar, as entregas pendentes ainda sem progresso acompanham as alterações, mesmo sem marcar esta opção novamente.</p>
         </div>}
         {editor?.entity === 'locais' && <><Field label="Nome do local">{input('nome', 'text', true, { maxLength: 120 })}</Field><Field label="Endereço">{input('endereco', 'text', false, { maxLength: 2000 })}</Field><Field label="Link do mapa (opcional)">{input('mapa_url', 'url', false, { maxLength: 1000 })}</Field><Choices label="Grupos habituais" options={options('grupos')} selected={form.grupos || []} onChange={value => update('grupos', value)} />{notes('observacoes', 'Observações')}</>}
         {editor?.entity === 'territorios' && <><Field label="Número do território">{input('numero', 'number', true, { min: 1, max: 2147483647, step: 1 })}</Field>{notes('descricao', 'Descrição / bairro')}<Field label="Link do Google Maps do território (opcional)">{input('mapa_url', 'url', false, { maxLength: 1000, placeholder: 'Cole o link do território ou ponto de referência' })}</Field>{notes('referencias', 'Referências das quadras e orientações')}<Field label="Mapa do território (PDF, até 10 MB)"><input type="file" accept=".pdf,application/pdf" className={controlClass} onChange={e => setMapFile(e.target.files?.[0] || null)} /></Field>{editor.id && <FieldMapLinks territoryId={editor.id} map={data.mapas.find(map => map.territorio_id === editor.id)} />}<Field label="Quando usar este território"><select className={controlClass} value={territoryPeriod(form)} onChange={e => update('periodo', e.target.value)}>{Object.entries(TERRITORY_PERIODS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field></>}

@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { after, NextResponse } from 'next/server';
 import { authorizeRequest } from '@/app/lib/request-authorization';
 import { readFieldService, mutateFieldService } from '@/app/lib/field-service-server';
+import { readFieldOutingBlocks } from '@/app/lib/field-service-batch';
 import { registerAuditLog } from '@/app/lib/audit-log';
 import { getUserIdFromRequest } from '@/app/lib/server-access';
 import { prepareFieldMap, saveFieldMap } from '@/app/lib/field-map';
@@ -26,7 +27,9 @@ export async function GET(request) {
   let client;
   try {
     client = await pool.connect();
-    return NextResponse.json(await readFieldService(client), { headers: { 'Cache-Control': 'private, no-store' } });
+    const outingId = new URL(request.url).searchParams.get('quadrasSaida');
+    const data = outingId === null ? await readFieldService(client) : await readFieldOutingBlocks(client, outingId);
+    return NextResponse.json(data, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) { return failure(error); }
   finally { client?.release(); }
 }

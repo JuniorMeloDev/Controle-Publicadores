@@ -56,6 +56,7 @@ export async function mutateFieldService(client, body) {
       const deliveries = await client.query(`DELETE FROM campo_designacoes d
         WHERE d.observacoes = $1 AND d.data_conclusao IS NULL AND d.data_transferencia IS NULL
           AND d.designacao_anterior_id IS NULL
+          AND cardinality(d.quadras_concluidas) = 0
           AND NOT EXISTS (SELECT 1 FROM campo_saida_resultados r WHERE r.designacao_id = d.id)
         RETURNING d.*`, [`Entrega registrada pela saída ${id}.`]);
       return { id, ids: [id], entregas_anteriores_removidas: deliveries.rows };
@@ -172,6 +173,7 @@ export async function mutateFieldService(client, body) {
         retained.add(delivery.territorio_id);
       } else {
         if (delivery.designacao_anterior_id) throw fieldError('Esta saída recebeu uma transferência. Preserve a data, o dirigente e os territórios para manter o histórico.', 409);
+        if (delivery.quadras_concluidas?.length) throw fieldError('Esta entrega tem quadras concluídas. Transfira a pendência pelo Histórico para preservar o progresso.', 409);
         await client.query('DELETE FROM campo_designacoes WHERE id = $1 AND data_conclusao IS NULL', [delivery.id]);
         deliveryChanges.push(delivery);
       }

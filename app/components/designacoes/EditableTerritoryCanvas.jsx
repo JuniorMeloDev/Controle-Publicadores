@@ -1,11 +1,11 @@
 ﻿'use client';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { MapPin, Store, Trees, School, Plus, Minus, Pill, ShoppingCart, Utensils, Croissant, Church, Scissors, Hospital } from 'lucide-react';
-import { editableDrawingBounds, automaticReferenceGroups } from '@/app/lib/editable-territory';
+import { editableDrawingBounds, automaticReferenceGroups, TERRITORY_ROAD_WIDTH } from '@/app/lib/editable-territory';
 import { roadLabelLayout } from '@/app/lib/road-label-layout';
 import { territoryNumberPosition } from '@/app/lib/territory-number-position';
 
-export function EditableTerritoryCanvas({layout,color='#0284c7',number,editing=false,tool='',selected=null,onSelect,onChange,onCheckpoint,highlightSide=null}) {
+export function EditableTerritoryCanvas({layout,color='#0284c7',number,editing=false,tool='',selected=null,onSelect,onChange,onCheckpoint,highlightSide=null,blocks=[],completedBlocks=[],onToggleBlock}) {
   const svg=useRef(null),drag=useRef(null);
   const prefix=useId().replace(/:/g,'');
   const [measureLabel,setMeasureLabel]=useState(()=>text=>text.length*9);
@@ -42,13 +42,33 @@ export function EditableTerritoryCanvas({layout,color='#0284c7',number,editing=f
     onCheckpoint?.();const next=points.filter((_,i)=>i!==index);
     onChange?.(type==='outline'?{...layout,outline:next}:{...layout,roads:layout.roads.map(r=>r.id===id?{...r,points:next}:r)});
   }}><title>Arraste para mover. Botão direito para remover.</title></circle>;
-  return <svg ref={svg} viewBox={editing?'0 0 1000 700':`${bounds.left} ${bounds.top} ${bounds.width} ${bounds.height}`} role="img" aria-label={`Desenho editável do Território ${number}`} className={`h-auto min-h-64 w-full rounded-xl border border-slate-200 bg-white ${editing?'touch-none':''}`} onPointerMove={move} onPointerUp={()=>{drag.current=null;}} onPointerCancel={()=>{drag.current=null;}} onClick={click}>
+  return <svg ref={svg} viewBox={editing?'0 0 1000 700':`${bounds.left} ${bounds.top} ${bounds.width} ${bounds.height}`} role={onToggleBlock ? 'group' : 'img'} aria-label={`Mapa do Território ${number}`} className={`h-auto min-h-64 w-full rounded-xl border border-slate-200 bg-white ${editing?'touch-none':''}`} onPointerMove={move} onPointerUp={()=>{drag.current=null;}} onPointerCancel={()=>{drag.current=null;}} onClick={click}>
     <defs><pattern id={`${prefix}-grid`} width="25" height="25" patternUnits="userSpaceOnUse"><path d="M 25 0 L 0 0 0 25" fill="none" stroke="#e2e8f0" strokeWidth="0.7" /></pattern></defs>
     {editing&&<rect width="1000" height="700" fill={`url(#${prefix}-grid)`} />}
     <polygon points={layout.outline.map(p=>p.join(',')).join(' ')} fill={color} fillOpacity="0.78" stroke={color} strokeWidth="4" strokeLinejoin="round" onClick={event=>{if(tool!=='road'&&tool!=='reference')pick(event,{type:'outline'});}} />
+    {blocks.map(({ id, rings, position }, index) => {
+      const done = completedBlocks.includes(id);
+      const label = `Quadra ${index + 1} · ${done ? 'Concluída' : 'Pendente'}`;
+      return <g key={id}>
+        <path d={rings.map(ring => `M${ring.map(point => point.join(',')).join('L')}Z`).join(' ')}
+          fillRule="evenodd" fill={done ? '#087b55' : 'transparent'}
+          className={onToggleBlock ? 'cursor-pointer stroke-white/50 stroke-2 hover:stroke-white focus-visible:stroke-white focus-visible:stroke-4' : undefined}
+          role={onToggleBlock ? 'button' : undefined} tabIndex={onToggleBlock ? 0 : undefined}
+          aria-label={label} aria-pressed={onToggleBlock ? done : undefined}
+          onClick={onToggleBlock ? () => onToggleBlock(id) : undefined}
+          onKeyDown={onToggleBlock ? event => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            onToggleBlock(id);
+          } : undefined}><title>{label}</title></path>
+        <text x={position[0]} y={position[1]} textAnchor="middle" dominantBaseline="central" fontSize="16"
+          fontWeight="700" fill={done ? '#065f46' : '#0f172a'} stroke="white" strokeWidth="5"
+          paintOrder="stroke" strokeLinejoin="round" pointerEvents="none">{`Q${index + 1}${done ? ' ✓' : ''}`}</text>
+      </g>;
+    })}
     {editing&&Number.isInteger(highlightSide)&&layout.outline[highlightSide]&&<g pointerEvents="none"><line x1={layout.outline[highlightSide][0]} y1={layout.outline[highlightSide][1]} x2={layout.outline[(highlightSide+1)%layout.outline.length][0]} y2={layout.outline[(highlightSide+1)%layout.outline.length][1]} stroke="#ea580c" strokeWidth="7" strokeDasharray="9 5" /><text x={(layout.outline[highlightSide][0]+layout.outline[(highlightSide+1)%layout.outline.length][0])/2} y={(layout.outline[highlightSide][1]+layout.outline[(highlightSide+1)%layout.outline.length][1])/2-12} textAnchor="middle" fontSize="18" fontWeight="700" fill="#9a3412" stroke="white" strokeWidth="4" paintOrder="stroke">Lateral {highlightSide+1}</text></g>}
     {/* Draw all street surfaces first so intersections cannot cover earlier labels. */}
-    {layout.roads.map(road=><path key={road.id} id={`${prefix}-${road.id}`} d={road.points.map((p,i)=>`${i?'L':'M'}${p[0]},${p[1]}`).join(' ')} stroke={selected?.id===road.id?'#cbd5e1':'white'} strokeWidth="27" strokeLinecap="round" fill="none" onClick={event=>pick(event,{type:'road',id:road.id})} className={editing?'cursor-pointer':''} />)}
+    {layout.roads.map(road=><path key={road.id} id={`${prefix}-${road.id}`} d={road.points.map((p,i)=>`${i?'L':'M'}${p[0]},${p[1]}`).join(' ')} stroke={selected?.id===road.id?'#cbd5e1':'white'} strokeWidth={TERRITORY_ROAD_WIDTH} strokeLinecap="round" strokeLinejoin="round" fill="none" onClick={event=>pick(event,{type:'road',id:road.id})} className={editing?'cursor-pointer':''} />)}
     {roadLabels.map(({road,parts})=><g key={road.id} aria-label={road.name} onClick={event=>pick(event,{type:'road',id:road.id})} className={editing?'cursor-pointer':''}>{parts.map((part,index)=><text key={index} fontFamily="Arial, sans-serif" fontSize={road.labelFontSize||18} fill="#0f172a" dominantBaseline="central" fontWeight="600" stroke="white" strokeWidth="3" strokeLinejoin="round" paintOrder="stroke"><textPath href={`#${prefix}-${road.id}`} startOffset={part.offset} textAnchor="middle" textLength={part.width} lengthAdjust="spacingAndGlyphs">{part.text}</textPath></text>)}</g>)}
     {editing&&selected?.type==='road'&&layout.roads.find(road=>road.id===selected.id)?.points.map((p,i)=>handle(p,i,'road',selected.id))}
     <g pointerEvents="none"><circle cx={numberPosition[0]} cy={numberPosition[1]} r="26" fill="white" fillOpacity="0.9" stroke="#0f172a" strokeWidth="2" /><text x={numberPosition[0]} y={numberPosition[1]+9} textAnchor="middle" fontSize="25" fontWeight="700" fill="#0f172a">{number}</text></g>
@@ -58,10 +78,31 @@ export function EditableTerritoryCanvas({layout,color='#0284c7',number,editing=f
   </svg>;
 }
 
-export function EditableTerritoryView(props) {
-  const [zoom,setZoom]=useState(1);
-  const bounds=editableDrawingBounds(props.layout);
-  const references=automaticReferenceGroups(props.layout.landmarks);
-  const button='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 disabled:opacity-40';
-  return <div className="space-y-2"><div className="flex justify-end gap-2"><button type="button" aria-label="Diminuir desenho" disabled={zoom<=1} className={button} onClick={()=>setZoom(value=>Math.max(1,value-0.5))}><Minus size={16} /></button><button type="button" className="text-xs text-slate-600" onClick={()=>setZoom(1)} aria-label="Ajustar desenho à tela">{Math.round(zoom*100)}%</button><button type="button" aria-label="Ampliar desenho" disabled={zoom>=3} className={button} onClick={()=>setZoom(value=>Math.min(3,value+0.5))}><Plus size={16} /></button></div><div className="max-h-[80vh] overflow-auto"><div className="mx-auto" style={{width:`calc(min(100%, ${64*bounds.width/bounds.height}vh) * ${zoom})`}}><EditableTerritoryCanvas {...props} /></div></div>{references.length>0&&<section className="rounded-lg border border-slate-200 bg-slate-50 p-3"><h4 className="mb-2 text-sm font-semibold text-slate-800">Pontos de referência</h4><ol className="grid gap-2 sm:grid-cols-2">{references.map(group=><li key={group.number} className="flex items-start gap-2 text-sm text-slate-700"><span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white font-bold">{group.number}</span><span>{group.markers.map(marker=>marker.name).join(" · ")}</span></li>)}</ol></section>}{props.layout.roads.some(road=>road.googlePlaceId)&&<p className="text-xs text-slate-500">Ruas consultadas no <a href="https://maps.google.com/" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Google Maps</a>.</p>}</div>;
+export function EditableTerritoryView({ showReferences = true, ...props }) {
+  const [zoom, setZoom] = useState(1);
+  const bounds = editableDrawingBounds(props.layout);
+  const references = showReferences ? automaticReferenceGroups(props.layout.landmarks) : [];
+  const button = 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 disabled:opacity-40';
+  return <div className="space-y-2">
+    <div className="flex justify-end gap-2">
+      <button type="button" aria-label="Diminuir desenho" disabled={zoom <= 1} className={button} onClick={() => setZoom(value => Math.max(1, value - 0.5))}><Minus size={16} /></button>
+      <button type="button" className="text-xs text-slate-600" onClick={() => setZoom(1)} aria-label="Ajustar desenho à tela">{Math.round(zoom * 100)}%</button>
+      <button type="button" aria-label="Ampliar desenho" disabled={zoom >= 3} className={button} onClick={() => setZoom(value => Math.min(3, value + 0.5))}><Plus size={16} /></button>
+    </div>
+    <div className="max-h-[80vh] overflow-auto">
+      <div className="mx-auto" style={{ width: `calc(min(100%, ${64 * bounds.width / bounds.height}vh) * ${zoom})` }}>
+        <EditableTerritoryCanvas {...props} />
+      </div>
+    </div>
+    {references.length > 0 && <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <h4 className="mb-2 text-sm font-semibold text-slate-800">Pontos de referência</h4>
+      <ol className="grid gap-2 sm:grid-cols-2">{references.map(group =>
+        <li key={group.number} className="flex items-start gap-2 text-sm text-slate-700">
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white font-bold">{group.number}</span>
+          <span>{group.markers.map(marker => marker.name).join(' · ')}</span>
+        </li>
+      )}</ol>
+    </section>}
+    {props.layout.roads.some(road => road.googlePlaceId) && <p className="text-xs text-slate-500">Ruas consultadas no <a href="https://maps.google.com/" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Google Maps</a>.</p>}
+  </div>;
 }

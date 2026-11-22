@@ -406,6 +406,12 @@ Use **Designar** para registrar a entrega ao publicador e **Registrar conclusão
 para devolver o território. O histórico é consultado por ano e mês da designação. Locais e territórios são desativados para preservar seus
 vínculos históricos. As planilhas de referência não são importadas automaticamente.
 
+No link do mapa, qualquer pessoa pode consultar as quadras concluídas e pendentes.
+Entre na sua conta para editar como dirigente da saída do dia, ancião ou servo
+ministerial. Toque nas quadras trabalhadas e use **Salvar marcações**. As marcações
+acompanham a designação quando ela é transferida. Use **Concluir território**
+quando todo o território tiver sido trabalhado. A conclusão aparece no Histórico.
+
 Para instalar as tabelas em outro ambiente e verificar o banco:
 
 ```bash

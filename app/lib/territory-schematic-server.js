@@ -17,13 +17,14 @@ export async function readPreparedSchematic(client, key, hash) {
   if (!row?.esquema_conteudo) throw unavailable();
   return row.esquema_conteudo;
 }
-export async function findSharedSchematic(client, token) {
+export async function findSharedSchematic(client, token, { lock = false } = {}) {
   if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
-  return withTerritoryDrawing((await client.query(`SELECT t.numero,t.descricao,t.referencias,t.mapa_url,t.limites,
+  return withTerritoryDrawing((await client.query(`SELECT t.id,t.numero,t.descricao,t.referencias,t.mapa_url,t.limites,
+    t.mapa_revisao,t.mapa_layout_revisao,
     t.mapa_layout,t.mapa_prototipo,g.nome_grupo AS grupo_nome,g.cor_mapa AS grupo_cor,
     m.chave AS imagem_chave,md5(m.conteudo) AS imagem_hash
     FROM campo_territorios t LEFT JOIN grupos g ON g.id=t.mapa_grupo_id
     LEFT JOIN campo_mapas m ON m.territorio_id=t.id
     WHERE t.mapa_share_token=$1 AND t.ativo=TRUE
-      AND (t.mapa_layout IS NOT NULL OR t.limites IS NOT NULL OR m.chave IS NOT NULL)`,[token])).rows[0] || null);
+      AND (t.mapa_layout IS NOT NULL OR t.limites IS NOT NULL OR m.chave IS NOT NULL)${lock ? ' FOR SHARE OF t' : ''}`,[token])).rows[0] || null);
 }

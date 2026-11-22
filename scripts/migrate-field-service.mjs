@@ -9,6 +9,7 @@ try {
   await pool.query(await readFile(new URL('./sql/adicionar-planejamento-campo.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/adicionar-dirigente-unico-campo.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/adicionar-transferencias-campo.sql', import.meta.url), 'utf8'));
+  await pool.query(await readFile(new URL('./sql/adicionar-progresso-quadras.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/corrigir-entregas-saidas-excluidas.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/adicionar-limites-territorios.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/adicionar-mapas-editaveis.sql', import.meta.url), 'utf8'));

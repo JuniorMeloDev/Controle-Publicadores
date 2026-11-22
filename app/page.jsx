@@ -51,6 +51,11 @@ export default function LoginPage() {
         const { pushRevoked } = await response.json();
         if (pushRevoked) await clearDevicePush();
         const hash = window.location.hash;
+        const territoryToken = /^#mapa-territorio=([A-Za-z0-9_-]{43})$/.exec(hash)?.[1];
+        if (territoryToken) {
+          router.push(`/mapa-territorio/${territoryToken}`);
+          return;
+        }
         router.push(`/admin/dashboard${notificationFromHash(hash) || boardNoticeFromHash(hash) ? hash : ''}`);
       } else {
         const data = await response.json();

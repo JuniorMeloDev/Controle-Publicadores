@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadModule, loadRoute } from './helpers/load-source.mjs';
 
-const { fieldId, fieldDate, fieldServiceYear, weeklyDates, validateFieldRecord, isFieldOutingCompleted, usesGroupTerritories, isTerritoryAllowedForOuting } = await loadModule('../../app/lib/field-service.js');
+const { fieldId, fieldDate, fieldServiceYear, weeklyDates, validateFieldRecord, fieldOutingResults, isFieldOutingCompleted, usesGroupTerritories, isTerritoryAllowedForOuting } = await loadModule('../../app/lib/field-service.js');
 const { mutateFieldService, readFieldService } = await loadModule('../../app/lib/field-service-server.js');
 const { canAccessRoute } = await loadModule('../../app/lib/route-access.js');
 const { prepareFieldMap, saveFieldMap } = await loadModule('../../app/lib/field-map.js');
@@ -53,6 +53,14 @@ test('agenda hides only outings whose own territories have all been completed', 
   assert.equal(isFieldOutingCompleted(row, [], results.map(result => ({ ...result, resultado: 'concluido' }))), true);
   const assignment = { id: 40, territorio_id: 4, data_conclusao: '2026-10-18' };
   assert.equal(isFieldOutingCompleted(row, [assignment], results), true);
+  assert.deepEqual(fieldOutingResults(row, [assignment], results), [
+    results[0], { territorio_id: 4, resultado: 'concluido', data: '2026-10-18' },
+  ]);
+  const transferred = { ...assignment, data_conclusao: null, data_transferencia: '2026-10-19' };
+  assert.equal(isFieldOutingCompleted(row, [transferred], results), true);
+  assert.deepEqual(fieldOutingResults(row, [transferred], results), [
+    results[0], { territorio_id: 4, resultado: 'transferido', data: '2026-10-19' },
+  ]);
   assert.equal(isFieldOutingCompleted(row, [{ ...assignment, id: 99 }], results), false);
   assert.equal(isFieldOutingCompleted(row, [{ ...assignment, data_conclusao: null }], results), false);
   const deliveries = [3, 4].map(territorio_id => ({ territorio_id, data_conclusao: '2026-10-18', observacoes: 'Entrega registrada pela saída 10.' }));
@@ -61,6 +69,19 @@ test('agenda hides only outings whose own territories have all been completed', 
   assert.equal(isFieldOutingCompleted({ ...row, id: 11 }, deliveries, results), false);
   assert.equal(isFieldOutingCompleted(outing({ id: 10, territorios: [] })), false);
   assert.equal(isFieldOutingCompleted(outing({ id: 10, modalidade: 'cartas' }), deliveries, results), false);
+});
+
+test('a completion from history is shown while other territories of the same outing remain pending', () => {
+  const row = outing({ id: 60, territorios: [3, 4, 5] });
+  const assignments = [
+    { id: 1, territorio_id: 3, data_conclusao: '2026-10-18', observacoes: 'Entrega registrada pela saída 60.' },
+    { id: 2, territorio_id: 4, data_conclusao: null, observacoes: 'Entrega registrada pela saída 60.' },
+    { id: 3, territorio_id: 5, data_conclusao: '2026-10-18', observacoes: 'Entrega registrada pela saída 59.' },
+  ];
+  assert.deepEqual(fieldOutingResults(row, assignments), [
+    { territorio_id: 3, resultado: 'concluido', data: '2026-10-18' },
+  ]);
+  assert.equal(isFieldOutingCompleted(row, assignments), false);
 });
 
 test('field records reject invalid IDs, dates, map protocols and malformed lists', () => {

@@ -1,12 +1,52 @@
 import { fieldDate, fieldId, validateFieldRecord, isTerritoryAllowedForOuting } from './field-service.js';
 import { FIELD_RESULTS, TERRITORY_PERIODS, validateImportedHistory } from './field-planner.js';
 import { fieldTerritoryResponsible } from './field-territory-responsibility.js';
+import { territoryBlocks } from './territory-blocks.js';
+import { withTerritoryDrawing } from './territory-map-display.js';
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const list = (value, max) => {
   if (!Array.isArray(value) || !value.length || value.length > max) throw fail(`Selecione entre 1 e ${max} registros.`);
   return value;
 };
+
+export async function readFieldOutingBlocks(client, outingId) {
+  let id;
+  try { id = fieldId(outingId); }
+  catch { throw fail('Saída inválida.'); }
+  const { rows } = await client.query(`SELECT t.id, t.limites, t.mapa_layout, d.quadras_concluidas
+    FROM campo_saidas s JOIN campo_territorios t ON t.id = ANY(s.territorios)
+    LEFT JOIN campo_designacoes d ON d.territorio_id = t.id AND d.data_conclusao IS NULL AND d.data_transferencia IS NULL
+    WHERE s.id = $1 AND s.modalidade = 'territorio'`, [id]);
+  return Object.fromEntries(rows.map(territory => {
+    const layout = withTerritoryDrawing(territory).mapa_layout;
+    const blocks = territoryBlocks(layout);
+    const completed = blocks.filter(block => territory.quadras_concluidas?.includes(block.id)).map(block => block.id);
+    return [territory.id, { layout, blocks, completed }];
+  }));
+}
+
+async function savePartialBlocks(client, territoryId, deliveryId, input, notes) {
+  const { rows: [territory] } = await client.query('SELECT id, limites, mapa_layout FROM campo_territorios WHERE id = $1 FOR SHARE', [territoryId]);
+  const blocks = territoryBlocks(withTerritoryDrawing(territory)?.mapa_layout);
+  const ids = new Set(blocks.map(block => block.id));
+  const { quadras_concluidas: selected, quadras_anteriores: baseline } = input;
+  const valid = values => Array.isArray(values) && values.length <= ids.size
+    && new Set(values).size === values.length && values.every(value => ids.has(value));
+  if (!ids.size || !valid(selected) || !valid(baseline)) throw fail('O mapa mudou ou a seleção de quadras é inválida. Reabra o resultado da saída.', 409);
+
+  const { rows: [delivery] } = await client.query('SELECT quadras_concluidas FROM campo_designacoes WHERE id = $1 FOR UPDATE', [deliveryId]);
+  const current = delivery.quadras_concluidas.filter(id => ids.has(id));
+  if (current.length !== baseline.length || current.some(id => !baseline.includes(id))) {
+    throw fail('As quadras foram atualizadas em outro lugar. Reabra o resultado para ver as marcações atuais.', 409);
+  }
+  if (selected.length === ids.size) throw fail('Se todas as quadras foram trabalhadas, registre o resultado como Concluído.');
+  if (!selected.length && !notes) throw fail('Marque as quadras concluídas ou informe o que falta trabalhar.');
+  const completed = blocks.filter(block => selected.includes(block.id)).map(block => block.id);
+  await client.query('UPDATE campo_designacoes SET quadras_concluidas = $2 WHERE id = $1', [deliveryId, completed]);
+  const remaining = blocks.flatMap((block, index) => selected.includes(block.id) ? [] : [index + 1]);
+  return notes || `Quadras pendentes: ${remaining.join(', ')}.`;
+}
 
 export async function mutateFieldBatch(client, body, mutate) {
   await client.query('SELECT pg_advisory_xact_lock(73428191)');
@@ -80,8 +120,10 @@ export async function mutateFieldBatch(client, body, mutate) {
     const territoryId = fieldId(input.territorio_id);
     if (!outing.territorios.includes(territoryId) || seen.has(territoryId) || !Object.hasOwn(FIELD_RESULTS, input.resultado)) throw fail('Confira os territórios e seus resultados.');
     seen.add(territoryId);
-    const notes = typeof input.observacoes === 'string' ? input.observacoes.trim() : '';
-    if (notes.length > 2000 || (input.resultado === 'parcial' && !notes)) throw fail('No resultado parcial, informe o que falta trabalhar (até 2000 caracteres).');
+    let notes = typeof input.observacoes === 'string' ? input.observacoes.trim() : '';
+    const partial = input.resultado === 'parcial';
+    const hasBlocks = partial && input.quadras_concluidas !== undefined;
+    if (notes.length > 2000 || (partial && !notes && !hasBlocks)) throw fail('No resultado parcial, marque as quadras concluídas ou informe o que falta trabalhar (até 2000 caracteres).');
     const previous = (await client.query('SELECT * FROM campo_saida_resultados WHERE saida_id = $1 AND territorio_id = $2', [id, territoryId])).rows[0];
     if (previous) throw fail('Este território já tem resultado nesta saída. Atualize a lista.', 409);
     const marker = `Entrega registrada pela saída ${id}.`;
@@ -101,6 +143,7 @@ export async function mutateFieldBatch(client, body, mutate) {
       }
       if (date < delivery.data_designacao) throw fail('O resultado não pode ser anterior à entrega.');
       if (input.resultado === 'concluido' && !delivery.data_conclusao) await mutate(client, { entity: 'designacoes', action: 'complete', id: delivery.id, data_conclusao: date });
+      if (hasBlocks) notes = await savePartialBlocks(client, territoryId, delivery.id, input, notes);
     } else if (delivery?.data_conclusao) throw fail('Este território já foi concluído. Confira o resultado.', 409);
     ids.push((await client.query(`INSERT INTO campo_saida_resultados (saida_id, territorio_id, designacao_id, resultado, data, observacoes)
       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, [id, territoryId, delivery?.id || null, input.resultado, date, notes])).rows[0].id);
